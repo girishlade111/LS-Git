@@ -3,8 +3,8 @@ import { makeApp } from '../test/helpers.js'
 
 const app = makeApp()
 const actorA = { userId: 1, username: 'alice', admin: true, state: 'active' as const, via: { kind: 'session' as const } }
-const r1 = await app.inject({ method:'POST', url:'/api/v1/auth/register', payload:{ username:'alice', email:'a@e.com', password:'correct horse battery staple 42' } }); console.log('regA:', r1.statusCode, r1.body.slice(0,120))
-const r2 = await app.inject({ method:'POST', url:'/api/v1/auth/register', payload:{ username:'bob', email:'b@e.com', password:'correct horse battery staple 42' } }); console.log('regB:', r2.statusCode)
+const r1 = await app.inject({ method:'POST', url:'/api/v1/auth/register', payload:{ username:'alice', email:'alice@example.com', password:'correct horse battery staple 42' } }); console.log('regA:', r1.statusCode, r1.body.slice(0,120))
+const r2 = await app.inject({ method:'POST', url:'/api/v1/auth/register', payload:{ username:'bob', email:'bob@example.com', password:'correct horse battery staple 42' } }); console.log('regB:', r2.statusCode)
 const actorB = { userId:2, username:'bob', admin:false, state:'active' as const, via:{ kind:'session' as const } }
 
 app.projects.create(actorA, {
