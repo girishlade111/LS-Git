@@ -16,8 +16,6 @@ import { can } from '../authz.js'
  * metadata cleanup if storage fails — Git objects never live in PostgreSQL.
  */
 
-const MINUTE = 60_000
-
 export class ProjectsService {
   readonly storage: LocalHashedStorage
 
@@ -143,7 +141,7 @@ export class ProjectsService {
           disk_path: '', // patched below once id exists — see post-create fixup
           initialized: false,
         }),
-      )()
+      )
     } catch (err) {
       if (String((err as Error).message).includes('UNIQUE')) {
         throw new AppError(409, 'Path has already been taken', 'path_taken')
@@ -156,7 +154,7 @@ export class ProjectsService {
     this.s.db.transaction(() => {
       this.s.db.run('UPDATE projects SET disk_path = ?, initialized = ? WHERE id = ?', diskPath, shouldInitialize ? 1 : 0, project.id)
       if (input.topics.length > 0) this.s.topics.setForProject(project.id, input.topics)
-    })()
+    })
     project = this.requireProject(project.id)
 
     // 2) Disk effect + compensation.
@@ -291,7 +289,7 @@ export class ProjectsService {
         disk_path: diskPath,
         initialized: false,
       }),
-    )()
+    )
     const newPath = this.storage.diskPathFor(project.id)
     this.db.transaction(() => {
       this.db.run('UPDATE projects SET disk_path = ?, initialized = 1 WHERE id = ?', newPath, project.id)

@@ -19,6 +19,7 @@ declare module 'fastify' {
     cfg: AppConfig
     identity: IdentityService
     credentials: CredentialsService
+    projects: ProjectsService
     authRateLimiter: RateLimiter
     store: ReturnType<typeof makeServices>
     requireAuth: (needed?: 'read_api' | 'write_api' | 'read_user') => PreHandlerFn
