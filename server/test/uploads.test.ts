@@ -169,7 +169,8 @@ describe('single-file upload workflow', () => {
       replace: true,
       commit_message: 'Update notes',
     })
-    expect(second.status).toBe(201)
+    // GitLab files-API parity: update returns 200 (create returns 201).
+    expect(second.status).toBe(200)
     expect(second.body.replaced).toBe(true)
 
     const files = app.projects.storage.readBranchFiles(project.disk_path, 'main')
