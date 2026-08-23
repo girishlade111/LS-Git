@@ -72,6 +72,11 @@ export async function loginUser(
   }
 }
 
+/** Login returning raw response (for cookie inspection in tests). */
+export async function loginRaw(app: FastifyInstance, login: string, password = PASSWORD) {
+  return app.inject({ method: 'POST', url: '/api/v1/auth/login', payload: { login, password } })
+}
+
 /** Authenticated request helper (session or token). */
 export async function authed(
   app: FastifyInstance,
