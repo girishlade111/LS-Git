@@ -73,6 +73,39 @@ export default function App() {
 
   const view = path.replace(/^\//, '') || 'overview'
 
+  // Project routes: /projects, /projects/new, /proj/:owner/:path, /explore
+  if (path === '/projects') {
+    return (
+      <AppShell sidebarCurrent="projects" onNavigate={(id) => navigate(`/${id}`)} repo={{ group: 'workspace', project: 'projects', visibility: 'Private', tabs: [], currentTab: '', onTab: () => undefined }}>
+        <ProjectsView />
+      </AppShell>
+    )
+  }
+  if (path === '/projects/new') {
+    return (
+      <AppShell sidebarCurrent="projects" onNavigate={(id) => navigate(`/${id}`)}>
+        <NewProjectView />
+      </AppShell>
+    )
+  }
+  if (path.startsWith('/proj/')) {
+    const [, , owner, projPath] = path.split('/')
+    if (owner && projPath) {
+      return (
+        <AppShell sidebarCurrent="projects" onNavigate={(id) => navigate(`/${id}`)} repo={{ group: owner, project: projPath, visibility: 'Private', tabs: [], currentTab: '', onTab: () => undefined }}>
+          <ProjectDetailView owner={owner} path={projPath} />
+        </AppShell>
+      )
+    }
+  }
+  if (path === '/explore') {
+    return (
+      <AppShell sidebarCurrent="projects" onNavigate={(id) => navigate(`/${id}`)}>
+        <ProjectsView />
+      </AppShell>
+    )
+  }
+
   function renderView() {
     switch (view) {
       case 'overview': return <OverviewView />
