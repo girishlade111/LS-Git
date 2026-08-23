@@ -77,7 +77,8 @@ export class UsersRepo {
     fields: Partial<
       Pick<
         UserRow,
-        'name' | 'bio' | 'location' | 'website_url' | 'public_email' | 'email' | 'username' | 'state' | 'email_verified' | 'password_hash'
+        | 'name' | 'bio' | 'location' | 'website_url' | 'public_email' | 'email' | 'username'
+        | 'state' | 'email_verified' | 'password_hash' | 'failed_login_count' | 'locked_until'
       >
     >,
   ): void {
@@ -87,11 +88,11 @@ export class UsersRepo {
       'failed_login_count', 'locked_until',
     ] as const
     const sets: string[] = []
-    const values: unknown[] = []
+    const values: SqlParam[] = []
     for (const key of allowed) {
       if (fields[key] !== undefined) {
         sets.push(`${key} = ?`)
-        values.push(fields[key])
+        values.push(fields[key] as SqlParam)
       }
     }
     if (sets.length === 0) return
