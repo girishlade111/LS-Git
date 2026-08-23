@@ -28,12 +28,12 @@ describe('SSH keys', () => {
     expect(key).toMatchObject({ title: 'work laptop', key_type: 'ssh-ed25519', bits: 256 })
     expect(String(key.fingerprint)).toMatch(/^SHA256:[A-Za-z0-9+/]{43}$/)
 
-    const list = (await authed(app, 'GET', '/api/v1/user/keys', { session })).json() as unknown[]
+    const list = (await authed(app, 'GET', '/api/v1/user/keys', { session })).json() as unknown as unknown[]
     expect(list).toHaveLength(1)
 
     const del = await authed(app, 'DELETE', `/api/v1/user/keys/${key.id}`, { session })
     expect(del.statusCode).toBe(200)
-    expect(((await authed(app, 'GET', '/api/v1/user/keys', { session })).json()) as unknown[]).toHaveLength(0)
+    expect(((await authed(app, 'GET', '/api/v1/user/keys', { session })).json()) as unknown as unknown[]).toHaveLength(0)
 
     // Deleting again → 404
     const gone = await authed(app, 'DELETE', `/api/v1/user/keys/${key.id}`, { session })

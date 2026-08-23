@@ -7,11 +7,7 @@ describe('registration', () => {
     const { status } = await registerUser(app)
     expect(status).toBe(201)
 
-    const me = await authed(app, 'GET', '/api/v1/user', { session: (await registerUser(app, { username: 'x1', email: 'x1@e.com' }), null) })
-    void me
-
-    const root = app.store.users.byUsername('alice')!
-    expect(root.admin).toBe(1)
+    expect(app.store.users.byUsername('alice')!.admin).toBe(1)
 
     // Second user is not admin.
     const r2 = await registerUser(app, { username: 'bob', email: 'bob@example.com' })
