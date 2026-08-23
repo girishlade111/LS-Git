@@ -2,6 +2,12 @@ import { loadConfig, type AppConfig } from '../src/config.js'
 import { buildApp } from '../src/http/app.js'
 import type { FastifyInstance } from 'fastify'
 
+// Keep the test suite fast: reduced scrypt cost (hashes embed their params, so
+// production data at full cost still verifies).
+process.env.LSGIT_SCRYPT_N ??= '512'
+process.env.LSGIT_SCRYPT_R ??= '8'
+process.env.LSGIT_SCRYPT_P ??= '1'
+
 export const PASSWORD = 'correct horse battery staple 42'
 
 export function makeApp(overrides: Partial<AppConfig> = {}): FastifyInstance {
