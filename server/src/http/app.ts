@@ -9,6 +9,7 @@ import { RateLimiter } from '../lib/rateLimiter.js'
 import { parsePersonalAccessToken, tokenDigest } from '../lib/crypto.js'
 import type { AppConfig } from '../config.js'
 import { ProjectsService } from '../services/projects.js'
+import { UploadService } from '../services/uploads.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -21,6 +22,7 @@ declare module 'fastify' {
     identity: IdentityService
     credentials: CredentialsService
     projects: ProjectsService
+    uploads: UploadService
     authRateLimiter: RateLimiter
     store: ReturnType<typeof makeServices>
     requireAuth: (needed?: 'read_api' | 'write_api' | 'read_user') => PreHandlerFn
@@ -72,14 +74,22 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   const db = new Database(dbFile ?? cfg.databaseFile)
   const services = makeServices(db)
 
-  const app = Fastify({ logger: false, bodyLimit: 1_500_000 })
+"  const app = Fastify({ logger: false, bodyLimit: 1_500_000 })
   app.cfg = cfg
+
+  // Raw binary bodies for upload transfer (route-level cap enforced too).
+  app.addContentTypeParser(
+    'application/octet-stream',
+    { parseAs: 'buffer', bodyLimit: cfg.maxUploadBytes },
+    (_req, body, done) => done(null, body as Buffer),
+  )"
   app.store = services
 
   // Outbox-backed mail transport; a real SMTP adapter plugs in at deploy time.
   app.identity = new IdentityService(services, cfg, services.outbox)
   app.credentials = new CredentialsService(services, cfg.patMaxTtlDays, cfg.patDefaultTtlDays)
   app.projects = new ProjectsService(services, cfg)
+  app.uploads = new UploadService(services, cfg, app.projects.storage)
   app.authRateLimiter = new RateLimiter(cfg.authRateLimit.max, cfg.authRateLimit.windowSeconds * 1000)
 
   // ---- authentication resolution ------------------------------------------
@@ -218,6 +228,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   registerAuthRoutes(app)
   registerAccountRoutes(app)
   registerProjectRoutes(app)
+  registerUploadRoutes(app)
 
   app.get('/healthz', async () => ({ status: 'ok' }))
   return app
@@ -266,3 +277,4 @@ function stripQuery(url: string): string {
 import { registerAuthRoutes } from './routes/auth.js'
 import { registerAccountRoutes } from './routes/account.js'
 import { registerProjectRoutes } from './routes/projects.js'
+import { registerUploadRoutes } from './routes/uploads.js'

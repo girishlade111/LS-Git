@@ -75,12 +75,14 @@ export class UploadService {
   }
 
   private canPush(actor: Actor | null, project: ProjectRow): boolean {
-    // Delegates to the central service; kept as thin wrapper for readability.
-    return (
-      !!actor &&
-      actor.state === 'active' &&
-      (actor.admin || actor.userId === project.owner_id)
-    )
+    // Central authorization service owns the decision (PERMISSIONS boundary).
+    return can(actor, 'project:push_code', {
+      resourceProject: {
+        ownerId: project.owner_id,
+        visibility: project.visibility,
+        archived: !!project.archived,
+      },
+    })
   }
 
   // -- step 1–2: request + authorization + path validation --------------------

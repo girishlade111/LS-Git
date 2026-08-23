@@ -127,7 +127,12 @@ function writeTreeLevel(objectsDir: string, node: DirNode): string {
       sha: writeTreeLevel(objectsDir, child),
     })),
   ]
-  entries.sort((a, b) => entryCompare(a, b))
+  entries.sort((a, b) =>
+    entryCompare(
+      { name: a.name, dir: a.mode === '40000' },
+      { name: b.name, dir: b.mode === '40000' },
+    ),
+  )
   const chunks: Buffer[] = []
   for (const e of entries) {
     let sha = e.sha
