@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { makeApp, registerUser, authed, extractSession, loginRaw } from './helpers.js'
+import { makeApp, registerUser, authed, extractSession, loginRaw, loginUser } from './helpers.js'
 
 function ed25519Line(seed = 7): string {
   const typeStr = Buffer.from('ssh-ed25519')
