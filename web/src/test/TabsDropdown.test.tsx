@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { Tabs } from '../design-system/Tabs'
@@ -70,15 +70,14 @@ describe('Dropdown', () => {
       />,
     )
     await user.click(screen.getByText('Actions'))
-    const menu = screen.getByRole('menu', { name: 'Actions' })
-    expect(menu).toBeInTheDocument()
+    expect(screen.getByRole('menu', { name: 'Actions' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('menuitem', { name: 'Delete project' }))
     expect(onSelect).toHaveBeenCalledWith('delete')
-    await waitForMenuGone()
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
   })
 
-  it('Escape closes and returns focus to the trigger; ArrowDown opens and focuses first item', async () => {
+  it('ArrowDown opens focusing first item; Escape closes restoring focus', async () => {
     const user = userEvent.setup()
     render(
       <Dropdown
@@ -93,32 +92,12 @@ describe('Dropdown', () => {
     )
     const trigger = screen.getByText('Actions')
 
-    // ArrowDown opens and focuses first item
     trigger.focus()
     await user.keyboard('{ArrowDown}')
     expect(screen.getAllByRole('menuitem')[0]).toHaveFocus()
 
-    // Escape closes and restores focus
     await user.keyboard('{Escape}')
-    await waitForMenuGone()
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
     expect(trigger).toHaveFocus()
   })
 })
-
-function waitForMenuGone() {
-  return new Promise<void>((resolve) => setTimeout(resolve, 0))
-}
-
-function waitFor(fn: () => boolean) {
-  return new Promise<void>((resolve) => {
-    const t = setInterval(() => {
-      if (fn()) {
-        clearInterval(t)
-        resolve()
-      }
-    }, 5)
-  })
-}
-
-// silence unused import warnings if RTL screen unused in a future edit
-void screen
