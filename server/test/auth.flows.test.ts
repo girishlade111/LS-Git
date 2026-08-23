@@ -65,7 +65,8 @@ describe('login / logout', () => {
     await registerUser(app)
     const byName = await loginUser(app, 'alice')
     expect(byName.status).toBe(200)
-    expect(byName.body.user).toMatchObject({ username: 'alice', admin: false })
+    // alice was the FIRST user → instance admin (GitLab parity).
+    expect(byName.body.user).toMatchObject({ username: 'alice', admin: true })
 
     const byEmail = await loginUser(app, 'ALICE@example.com')
     expect(byEmail.status).toBe(200)

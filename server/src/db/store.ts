@@ -370,8 +370,9 @@ export class EmailVerificationsRepo {
       | OneTimeTokenRow
       | undefined
   }
+  /** Marks the token consumed (single-use) and records the verification timestamp. */
   markVerified(id: number): void {
-    this.db.run('UPDATE email_verifications SET verified_at = ? WHERE id = ?', nowIso(), id)
+    this.db.run('UPDATE email_verifications SET verified_at = ?, used_at = ? WHERE id = ?', nowIso(), nowIso(), id)
   }
 }
 

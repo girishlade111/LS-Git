@@ -56,13 +56,20 @@ export function can(actor: Actor | null, permission: Permission, ctx: AuthzConte
 /** Token scope gate — orthogonal to role checks; PATs must carry a sufficient scope. */
 export function scopeAllows(
   via: Actor['via'],
-  needed: 'read_api' | 'write_api',
+  needed: 'read_api' | 'write_api' | 'read_user',
 ): boolean {
   if (via.kind === 'session') return true
   const scopes = via.scopes
-  if (needed === 'read_api') {
-    return scopes.includes('api') || scopes.includes('read_api')
+  switch (needed) {
+    // GitLab parity: read_user grants /user-profile reads; read_api implies it.
+    case 'read_user':
+      return (
+        scopes.includes('api') || scopes.includes('read_api') || scopes.includes('read_user')
+      )
+    case 'read_api':
+      return scopes.includes('api') || scopes.includes('read_api')
+    // write_api requires full api scope (GitLab parity: read_* cannot write)
+    case 'write_api':
+      return scopes.includes('api') || scopes.includes('write_api')
   }
-  // write_api requires full api scope (GitLab parity: read_* cannot write)
-  return scopes.includes('api') || scopes.includes('write_api')
 }

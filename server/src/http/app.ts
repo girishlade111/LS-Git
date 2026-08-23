@@ -21,7 +21,7 @@ declare module 'fastify' {
     credentials: CredentialsService
     authRateLimiter: RateLimiter
     store: ReturnType<typeof makeServices>
-    requireAuth: (needed?: 'read_api' | 'write_api') => PreHandlerFn
+    requireAuth: (needed?: 'read_api' | 'write_api' | 'read_user') => PreHandlerFn
     requirePermission: (
       permission: Parameters<typeof can>[1],
       ctx?: Parameters<typeof can>[2],
@@ -172,7 +172,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   })
 
   // ---- guards --------------------------------------------------------------
-  app.requireAuth = (needed?: 'read_api' | 'write_api') =>
+  app.requireAuth = (needed?: 'read_api' | 'write_api' | 'read_user') =>
     ((req, reply, done) => {
       if (!req.actor) {
         // Sync pre-handler: sending the reply (without done) halts the chain.

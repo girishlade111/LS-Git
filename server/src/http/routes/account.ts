@@ -16,7 +16,8 @@ export function registerAccountRoutes(app: FastifyInstance): void {
   const auth = app.requireAuth()
 
   // -- current user -----------------------------------------------------------
-  app.get('/api/v1/user', { preHandler: app.requireAuth('read_api') }, async (req) => {
+  // GitLab parity: read_user scope is sufficient for the /user profile endpoint.
+  app.get('/api/v1/user', { preHandler: app.requireAuth('read_user') }, async (req) => {
     return selfUser(app.identity.requireUser(req.actor!.userId))
   })
 
