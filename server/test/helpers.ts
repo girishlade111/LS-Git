@@ -1,6 +1,9 @@
 import { loadConfig, type AppConfig } from '../src/config.js'
 import { buildApp } from '../src/http/app.js'
 import type { FastifyInstance } from 'fastify'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 // Keep the test suite fast: reduced scrypt cost (hashes embed their params, so
 // production data at full cost still verifies).
