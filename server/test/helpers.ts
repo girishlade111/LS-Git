@@ -21,6 +21,8 @@ export function makeApp(overrides: Partial<AppConfig> = {}): FastifyInstance {
     origin: 'http://localhost:5173',
     secureCookies: false,
     sessionTtlMinutes: overrides.sessionTtlMinutes ?? 60 * 24 * 7,
+    // Every app instance gets an isolated repository root.
+    repositoriesRoot: overrides.repositoriesRoot ?? mkdtempSync(join(tmpdir(), 'lsgit-repos-')),
     // Generous by default; the rate-limit tests override this.
     authRateLimit: overrides.authRateLimit ?? { max: 10_000, windowSeconds: 60 },
     ...overrides,
