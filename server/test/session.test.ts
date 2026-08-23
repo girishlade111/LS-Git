@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { makeApp, registerUser, loginUser, loginRaw, authed, extractSession, type Session } from './helpers.js'
+import { makeApp, registerUser, loginUser, loginRaw, authed, extractSession, PASSWORD, type Session } from './helpers.js'
 
 async function setup(overrides = {}): Promise<{ app: ReturnType<typeof makeApp>; alice: Session }> {
   const app = makeApp(overrides)

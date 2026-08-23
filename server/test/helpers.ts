@@ -105,7 +105,12 @@ export async function authed(
     headers.cookie = opts.session.cookie
     if (!['GET', 'HEAD'].includes(method)) headers['x-csrf-token'] = opts.session.csrf
   }
-  const options: Parameters<typeof app.inject>[0] = { method, url, headers }
+  const options: {
+    method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
+    url: string
+    headers: Record<string, string>
+    payload?: unknown
+  } = { method, url, headers }
   if (opts.payload !== undefined) options.payload = opts.payload
   const res = await app.inject(options)
   return {
