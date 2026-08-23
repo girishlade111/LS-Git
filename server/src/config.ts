@@ -29,6 +29,11 @@ export interface AppConfig {
   /** Personal access tokens: mandatory expiry (GitLab 16.0+), default/max lifetime in days. */
   patDefaultTtlDays: number
   patMaxTtlDays: number
+
+  /** Root directory for hashed bare repositories (@hashed/...). */
+  repositoriesRoot: string
+  /** Max topics per project (GitLab parity). */
+  maxTopicsPerProject: number
 }
 
 export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
