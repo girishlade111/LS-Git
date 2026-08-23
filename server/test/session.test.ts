@@ -22,7 +22,7 @@ describe('session management', () => {
     const past = new Date(Date.now() - 61 * 60_000).toISOString()
     app.store.db.run('UPDATE sessions SET expires_at = ?', past)
 
-    const res = await authed(app, 'GET', '/api/v1/user', { session })
+    const res = await authed(app, 'GET', '/api/v1/user', { session: session! })
     expect(res.statusCode).toBe(401)
     expect(
       app.store.sessions.listForUser(app.store.users.byUsername('alice')!.id),
@@ -33,7 +33,7 @@ describe('session management', () => {
     const app = makeApp()
     const { session } = await registerUser(app)
     const before = app.store.sessions.listForUser(1)[0]!
-    await authed(app, 'GET', '/api/v1/user', { session })
+    await authed(app, 'GET', '/api/v1/user', { session: session! })
     const after = app.store.sessions.listForUser(1)[0]!
     expect(new Date(after.expires_at).getTime()).toBeGreaterThanOrEqual(
       new Date(before.expires_at).getTime(),
@@ -111,7 +111,7 @@ describe('session management', () => {
     const user = app.store.users.byUsername('alice')!
     app.store.users.updateProfile(user.id, { state: 'blocked' })
 
-    const res = await authed(app, 'GET', '/api/v1/user', { session: alice })
+    const res = await authed(app, 'GET', '/api/v1/user', { session: alice! })
     expect(res.statusCode).toBe(401)
   })
 

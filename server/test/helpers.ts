@@ -1,6 +1,6 @@
 import { loadConfig, type AppConfig } from '../src/config.js'
 import { buildApp } from '../src/http/app.js'
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, InjectPayload } from 'fastify'
 
 // Keep the test suite fast: reduced scrypt cost (hashes embed their params, so
 // production data at full cost still verifies).
@@ -105,13 +105,12 @@ export async function authed(
     headers.cookie = opts.session.cookie
     if (!['GET', 'HEAD'].includes(method)) headers['x-csrf-token'] = opts.session.csrf
   }
-  const options: {
-    method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
-    url: string
-    headers: Record<string, string>
-    payload?: unknown
-  } = { method, url, headers }
-  if (opts.payload !== undefined) options.payload = opts.payload
+  const options = {
+    method,
+    url,
+    headers,
+    ...(opts.payload !== undefined ? { payload: opts.payload as InjectPayload } : {}),
+  }
   const res = await app.inject(options)
   return {
     statusCode: res.statusCode,
