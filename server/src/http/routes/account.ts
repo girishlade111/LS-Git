@@ -20,13 +20,13 @@ export function registerAccountRoutes(app: FastifyInstance): void {
     return selfUser(app.identity.requireUser(req.actor!.userId))
   })
 
-  app.patch('/api/v1/user', { preHandler: [auth, app.requirePermission('profile:update_self', {})] }, async (req) => {
+  app.patch('/api/v1/user', { preHandler: [app.requireAuth('write_api'), app.requirePermission('profile:update_self', {})] }, async (req) => {
     const body = (req.body ?? {}) as Record<string, unknown>
     const updated = app.identity.updateProfile(req.actor!.userId, body)
     return selfUser(updated)
   })
 
-  app.put('/api/v1/user/password', { preHandler: [auth, app.requirePermission('account:manage_credentials', {})] }, async (req) => {
+  app.put('/api/v1/user/password', { preHandler: [app.requireAuth('write_api'), app.requirePermission('account:manage_credentials', {})] }, async (req) => {
     const body = (req.body ?? {}) as { current_password?: unknown; new_password?: unknown }
     await app.identity.changePassword(
       req.actor!.userId,
@@ -73,17 +73,17 @@ export function registerAccountRoutes(app: FastifyInstance): void {
   })
 
   // -- sessions -----------------------------------------------------------------
-  app.get('/api/v1/sessions', { preHandler: [auth, app.requirePermission('account:manage_credentials', {})] }, async (req) => {
+  app.get('/api/v1/sessions', { preHandler: [app.requireAuth('write_api'), app.requirePermission('account:manage_credentials', {})] }, async (req) => {
     const rows = app.store.sessions.listForUser(req.actor!.userId)
     return rows.map((s) => sessionView(s, req.sessionId ?? undefined))
   })
 
-  app.post('/api/v1/sessions/revoke-others', { preHandler: [auth, app.requirePermission('account:manage_credentials', {})] }, async (req) => {
+  app.post('/api/v1/sessions/revoke-others', { preHandler: [app.requireAuth('write_api'), app.requirePermission('account:manage_credentials', {})] }, async (req) => {
     const n = app.identity.revokeOtherSessions(req.actor!.userId, req.sessionId)
     return { revoked: n }
   })
 
-  app.delete('/api/v1/sessions/:id', { preHandler: [auth, app.requirePermission('account:manage_credentials', {})] }, async (req, reply) => {
+  app.delete('/api/v1/sessions/:id', { preHandler: [app.requireAuth('write_api'), app.requirePermission('account:manage_credentials', {})] }, async (req, reply) => {
     const id = Number((req.params as { id: string }).id)
     const row = app.store.sessions.listForUser(req.actor!.userId).find((s) => s.id === id)
     if (!row) {
@@ -100,17 +100,17 @@ export function registerAccountRoutes(app: FastifyInstance): void {
   })
 
   // -- SSH keys ---------------------------------------------------------------
-  app.get('/api/v1/user/keys', { preHandler: [auth, app.requirePermission('account:manage_credentials', {})] }, async (req) => {
+  app.get('/api/v1/user/keys', { preHandler: [app.requireAuth('write_api'), app.requirePermission('account:manage_credentials', {})] }, async (req) => {
     return app.credentials.listSshKeys(req.actor!.userId).map(sshKeyView)
   })
 
-  app.post('/api/v1/user/keys', { preHandler: [auth, app.requirePermission('account:manage_credentials', {})] }, async (req, reply) => {
+  app.post('/api/v1/user/keys', { preHandler: [app.requireAuth('write_api'), app.requirePermission('account:manage_credentials', {})] }, async (req, reply) => {
     const row = app.credentials.addSshKey(req.actor!.userId, (req.body ?? {}) as Record<string, unknown>)
     reply.code(201)
     return sshKeyView(row)
   })
 
-  app.delete('/api/v1/user/keys/:id', { preHandler: [auth, app.requirePermission('account:manage_credentials', {})] }, async (req, reply) => {
+  app.delete('/api/v1/user/keys/:id', { preHandler: [app.requireAuth('write_api'), app.requirePermission('account:manage_credentials', {})] }, async (req, reply) => {
     const id = Number((req.params as { id: string }).id)
     if (!Number.isInteger(id)) {
       reply.code(400).send({ message: 'Invalid key id' })
@@ -122,11 +122,11 @@ export function registerAccountRoutes(app: FastifyInstance): void {
   })
 
   // -- personal access tokens -----------------------------------------------------
-  app.get('/api/v1/user/personal_access_tokens', { preHandler: [auth, app.requirePermission('account:manage_credentials', {})] }, async (req) => {
+  app.get('/api/v1/user/personal_access_tokens', { preHandler: [app.requireAuth('write_api'), app.requirePermission('account:manage_credentials', {})] }, async (req) => {
     return app.credentials.listPats(req.actor!.userId).map(patView)
   })
 
-  app.post('/api/v1/user/personal_access_tokens', { preHandler: [auth, app.requirePermission('account:manage_credentials', {})] }, async (req, reply) => {
+  app.post('/api/v1/user/personal_access_tokens', { preHandler: [app.requireAuth('write_api'), app.requirePermission('account:manage_credentials', {})] }, async (req, reply) => {
     const { record, plaintext } = app.credentials.createPat(
       req.actor!.userId,
       (req.body ?? {}) as Record<string, unknown>,
@@ -136,7 +136,7 @@ export function registerAccountRoutes(app: FastifyInstance): void {
     return { ...patView(record), token: plaintext }
   })
 
-  app.delete('/api/v1/user/personal_access_tokens/:id', { preHandler: [auth, app.requirePermission('account:manage_credentials', {})] }, async (req, reply) => {
+  app.delete('/api/v1/user/personal_access_tokens/:id', { preHandler: [app.requireAuth('write_api'), app.requirePermission('account:manage_credentials', {})] }, async (req, reply) => {
     const id = Number((req.params as { id: string }).id)
     if (!Number.isInteger(id)) {
       reply.code(400).send({ message: 'Invalid token id' })
