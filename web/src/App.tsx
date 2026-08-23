@@ -25,9 +25,18 @@ function Placeholder({ title }: { title: string }) {
 /** Full-page loading gate while the session is restored. */
 function Booting() {
   return (
-    <AuthLayout title="Loading…" description="Restoring your session.">
-      <SubmitButton label="Please wait…" />
-    </AuthLayout>
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'grid',
+        placeItems: 'center',
+        color: 'var(--ls-text-secondary)',
+        fontSize: 'var(--ls-fs-body)',
+      }}
+      role="status"
+    >
+      Restoring session…
+    </div>
   )
 }
 
