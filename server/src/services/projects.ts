@@ -154,6 +154,8 @@ export class ProjectsService {
     this.s.db.transaction(() => {
       this.s.db.run('UPDATE projects SET disk_path = ?, initialized = ? WHERE id = ?', diskPath, shouldInitialize ? 1 : 0, project.id)
       if (input.topics.length > 0) this.s.topics.setForProject(project.id, input.topics)
+      // Claiming a redirected path retires that redirect (GitLab parity).
+      this.s.redirects.pruneSuperseded()
     })
     project = this.requireProject(project.id)
 
