@@ -40,7 +40,7 @@ export function UploadDialog({
   const [resultNote, setResultNote] = useState<string | null>(null)
 
   function reset() {
-    setFile(null); setFilePath(''); setMessage(''); setPhase('idle'); setSent(0)
+    setFile(null); setFilePath(''); setMessage(''); setPhase('idle'); setSent(0); setReplaceExisting(false)
     setError(null); setResultNote(null); setTargetMode('current'); setNewBranch(''); setWantMr(false)
     uploaderRef.current = new Uploader()
   }
@@ -131,7 +131,7 @@ export function UploadDialog({
       <>
         {(phase === 'idle' || phase === 'done') && <Button onClick={() => { close() }}>{phase === 'done' ? 'Close' : 'Cancel'}</Button>}
         {(phase === 'idle') && (
-          <Button variant="primary" data-autofocus disabled={!file || !filePath.trim() || !message.trim()} onClick={() => void run(false)}>
+          <Button variant="primary" data-autofocus disabled={!file || !filePath.trim() || !message.trim()} onClick={() => void run(replaceExisting)}>
             Upload &amp; commit
           </Button>
         )}
