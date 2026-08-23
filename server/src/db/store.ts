@@ -443,3 +443,248 @@ export class MailOutboxRepo {
     return this.db.all('SELECT * FROM mail_outbox ORDER BY id DESC LIMIT ?', limit)
   }
 }
+
+// ---------------------------------------------------------------------------
+// Projects & topics
+// ---------------------------------------------------------------------------
+
+export type Visibility = 'private' | 'internal' | 'public'
+
+export interface ProjectRow {
+  id: number
+  owner_id: number
+  name: string
+  path: string
+  visibility: Visibility
+  description: string
+  website_url: string
+  default_branch: string
+  archived: number
+  is_template: number
+  repository_storage: string
+  disk_path: string
+  initialized: number
+  last_activity_at: string
+  created_at: string
+  updated_at: string
+}
+
+export class ProjectsRepo {
+  constructor(private db: Database) {}
+
+  create(data: {
+    owner_id: number
+    name: string
+    path: string
+    visibility?: Visibility
+    description?: string
+    website_url?: string
+    default_branch?: string
+    disk_path: string
+    initialized?: boolean
+  }): ProjectRow {
+    const now = nowIso()
+    const res = this.db.run(
+      `INSERT INTO projects (owner_id, name, path, visibility, description, website_url,
+         default_branch, repository_storage, disk_path, initialized, last_activity_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'default', ?, ?, ?, ?, ?)`,
+      data.owner_id,
+      data.name,
+      data.path,
+      data.visibility ?? 'private',
+      data.description ?? '',
+      data.website_url ?? '',
+      data.default_branch ?? 'main',
+      data.disk_path,
+      data.initialized ? 1 : 0,
+      now,
+      now,
+      now,
+    )
+    return this.byId(res.lastInsertRowid)!
+  }
+
+  byId(id: number): ProjectRow | undefined {
+    return this.db.get('SELECT * FROM projects WHERE id = ?', id) as ProjectRow | undefined
+  }
+
+  /** Live project at an exact owner/path — used for duplicate checks. */
+  byOwnerPath(ownerUsername: string, path: string): ProjectRow | undefined {
+    return this.db.get(
+      `SELECT p.* FROM projects p JOIN users u ON u.id = p.owner_id
+       WHERE u.username = ? AND p.path = ?`,
+      ownerUsername.toLowerCase(),
+      path.toLowerCase(),
+    ) as ProjectRow | undefined
+  }
+
+  listByOwner(ownerId: number): Array<ProjectRow> {
+    return this.db.all(
+      'SELECT * FROM projects WHERE owner_id = ? ORDER BY last_activity_at DESC',
+      ownerId,
+    ) as unknown as Array<ProjectRow>
+  }
+
+  listPublic(opts: { search?: string; topic?: string; limit?: number } = {}): Array<ProjectRow> {
+    const clauses: string[] = ["p.visibility = 'public'", 'p.archived = 0']
+    const params: SqlParam[] = []
+    if (opts.search) {
+      clauses.push('(p.name LIKE ? OR p.description LIKE ? OR p.path LIKE ?)')
+      const like = `%${opts.search}%`
+      params.push(like, like, like)
+    }
+    if (opts.topic) {
+      clauses.push(
+        'p.id IN (SELECT ptl.project_id FROM project_topic_links ptl JOIN project_topics t ON t.id = ptl.topic_id WHERE t.title = ?)',
+      )
+      params.push(opts.topic.toLowerCase())
+    }
+    params.push(opts.limit ?? 50)
+    return this.db.all(
+      `SELECT p.* FROM projects p WHERE ${clauses.join(' AND ')} ORDER BY p.last_activity_at DESC LIMIT ?`,
+      ...params,
+    ) as unknown as Array<ProjectRow>
+  }
+
+  listTemplates(): Array<ProjectRow> {
+    return this.db.all(
+      "SELECT * FROM projects WHERE is_template = 1 ORDER BY name",
+    ) as unknown as Array<ProjectRow>
+  }
+
+  update(
+    id: number,
+    fields: Partial<Pick<ProjectRow, 'name' | 'path' | 'visibility' | 'description' | 'website_url' | 'default_branch' | 'archived' | 'is_template' | 'owner_id' | 'last_activity_at'>>,
+  ): void {
+    const sets: string[] = []
+    const values: SqlParam[] = []
+    for (const [key, value] of Object.entries(fields)) {
+      sets.push(`${key} = ?`)
+      values.push(value as SqlParam)
+    }
+    if (sets.length === 0) return
+    sets.push('updated_at = ?')
+    values.push(nowIso(), id)
+    this.db.run(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`, ...values)
+  }
+
+  count(): number {
+    return Number((this.db.get('SELECT COUNT(*) AS c FROM projects') as Row).c)
+  }
+}
+
+export class TopicsRepo {
+  constructor(private db: Database) {}
+
+  /** Normalizes to the canonical (lowercase) form; returns existing row on dedup hit. */
+  ensure(title: string): { id: number; title: string } {
+    const canonical = title.trim().toLowerCase()
+    const existing = this.db.get('SELECT id, title FROM project_topics WHERE title = ?', canonical) as
+      | { id: number; title: string }
+      | undefined
+    if (existing) return existing
+    this.db.run('INSERT INTO project_topics (title) VALUES (?)', canonical)
+    return this.db.get('SELECT id, title FROM project_topics WHERE title = ?', canonical) as {
+      id: number
+      title: string
+    }
+  }
+
+  byTitle(title: string): { id: number; title: string } | undefined {
+    return this.db.get('SELECT id, title FROM project_topics WHERE title = ?', title.toLowerCase()) as
+      | { id: number; title: string }
+      | undefined
+  }
+
+  search(query: string, limit = 20): Array<{ id: number; title: string }> {
+    return this.db.all(
+      'SELECT id, title FROM project_topics WHERE title LIKE ? ORDER BY title LIMIT ?',
+      `%${query.toLowerCase()}%`,
+      limit,
+    ) as unknown as Array<{ id: number; title: string }>
+  }
+
+  listForProject(projectId: number): Array<string> {
+    return (
+      this.db.all(
+        `SELECT t.title FROM project_topics t
+         JOIN project_topic_links l ON l.topic_id = t.id
+         WHERE l.project_id = ? ORDER BY t.title`,
+        projectId,
+      ) as Array<Row>
+    ).map((r) => String(r.title))
+  }
+
+  setForProject(projectId: number, titles: string[]): void {
+    // Replace-set semantics inside a caller-managed transaction.
+    this.db.run('DELETE FROM project_topic_links WHERE project_id = ?', projectId)
+    for (const title of titles) {
+      const topic = this.ensure(title)
+      this.db.run(
+        'INSERT OR IGNORE INTO project_topic_links (project_id, topic_id) VALUES (?, ?)',
+        projectId,
+        topic.id,
+      )
+    }
+  }
+
+  /** Removes topic rows that no longer have any project linked. */
+  pruneOrphans(): void {
+    this.db.run(
+      'DELETE FROM project_topics WHERE id NOT IN (SELECT DISTINCT topic_id FROM project_topic_links)',
+    )
+  }
+}
+
+export interface RedirectRow {
+  owner_username: string
+  path: string
+  project_id: number
+  created_at: string
+}
+
+export class RedirectsRepo {
+  constructor(private db: Database) {}
+
+  create(ownerUsername: string, path: string, projectId: number): void {
+    // A live project occupies its own path; never shadow one with a redirect.
+    this.db.run(
+      `INSERT OR REPLACE INTO project_redirects (owner_username, path, project_id, created_at)
+       SELECT ?, ?, ?, ?
+       WHERE NOT EXISTS (
+         SELECT 1 FROM projects p JOIN users u ON u.id = p.owner_id
+         WHERE u.username = ? AND p.path = ?
+       )`,
+      ownerUsername.toLowerCase(),
+      path.toLowerCase(),
+      projectId,
+      nowIso(),
+      ownerUsername.toLowerCase(),
+      path.toLowerCase(),
+    )
+  }
+
+  resolve(ownerUsername: string, path: string): number | undefined {
+    const row = this.db.get(
+      'SELECT project_id FROM project_redirects WHERE owner_username = ? AND path = ?',
+      ownerUsername.toLowerCase(),
+      path.toLowerCase(),
+    ) as Row | undefined
+    return row ? Number(row.project_id) : undefined
+  }
+
+  deleteForProject(projectId: number): void {
+    this.db.run('DELETE FROM project_redirects WHERE project_id = ?', projectId)
+  }
+
+  /** Drops redirects that point where a live project already sits (stale after rename chains). */
+  pruneSuperseded(): void {
+    this.db.run(
+      `DELETE FROM project_redirects r
+       WHERE EXISTS (
+         SELECT 1 FROM projects p JOIN users u ON u.id = p.owner_id
+         WHERE u.username = r.owner_username AND p.path = r.path
+       )`,
+    )
+  }
+}
