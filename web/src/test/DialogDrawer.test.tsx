@@ -49,14 +49,23 @@ describe('Dialog', () => {
     render(<DialogHarness />)
     await user.click(screen.getByText('Open dialog'))
 
-    const confirm = screen.getByText('Confirm')
     const close = screen.getByRole('button', { name: 'Close dialog' })
-    confirm.focus()
-    // Tab from last focusable wraps to first
-    await user.tab()
-    expect(close).not.toHaveFocus() // sanity: order handled by trap
     const input = screen.getByLabelText('Project path')
-    expect([confirm, close, input]).toContain(document.activeElement)
+    const confirm = screen.getByText('Confirm')
+
+    // From the last focusable, Tab wraps to the first (header close button).
+    confirm.focus()
+    await user.tab()
+    expect(close).toHaveFocus()
+
+    // Shift+Tab from the first wraps to the last.
+    await user.tab({ shift: true })
+    expect(confirm).toHaveFocus()
+
+    // Middle navigation still works normally.
+    close.focus()
+    await user.tab()
+    expect(input).toHaveFocus()
   })
 
   it('closes on Escape and restores focus to the opener', async () => {
