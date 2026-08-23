@@ -166,7 +166,7 @@ describe('visibility', () => {
       description: 'findable',
       topics: ['rust'],
     })
-    expect(created.status).toBe(201)
+    expect(created.statusCode).toBe(201)
 
     expect((await app.inject({ method: 'GET', url: '/api/v1/alice/my-project' })).statusCode).toBe(200)
     const explore = (await app.inject({ method: 'GET', url: '/api/v1/projects/explore' })).json() as Array<Record<string, unknown>>
@@ -224,11 +224,13 @@ describe('deletion', () => {
     const wrong = await authed(app, 'DELETE', `/api/v1/projects/${project.id}?confirm_path=bob/wrong`, { session: bobSession })
     expect(wrong.statusCode).toBe(400)
 
-    // Non-owner cannot delete even with correct confirmation.
+    // Non-owner cannot delete even with correct confirmation (charlie is not admin).
+    await registerUser(app, { username: 'charlie', email: 'charlie@example.com' })
+    const charlie = extractSession((await loginRaw(app, 'charlie')).cookies)
     const forbidden = await authed(
       app, 'DELETE',
       `/api/v1/projects/${project.id}?confirm_path=${encodeURIComponent('bob/my-project')}`,
-      { session: aliceSession },
+      { session: charlie! },
     )
     expect(forbidden.statusCode).toBe(403)
 
@@ -334,7 +336,7 @@ describe('templates', () => {
         template_project_id: template.id,
       }),
     })
-    expect(created.status).toBe(201)
+    expect(created.statusCode).toBe(201)
 
     const copy = app.store.projects.byOwnerPath('bob', 'from-template')!
     expect(copy.initialized).toBe(1)
@@ -349,7 +351,7 @@ describe('templates', () => {
       session: bobSession,
       payload: createPayload({ path: 'nope', template_project_id: plain.id }),
     })
-    expect(bad.status).toBe(400)
+    expect(bad.statusCode).toBe(400)
   })
 })
 
