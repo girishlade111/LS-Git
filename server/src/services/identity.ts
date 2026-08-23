@@ -7,7 +7,7 @@ import {
 } from '../lib/validation.js'
 import type { AppConfig } from '../config.js'
 import type { Database } from '../db/database.js'
-import { isoPlus, nowIso } from '../db/database.js'
+import { isoPlus } from '../db/database.js'
 import {
   AccessTokensRepo,
   AuditRepo,
