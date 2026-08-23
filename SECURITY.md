@@ -3,6 +3,18 @@
 Status: **PROPOSED (greenfield)**.
 Reference: GitLab security architecture, token model, and webhook hardening behaviors.
 
+> **Implementation status (identity phase):** §1–§2, §4, §5 are implemented in
+> `server/` (scrypt password hashing with embedded params; opaque session ids stored
+> as SHA-256 digests in HttpOnly SameSite=Lax cookies; double-submit CSRF for
+> cookie-authenticated mutations; per-IP rate limits on auth endpoints; 10-attempt /
+> 60-minute account lockout (Devise lockable parity); single-use reset/verification
+> tokens (6h / 3d TTLs); PATs stored as SHA-256 digests with `lspat_` prefix,
+> GitLab scopes (`api`, `read_api`, `read_user`, `read_repository`,
+> `write_repository`), mandatory ≤365-day expiry, one-time plaintext reveal;
+> `authentication_audit` events for every credential lifecycle action).
+> Authorization is centralized in `server/src/authz.ts` (`can()`, `scopeAllows()`);
+> authentication code never embeds authorization rules.
+
 ---
 
 ## 1. Authentication surfaces
