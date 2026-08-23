@@ -65,23 +65,23 @@ export function FileTree({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault()
-        focusIndex(currentIndex + 1)
+        focusIndex(idx + 1)
         break
       case 'ArrowUp':
         e.preventDefault()
-        focusIndex(currentIndex - 1)
+        focusIndex(idx - 1)
         break
       case 'ArrowRight': {
         e.preventDefault()
-        const row = rows[currentIndex]
+        const row = rows[idx]
         if (row?.node.type !== 'dir') return
         if (!expanded.has(row.node.path)) toggle(row.node.path)
-        else focusIndex(currentIndex + 1)
+        else focusIndex(idx + 1)
         break
       }
       case 'ArrowLeft': {
         e.preventDefault()
-        const row = rows[currentIndex]
+        const row = rows[idx]
         if (row?.node.type === 'dir' && expanded.has(row.node.path)) toggle(row.node.path)
         else {
           // Move to parent directory if one exists.
@@ -96,7 +96,7 @@ export function FileTree({
       case 'Enter':
       case ' ': {
         e.preventDefault()
-        const row = rows[currentIndex]
+        const row = rows[idx]
         if (!row) return
         row.node.type === 'dir' ? toggle(row.node.path) : onSelect?.(row.node)
         break
