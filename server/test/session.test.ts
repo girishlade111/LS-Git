@@ -58,7 +58,7 @@ describe('session management', () => {
 
     const good = await app.inject({
       method: 'POST', url: '/api/v1/sessions/revoke-others',
-      headers: { cookie: session!.cookie, 'x-csrf-token': session.csrf },
+      headers: { cookie: session!.cookie, 'x-csrf-token': session!.csrf },
     })
     expect(good.statusCode).toBe(200)
   })
