@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { makeApp, registerUser, authed, extractSession, loginRaw, type Session } from './helpers.js'
 import { readObject, parseCommit, loadFilesUnderTree } from '../src/storage/gitobjects.js'
 
-const PASSWORD = 'correct horse battery staple 42'
-
-async function setup(overrides = {}) {
+async function setup(overrides: Record<string, unknown> = {}) {
   const app = makeApp({ maxUploadBytes: overrides.maxUploadBytes ?? 1024 * 1024, ...overrides })
   await registerUser(app) // alice (admin)
   const aliceSession = extractSession((await loginRaw(app, 'alice')).cookies)
@@ -23,11 +21,6 @@ async function setup(overrides = {}) {
   expect(created.statusCode).toBe(201)
 
   return { app, aliceSession, bobSession, charlieSession }
-}
-
-interface UploadHandle {
-  initiateRes: ReturnType<typeof Object>
-  uploadId?: string
 }
 
 async function initiate(
@@ -97,14 +90,6 @@ async function uploadFile(
     commit_message: commitOpts.commit_message ?? `Upload ${filePath}`,
     ...commitOpts,
   })
-}
-
-function headFiles(app: ReturnType<typeof makeApp>, diskPath: string, branch: string): Map<string, Buffer> {
-  const abs = join(app.cfg.repositoriesRoot, diskPath)
-  const refSha = readFileSync(join(abs, 'refs', 'heads', branch), 'utf8').trim()
-  const objectsDir = join(abs, 'objects')
-  const commitObj = readObject(objectsDir, refSha)
-  return loadFilesUnderTree(objectsDir, parseCommit(commitObj.body).tree)
 }
 
 // ---------------------------------------------------------------------------
