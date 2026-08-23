@@ -3,6 +3,8 @@ import { Badge } from '../design-system/Badge'
 import { Icon, type IconName } from '../design-system/Icon'
 import { IconButton } from '../design-system/IconButton'
 import { Dropdown } from '../design-system/Dropdown'
+import { useAuth } from '../auth/context'
+import { useHashRoute } from '../auth/context'
 
 export interface SidebarProps {
   current: string
@@ -40,6 +42,9 @@ const sections: Array<{ label: string; items: NavEntry[] }> = [
  * the Drawer-like behavior is driven by `open` from AppShell.
  */
 export function Sidebar({ current, onNavigate, open }: SidebarProps) {
+  const { user, signOut } = useAuth()
+  const { navigate } = useHashRoute()
+
   return (
     <aside className="ls-sidebar" data-open={open} aria-label="Primary">
       <div className="ls-sidebar__brand">
@@ -89,10 +94,10 @@ export function Sidebar({ current, onNavigate, open }: SidebarProps) {
       <div className="ls-sidebar__spacer" />
 
       <div className="ls-sidebar__user">
-        <Avatar name="Girish Lade" size="sm" />
+        <Avatar name={user?.name ?? user?.username ?? '?'} size="sm" />
         <span style={{ minWidth: 0 }}>
-          <div className="ls-sidebar__user-name">Girish Lade</div>
-          <div className="ls-sidebar__user-handle">@girish</div>
+          <div className="ls-sidebar__user-name">{user?.name ?? user?.username ?? '…'}</div>
+          <div className="ls-sidebar__user-handle">@{user?.username ?? ''}</div>
         </span>
         <Dropdown
           menuLabel="Account menu"
@@ -101,11 +106,15 @@ export function Sidebar({ current, onNavigate, open }: SidebarProps) {
             <IconButton label="Open account menu" icon="more" active={expanded} onClick={onClick} />
           )}
           items={[
-            { kind: 'item', id: 'profile', label: 'Profile' },
-            { kind: 'item', id: 'preferences', label: 'Preferences' },
+            { kind: 'item', id: 'account', label: 'Account settings' },
+            { kind: 'item', id: 'profile', label: 'Public profile' },
             { kind: 'separator' },
             { kind: 'item', id: 'signout', label: 'Sign out' },
           ]}
+          onSelect={(id) => {
+            if (id === 'signout') void signOut().then(() => navigate('/login'))
+            else if (id === 'account') navigate('/account')
+          }}
         />
       </div>
     </aside>
