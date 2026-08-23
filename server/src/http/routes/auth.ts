@@ -4,7 +4,6 @@ import { AppError } from '../../services/identity.js'
 import { clearAuthCookies, issueCookies, parseRequestCookieValue } from '../app.js'
 import { selfUser, publicUser, sessionView, sshKeyView, patView } from '../serializers.js'
 import { tokenDigest } from '../../lib/crypto.js'
-import type { IdentityServices } from '../../services/identity.js'
 
 const loginSchema = z.object({
   login: z.string().min(1).max(255),
@@ -37,7 +36,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       ip: req.ip,
       userAgent: req.headers['user-agent'],
     })
-    // New session id on every login → session fixation is impossible.
+    // Fresh session id on every login → session fixation is impossible.
     const csrf = issueCookies(reply, app.cfg, rawSession)
     return { user: selfUser(user), csrf_token: csrf }
   })
@@ -45,10 +44,10 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   // -- logout ---------------------------------------------------------------
   app.post('/api/v1/auth/logout', async (req, reply) => {
     if (req.rawSessionToken) {
-      const session = sessionsOf(app).byDigest(tokenDigest(req.rawSessionToken))
+      const session = app.store.sessions.byDigest(tokenDigest(req.rawSessionToken))
       if (session && req.actor?.via.kind === 'session' && session.user_id === req.actor.userId) {
-        sessionsOf(app).delete(session.id)
-        app.identity.auditLogout(req.actor.userId)
+        app.store.sessions.delete(session.id)
+        app.store.audit.record({ userId: req.actor.userId, name: 'logout' })
       }
     }
     clearAuthCookies(reply, app.cfg)
@@ -96,24 +95,9 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     return { message: 'Password has been reset. Sign in with your new password.' }
   })
 
-  // Central-authorization demonstration endpoint (admin area gate).
+  // Central-authorization gate demonstration (admin area).
   app.get('/api/v1/admin/ping', {
     preHandler: app.requirePermission('admin:access'),
     handler: async () => ({ pong: true }),
   })
 }
-
-// The store instance lives inside the identity service bundle; expose minimal access.
-const storeBundles = new WeakMap<FastifyInstance, IdentityServices>()
-export function attachStore(app: FastifyInstance, s: IdentityServices): void {
-  storeBundles.set(app, s)
-}
-function sessionsOf(app: FastifyInstance) {
-  const s = storeBundles.get(app)
-  if (!s) throw new Error('store not attached')
-  return s.sessions
-}
-void publicUser
-void sshKeyView
-void patView
-void sessionView
