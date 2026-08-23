@@ -80,6 +80,7 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         token_digest TEXT NOT NULL UNIQUE,
         expires_at TEXT NOT NULL,
+        used_at TEXT,
         verified_at TEXT,
         created_at TEXT NOT NULL
       );
