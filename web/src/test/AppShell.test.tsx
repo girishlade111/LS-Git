@@ -54,8 +54,6 @@ describe('AppShell', () => {
     await user.click(screen.getByRole('tab', { name: /Issues/ }))
     await waitFor(() => expect(screen.getByText('Issues page')).toBeInTheDocument())
 
-    await user.click(screen.getByRole('button', { name: 'Settings' }).first() as HTMLElement).catch(() => undefined) ?? undefined
-    // Use the repo tab instead (multiple Settings buttons exist by design):
     await user.click(screen.getByRole('tab', { name: 'Settings' }))
     await waitFor(() => expect(screen.getByText('Settings page')).toBeInTheDocument())
   })
