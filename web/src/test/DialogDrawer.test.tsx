@@ -44,27 +44,24 @@ describe('Dialog', () => {
     expect(screen.getByLabelText('Project path')).toBeInTheDocument()
   })
 
-  it('traps Tab focus inside the dialog', async () => {
-    const user = userEvent.setup()
+  it('traps Tab focus inside the dialog', () => {
     render(<DialogHarness />)
-    await user.click(screen.getByText('Open dialog'))
+    fireEvent.click(screen.getByText('Open dialog'))
 
     const close = screen.getByRole('button', { name: 'Close dialog' })
     const input = screen.getByLabelText('Project path')
     const confirm = screen.getByText('Confirm')
 
-    // From the last focusable, Tab wraps to the first (header close button).
-    confirm.focus()
-    await user.tab()
+    // Tab from the last focusable wraps to the first (trap handler).
+    fireEvent.keyDown(confirm, { key: 'Tab' })
     expect(close).toHaveFocus()
 
     // Shift+Tab from the first wraps to the last.
-    await user.tab({ shift: true })
+    fireEvent.keyDown(close, { key: 'Tab', shiftKey: true })
     expect(confirm).toHaveFocus()
 
-    // Middle navigation still works normally.
-    close.focus()
-    await user.tab()
+    // In-range navigation follows DOM order.
+    fireEvent.keyDown(close, { key: 'Tab' })
     expect(input).toHaveFocus()
   })
 
