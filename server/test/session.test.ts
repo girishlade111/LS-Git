@@ -70,19 +70,21 @@ describe('session management', () => {
     const s2 = extractSession((await loginRaw(app, 'dana')).cookies)
 
     // dana has THREE sessions: the registration auto-login + two explicit logins.
-    const list = (await authed(app, 'GET', '/api/v1/sessions', { session: s2 })).json() as unknown as Array<{ id: number; current: boolean }>
-    expect(list).toHaveLength(3)
-    expect(list.filter((r) => r.current)).toHaveLength(1)
+    const l2 = (await authed(app, 'GET', '/api/v1/sessions', { session: s2 })).json() as unknown as Array<{ id: number; current: boolean }>
+    expect(l2).toHaveLength(3)
+    expect(l2.filter((r) => r.current)).toHaveLength(1)
 
-    // Delete the REGISTRATION session by id (not s1/s2).
-    const s1Id = (await authed(app, 'GET', '/api/v1/sessions', { session: s1 })).json() as unknown as Array<{ id: number; current: boolean }>
-    const regSessionId = s1Id.find((r) => r.current)!.id
+    // Identify the registration session: it is NON-current in both s1's and s2's views.
+    const l1 = (await authed(app, 'GET', '/api/v1/sessions', { session: s1 })).json() as unknown as Array<{ id: number; current: boolean }>
+    const nonCurrentInL1 = new Set(l1.filter((r) => !r.current).map((r) => r.id))
+    const regSessionId = l2.find((r) => !r.current && nonCurrentInL1.has(r.id))!.id
+
     const del = await authed(app, 'DELETE', `/api/v1/sessions/${regSessionId}`, { session: s2 })
     expect(del.statusCode).toBe(200)
 
-    // s1 is untouched; deleting the same row again → 404.
-    const still = await authed(app, 'GET', '/api/v1/user', { session: s1 })
-    expect(still.statusCode).toBe(200)
+    // s1 and s2 survive; deleting the same row again → 404.
+    expect((await authed(app, 'GET', '/api/v1/user', { session: s1 })).statusCode).toBe(200)
+    expect((await authed(app, 'GET', '/api/v1/user', { session: s2 })).statusCode).toBe(200)
     const gone = await authed(app, 'DELETE', `/api/v1/sessions/${regSessionId}`, { session: s2 })
     expect(gone.statusCode).toBe(404)
     void reg
