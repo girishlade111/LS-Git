@@ -74,7 +74,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   const db = new Database(dbFile ?? cfg.databaseFile)
   const services = makeServices(db)
 
-"  const app = Fastify({ logger: false, bodyLimit: 1_500_000 })
+  const app = Fastify({ logger: false, bodyLimit: 1_500_000 })
   app.cfg = cfg
 
   // Raw binary bodies for upload transfer (route-level cap enforced too).
@@ -82,7 +82,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
     'application/octet-stream',
     { parseAs: 'buffer', bodyLimit: cfg.maxUploadBytes },
     (_req, body, done) => done(null, body as Buffer),
-  )"
+  )
   app.store = services
 
   // Outbox-backed mail transport; a real SMTP adapter plugs in at deploy time.
