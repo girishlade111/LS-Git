@@ -112,8 +112,7 @@ export class LocalHashedStorage implements RepositoryStorage {
     const refFile = join(abs, 'refs', 'heads', branch)
     if (!existsSync(refFile)) throw new Error(`branch not found: ${branch}`)
     const headSha = readFileSync(refFile, 'utf8').trim()
-    const { parseCommit } = require('./gitobjects.js') as typeof import('./gitobjects.js')
-    const commitBody = inflateObject(join(abs, 'objects'), headSha)
+    const commitBody = inflateSync(readFileSync(join(abs, 'objects', headSha.slice(0, 2), headSha.slice(2))))
     return loadFilesUnderTree(join(abs, 'objects'), parseCommit(commitBody).tree)
   }
 
