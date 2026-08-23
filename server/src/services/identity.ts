@@ -47,6 +47,9 @@ export interface IdentityServices {
   verifications: EmailVerificationsRepo
   audit: AuditRepo
   outbox: MailOutboxRepo
+  projects: ProjectsRepo
+  topics: TopicsRepo
+  redirects: RedirectsRepo
 }
 
 export function makeServices(db: Database): IdentityServices {
