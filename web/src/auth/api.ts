@@ -27,8 +27,8 @@ export function setBearerToken(token: string | null): void {
 }
 
 async function request<T>(
-  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
   url: string,
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
   body?: unknown,
 ): Promise<T> {
   const headers: Record<string, string> = {}
