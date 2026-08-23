@@ -59,14 +59,17 @@ describe('AppShell', () => {
   })
 
   it('opens the mobile navigation drawer from the menu button', async () => {
-    const user = userEvent.setup()
     render(<Harness />)
-    await user.click(screen.getByRole('button', { name: 'Open navigation menu' }))
+    // The menu button is hidden on desktop via CSS; jsdom has no layout, so use
+    // fireEvent to exercise the handler independent of geometry.
+    fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }))
     const drawer = await screen.findByRole('dialog', { name: 'Navigation' })
     expect(drawer).toBeInTheDocument()
 
-    await user.click(drawer.parentElement!.querySelector('.ls-drawer__header button')!)
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Navigation' })).not.toBeInTheDocument())
+    fireEvent.click(drawer.parentElement!.querySelector('.ls-drawer__header button')!)
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Navigation' })).not.toBeInTheDocument(),
+    )
   })
 
   it('skip link targets main content', () => {
