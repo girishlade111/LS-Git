@@ -153,4 +153,35 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
       );
     `,
   },
+  {
+    version: 3,
+    sql: `
+      -- Staged uploads: temp-file bookkeeping between initiate and commit/cancel.
+      CREATE TABLE uploads (
+        id TEXT PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        file_path TEXT NOT NULL,
+        declared_size INTEGER NOT NULL,
+        received_size INTEGER NOT NULL DEFAULT 0,
+        sha256 TEXT,
+        state TEXT NOT NULL DEFAULT 'pending'
+          CHECK (state IN ('pending', 'completed', 'cancelled')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_uploads_project ON uploads(project_id, state);
+
+      -- Durable event outbox (EVENTS.md §1). Consumers fan out async; rows are the
+      -- authoritative emission record for repository mutations.
+      CREATE TABLE events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER,
+        type TEXT NOT NULL,
+        payload TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_events_project ON events(project_id, id DESC);
+    `,
+  },
 ]
