@@ -175,11 +175,11 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   app.requireAuth = (needed?: 'read_api' | 'write_api') =>
     ((req, reply, done) => {
       if (!req.actor) {
-        done()
+        // Sync pre-handler: sending the reply (without done) halts the chain.
+        void done
         return reply.code(401).send({ message: 'Authentication required' })
       }
       if (needed && !scopeAllows(req.actor.via, needed)) {
-        done()
         return reply.code(403).send({ message: `Insufficient token scope for ${needed}` })
       }
       done()
@@ -189,7 +189,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
     ((req, reply, done) => {
       const ok = can(req.actor, permission, { resourceUserId: ctx?.resourceUserId })
       if (!ok) {
-        done()
+        void done
         return reply
           .code(req.actor ? 403 : 401)
           .send({
