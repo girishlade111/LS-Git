@@ -42,7 +42,7 @@ describe('AppShell', () => {
   it('renders landmarks: primary sidebar nav, breadcrumb, repository tabs', () => {
     render(<Harness />)
     expect(screen.getByRole('navigation', { name: 'Workspace' })).toBeInTheDocument()
-    expect(screen.getByRole('navigation', { label: 'Breadcrumb' })).toHaveTextContent('ls-git')
+    expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toHaveTextContent('ls-git')
     expect(screen.getByRole('tablist', { name: 'Repository sections' })).toBeInTheDocument()
     expect(screen.getByText('Overview page')).toBeInTheDocument()
   })
