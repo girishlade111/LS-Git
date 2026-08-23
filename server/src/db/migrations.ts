@@ -13,6 +13,8 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
         state TEXT NOT NULL DEFAULT 'active',
         admin INTEGER NOT NULL DEFAULT 0,
         email_verified INTEGER NOT NULL DEFAULT 0,
+        failed_login_count INTEGER NOT NULL DEFAULT 0,
+        locked_until TEXT,
         bio TEXT,
         location TEXT,
         website_url TEXT,
