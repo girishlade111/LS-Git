@@ -5,7 +5,6 @@ import { normalizeTopic } from '../../lib/projects.js'
 import { GITIGNORE_TEMPLATES, LICENSE_TEMPLATES } from '../../storage/templates.js'
 import type { ProjectRow } from '../../db/store.js'
 import { can as authzCan } from '../../authz.js'
-import type { Actor } from '../../authz.js'
 
 export function projectView(app: FastifyInstance, p: ProjectRow) {
   const owner = app.store.users.byId(p.owner_id)
@@ -27,10 +26,6 @@ export function projectView(app: FastifyInstance, p: ProjectRow) {
     // Existence-only booleans; no storage internals leak (hashed paths stay server-side).
     repository_empty: !p.initialized,
   }
-}
-
-function actorOf(req: { actor: Actor | null }): Actor | null {
-  return req.actor
 }
 
 export function registerProjectRoutes(app: FastifyInstance): void {
