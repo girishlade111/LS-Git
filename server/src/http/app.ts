@@ -147,7 +147,8 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
     if (req.actor?.via.kind !== 'session') return
     const header = req.headers['x-csrf-token']
     if (typeof header !== 'string' || header !== cookies[cfg.csrfCookieName]) {
-      reply.code(403).send({ message: 'CSRF verification failed' })
+      // Returning the reply halts the request lifecycle (single-send contract).
+      return reply.code(403).send({ message: 'CSRF verification failed' })
     }
   })
 
@@ -166,7 +167,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
     reply.header('x-ratelimit-remaining', verdict.remaining)
     if (!verdict.allowed) {
       reply.header('retry-after', verdict.retryAfterSeconds)
-      reply.code(429).send({ message: 'Too many requests. Try again later.' })
+      return reply.code(429).send({ message: 'Too many requests. Try again later.' })
     }
   })
 
@@ -174,24 +175,28 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   app.requireAuth = (needed?: 'read_api' | 'write_api') =>
     ((req, reply, done) => {
       if (!req.actor) {
-        reply.code(401).send({ message: 'Authentication required' })
-        return
+        done()
+        return reply.code(401).send({ message: 'Authentication required' })
       }
       if (needed && !scopeAllows(req.actor.via, needed)) {
-        reply.code(403).send({ message: `Insufficient token scope for ${needed}` })
-        return
+        done()
+        return reply.code(403).send({ message: `Insufficient token scope for ${needed}` })
       }
       done()
     }) as PreHandlerFn
 
   app.requirePermission = (permission, ctx) =>
-    ((req, reply) => {
+    ((req, reply, done) => {
       const ok = can(req.actor, permission, { resourceUserId: ctx?.resourceUserId })
       if (!ok) {
-        reply.code(req.actor ? 403 : 401).send({
-          message: req.actor ? 'You are not allowed to perform this action' : 'Authentication required',
-        })
+        done()
+        return reply
+          .code(req.actor ? 403 : 401)
+          .send({
+            message: req.actor ? 'You are not allowed to perform this action' : 'Authentication required',
+          })
       }
+      done()
     }) as PreHandlerFn
 
   // ---- error mapping -------------------------------------------------------
