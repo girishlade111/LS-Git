@@ -17,6 +17,7 @@ import {
 } from '../storage/gitobjects.js'
 import type { LocalHashedStorage } from '../storage/local.js'
 import { validateRepoFilePath, sanitizeCommitMessage } from '../lib/pathsafe.js'
+import { can } from '../authz.js'
 
 /**
  * Single-file upload pipeline (GitLab Web-Editor / files-API parity):
@@ -29,8 +30,6 @@ import { validateRepoFilePath, sanitizeCommitMessage } from '../lib/pathsafe.js'
  * relative slash-delimited repository path and used ONLY as git tree keys and as
  * an opaque bookkeeping value. All bytes land in a server-controlled temp file.
  */
-
-const MINUTE = 60_000
 
 export interface InitiateResult {
   uploadId: string
@@ -221,8 +220,7 @@ export class UploadService {
     }
 
     // Git blob → nested tree → commit with parent linkage.
-    const blobSha = writeObject(objectsDir, 'blob', content)
-    void blobSha
+    writeObject(objectsDir, 'blob', content)
     const merged: FlatFile[] = [
       ...[...files.entries()]
         .filter(([p]) => p !== row.file_path)
@@ -251,7 +249,7 @@ export class UploadService {
         content_sha256_prefix: sha256.slice(0, 12),
         size: content.length,
         replaced: existedBefore,
-        new_branch: targetBranch !== baseBranch || !existedBefore && false,
+        new_branch: opts.new_branch ? true : false,
         actor_user_id: actor!.userId,
       })
       this.s.projects.update(project.id, { last_activity_at: new Date().toISOString() })
