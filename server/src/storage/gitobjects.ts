@@ -25,11 +25,6 @@ export interface TreeEntryParsed {
   sha: string
 }
 
-function hashObject(type: ObjectType, body: Buffer): string {
-  const header = Buffer.from(`${type} ${body.length}\0`, 'utf8')
-  return createHash('sha1').update(Buffer.concat([header, body])).digest('hex')
-}
-
 function objectPath(objectsDir: string, sha: string): string {
   return join(objectsDir, sha.slice(0, 2), sha.slice(2))
 }
