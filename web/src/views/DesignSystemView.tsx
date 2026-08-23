@@ -135,7 +135,7 @@ function Playground() {
               { value: 'linus', label: 'Linus Torvalds', description: '@linus' },
             ]}
           />
-          <Checkbox checked={check} onChange={setCheck} label="Enable CI/CD for this project" />
+          <Checkbox checked={check} onChange={(e) => setCheck(e.target.checked)} label="Enable CI/CD for this project" />
           <Toggle checked={flag} onChange={setFlag} label="Public pipelines" />
         </div>
       </Section>
@@ -273,9 +273,5 @@ function Playground() {
 }
 
 export function DesignSystemView() {
-  return (
-    <ToastProvider>
-      <Playground />
-    </ToastProvider>
-  )
+  return <Playground />
 }
