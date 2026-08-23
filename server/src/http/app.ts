@@ -79,6 +79,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   // Outbox-backed mail transport; a real SMTP adapter plugs in at deploy time.
   app.identity = new IdentityService(services, cfg, services.outbox)
   app.credentials = new CredentialsService(services, cfg.patMaxTtlDays, cfg.patDefaultTtlDays)
+  app.projects = new ProjectsService(services, cfg)
   app.authRateLimiter = new RateLimiter(cfg.authRateLimit.max, cfg.authRateLimit.windowSeconds * 1000)
 
   // ---- authentication resolution ------------------------------------------
