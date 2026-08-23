@@ -50,22 +50,27 @@ describe('SSH public key parsing', () => {
   }
 
   function rsaLine(bits: number): string {
+    const u32 = (n: number): Buffer => {
+      const b = Buffer.alloc(4)
+      b.writeUInt32BE(n)
+      return b
+    }
     const encStr = (s: string) => {
       const b = Buffer.from(s)
-      return Buffer.concat([Buffer.from([0, 0, 0, b.length]), b])
+      return Buffer.concat([u32(b.length), b])
     }
     const encMpint = (n: number) => {
       const bytes = Math.ceil(n / 8) + 1 // leading zero for positive
       const buf = Buffer.alloc(bytes)
       buf[0] = 0
       buf[1] = 0xf6 // high bits set → full bit count after stripping the sign byte
-      return Buffer.concat([Buffer.from([0, 0, 0, bytes]), buf])
+      return Buffer.concat([u32(bytes), buf])
     }
     const blob = Buffer.concat([
       encStr('ssh-rsa'),
       (() => {
         const e = Buffer.from([1, 0, 1])
-        return Buffer.concat([Buffer.from([0, 0, 0, e.length]), e])
+        return Buffer.concat([u32(e.length), e])
       })(),
       encMpint(bits),
     ])
