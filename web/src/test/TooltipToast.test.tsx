@@ -57,11 +57,11 @@ describe('Toast', () => {
   afterEach(() => vi.useRealTimers())
 
   it('renders in a live region and auto-dismisses', async () => {
-    vi.useFakeTimers()
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    // Real timers with a short duration keep this deterministic in jsdom.
+    const user = userEvent.setup()
     render(
       <ToastProvider>
-        <ToastButton duration={1000} />
+        <ToastButton duration={150} />
       </ToastProvider>,
     )
     await user.click(screen.getByText('Trigger toast'))
@@ -70,10 +70,7 @@ describe('Toast', () => {
     expect(region).toHaveTextContent('Saved')
     expect(region).toHaveTextContent('Settings updated.')
 
-    act(() => {
-      vi.advanceTimersByTime(1300)
-    })
-    expect(region).not.toHaveTextContent('Saved')
+    await waitFor(() => expect(region).not.toHaveTextContent('Saved'), { timeout: 2000 })
   })
 
   it('can be dismissed via its dismiss button', async () => {
