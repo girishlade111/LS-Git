@@ -63,6 +63,9 @@ export function makeServices(db: Database): IdentityServices {
     verifications: new EmailVerificationsRepo(db),
     audit: new AuditRepo(db),
     outbox: new MailOutboxRepo(db),
+    projects: new ProjectsRepo(db),
+    topics: new TopicsRepo(db),
+    redirects: new RedirectsRepo(db),
   }
 }
 
