@@ -275,3 +275,18 @@
   .ls-settings__nav { position: static; }
   .ls-grid-2 { grid-template-columns: 1fr; }
 }
+
+/* Topic chips (normalized tags; clickable) */
+.ls-topic {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--ls-border);
+  border-radius: var(--ls-radius-full);
+  background: var(--ls-surface-1);
+  font-size: var(--ls-fs-label);
+  color: var(--ls-text-secondary);
+  cursor: pointer;
+}
+.ls-topic:hover { background: var(--ls-tint-accent); color: var(--ls-accent); border-color: var(--ls-accent); }
