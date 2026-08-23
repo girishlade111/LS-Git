@@ -46,6 +46,8 @@ export function verifyPassword(password: string, stored: string): boolean {
 }
 
 /** Opaque high-entropy token (session ids, PATs, reset/verification tokens). */
+function placeholder(){}
+void placeholder()
 export function generateToken(bytes = 32): string {
   return randomBytes(bytes).toString('base64url')
 }
