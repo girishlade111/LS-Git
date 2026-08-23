@@ -86,11 +86,15 @@ describe('login / logout', () => {
     const app = makeApp({ maxFailedLogins: 3, lockoutMinutes: 60 })
     await registerUser(app, { username: 'carol', email: 'carol@example.com' })
 
-    for (let i = 0; i < 3; i++) {
+    // First two failures return the generic error...
+    for (let i = 0; i < 2; i++) {
       const res = await loginUser(app, 'carol', 'bad-password-xyz')
       expect(res.status).toBe(400)
     }
-    // Correct password now rejected because the account is locked.
+    // ...the third failure trips the lockout immediately.
+    const trip = await loginUser(app, 'carol', 'bad-password-xyz')
+    expect(trip.status).toBe(423)
+    // Correct password is rejected while the lock is active.
     const locked = await loginUser(app, 'carol')
     expect(locked.status).toBe(423)
     expect(locked.body.message).toMatch(/locked/i)
