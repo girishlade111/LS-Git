@@ -5,6 +5,8 @@
  * - one stored key may belong to exactly one user (uniqueness by fingerprint)
  */
 
+import { createHash } from 'node:crypto'
+
 export interface ParsedPublicKey {
   type: string
   bits: number | null
@@ -111,6 +113,3 @@ export function parseSshPublicKey(line: string): ParsedPublicKey {
     comment,
   }
 }
-
-// Imported late to keep the top focused; node:crypto hash.
-import { createHash } from 'node:crypto'
