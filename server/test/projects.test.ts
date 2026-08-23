@@ -328,13 +328,10 @@ describe('templates', () => {
     expect(templates).toHaveLength(1)
 
     // Create from template as bob: files copied from template tip.
-    const created = await authed(app, 'POST', '/api/v1/projects', {
-      session: bobSession,
-      payload: createPayload({
-        name: 'From Template',
-        path: 'from-template',
-        template_project_id: template.id,
-      }),
+    const created = await createProject(app, bobSession, {
+      name: 'From Template',
+      path: 'from-template',
+      template_project_id: template.id,
     })
     expect(created.statusCode).toBe(201)
 
