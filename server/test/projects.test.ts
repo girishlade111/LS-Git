@@ -302,7 +302,7 @@ describe('transfer', () => {
 
 describe('templates', () => {
   it('marks a project as template and seeds new projects from its files', async () => {
-    const { app, aliceSession } = await setup()
+    const { app, aliceSession, bobSession } = await setup()
     await createProject(app, aliceSession, {
       visibility: 'public',
       initialize_with_readme: true,
