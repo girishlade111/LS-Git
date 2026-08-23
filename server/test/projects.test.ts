@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { makeApp, registerUser, loginUser, authed, extractSession, loginRaw, type Session } from './helpers.js'
+import { makeApp, registerUser, authed, extractSession, loginRaw, type Session } from './helpers.js'
 import { LocalHashedStorage } from '../src/storage/local.js'
 import { verifyLooseObject, readObject } from '../src/storage/gitobjects.js'
 
