@@ -1,4 +1,4 @@
-import { Database, nowIso, type Row } from './database.js'
+import { Database, nowIso, type Row, type SqlParam } from './database.js'
 
 /** Repository layer. All SQL lives here; services never touch SQL directly. */
 
@@ -170,7 +170,7 @@ export class SessionsRepo {
     return this.db.all(
       'SELECT * FROM sessions WHERE user_id = ? ORDER BY last_active_at DESC',
       userId,
-    ) as Array<SessionRow>
+    ) as unknown as Array<SessionRow>
   }
 
   touch(id: number, nextExpiry: string): void {
@@ -243,7 +243,7 @@ export class SshKeysRepo {
     return this.db.all(
       'SELECT * FROM ssh_keys WHERE user_id = ? ORDER BY created_at DESC',
       userId,
-    ) as Array<SshKeyRow>
+    ) as unknown as Array<SshKeyRow>
   }
 
   delete(id: number): boolean {
@@ -303,7 +303,7 @@ export class AccessTokensRepo {
     return this.db.all(
       'SELECT * FROM access_tokens WHERE user_id = ? ORDER BY created_at DESC',
       userId,
-    ) as Array<AccessTokenRow>
+    ) as unknown as Array<AccessTokenRow>
   }
 
   revoke(id: number): boolean {
