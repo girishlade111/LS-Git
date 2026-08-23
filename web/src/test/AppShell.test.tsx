@@ -59,10 +59,12 @@ describe('AppShell', () => {
   })
 
   it('opens the mobile navigation drawer from the menu button', async () => {
-    render(<Harness />)
-    // The menu button is hidden on desktop via CSS; jsdom has no layout, so use
-    // fireEvent to exercise the handler independent of geometry.
-    fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }))
+    const { container } = render(<Harness />)
+    // The menu button is display:none on desktop (CSS); jsdom applies no layout,
+    // so reach it directly and fire the handler without geometry assumptions.
+    const menuButton = container.querySelector<HTMLElement>('.ls-contextbar__menu')!
+    expect(menuButton).toHaveAttribute('aria-label', 'Open navigation menu')
+    fireEvent.click(menuButton)
     const drawer = await screen.findByRole('dialog', { name: 'Navigation' })
     expect(drawer).toBeInTheDocument()
 

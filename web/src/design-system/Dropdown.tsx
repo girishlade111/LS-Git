@@ -23,6 +23,7 @@ export function Dropdown({ trigger, items, onSelect, align = 'left', menuLabel }
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
+  const pendingFocus = useRef<'first' | 'last' | null>(null)
   const uid = useId()
 
   const actionable = items.filter((i) => i.kind === 'item') as Array<
@@ -38,13 +39,25 @@ export function Dropdown({ trigger, items, onSelect, align = 'left', menuLabel }
     return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [open])
 
+  // Focus management after the menu commits to the DOM (runs post-render).
+  useEffect(() => {
+    if (!open || !pendingFocus.current) return
+    const els = listRef.current?.querySelectorAll<HTMLButtonElement>(
+      '[role="menuitem"]:not([aria-disabled="true"])',
+    )
+    if (els && els.length > 0) {
+      const target =
+        pendingFocus.current === 'first'
+          ? els[0]
+          : els[els.length - 1]
+      target.focus()
+    }
+    pendingFocus.current = null
+  }, [open])
+
   function openMenu(focus: 'first' | 'last') {
+    pendingFocus.current = focus
     setOpen(true)
-    requestAnimationFrame(() => {
-      const els = listRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([aria-disabled="true"])')
-      if (!els || els.length === 0) return
-      ;(focus === 'first' ? els[0] : els[els.length - 1]).focus()
-    })
   }
 
   function close(returnFocus = true) {
