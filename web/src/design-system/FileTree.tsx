@@ -48,9 +48,15 @@ export function FileTree({
     })
   }
 
+  function currentIndex(): number {
+    const key = focusedPath ?? selectedPath ?? null
+    return rows.findIndex((r) => r.node.path === key)
+  }
+
   function onKeyDown(e: React.KeyboardEvent) {
-    const currentIndex = rows.findIndex((r) => r.node.path === selectedPath)
+    const idx = currentIndex()
     const focusIndex = (target: number) => {
+      if (rows.length === 0) return
       const clamped = Math.max(0, Math.min(target, rows.length - 1))
       const el = document.querySelector<HTMLElement>(`[data-tree-path="${cssEscape(rows[clamped].node.path)}"]`)
       el?.focus()
