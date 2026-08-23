@@ -50,6 +50,9 @@ export function OverviewView() {
     <>
       <div className="ls-page-title">
         <h1>Overview</h1>
+        <Button size="sm" variant="primary" iconStart="plus" onClick={() => { window.location.hash = '/projects/new' }}>
+          New project
+        </Button>
       </div>
       <p className="ls-page-desc">Repository files, recent activity, and branch health.</p>
 
