@@ -35,11 +35,13 @@ export function registerUploadRoutes(app: FastifyInstance): void {
   app.post('/api/v1/projects/:id/uploads/:uploadId/commit', { preHandler: app.requireAuth('write_api') }, async (req) => {
     const id = Number((req.params as { id: string }).id)
     const uploadId = String((req.params as { uploadId: string }).uploadId)
-    return app.uploads.commit(
-      req.actor,
-      id,
-      uploadId,
-      ((req.body ?? {}) as Record<string, unknown>) as Parameters<typeof app.uploads.commit>[3],
-    )
+    const body = (req.body ?? {}) as {
+      branch?: string
+      new_branch?: string
+      start_branch?: string
+      commit_message?: string
+      replace?: boolean
+    }
+    return app.uploads.commit(req.actor, id, uploadId, body)
   })
 }
