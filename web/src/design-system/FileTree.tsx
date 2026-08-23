@@ -117,6 +117,7 @@ export function FileTree({
           className="ls-treeitem"
           style={{ paddingLeft: `${8 + depth * 14}px` }}
           onClick={() => (node.type === 'dir' ? toggle(node.path) : onSelect?.(node))}
+          onFocus={() => setFocusedPath(node.path)}
           onKeyDown={(e) => e.currentTarget.closest('[role="tree"]')?.dispatchEvent(new KeyboardEvent(e.type, { key: e.key }))}
         >
           <span className="ls-treeitem__chev" data-has-children={node.type === 'dir'}>
