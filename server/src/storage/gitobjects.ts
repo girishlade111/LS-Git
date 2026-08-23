@@ -77,18 +77,86 @@ export function commitTree(
   treeSha: string,
   message: string,
   author: { name: string; email: string },
+  parents: string[] = [],
 ): string {
   const ts = Math.floor(Date.now() / 1000)
   const tz = '+0000'
   const ident = `${author.name} <${author.email}> ${ts} ${tz}`
+  const parentLines = parents.map((p) => `parent ${p}\n`).join('')
   const body = Buffer.from(
     `tree ${treeSha}\n` +
+      parentLines +
       `author ${ident}\n` +
       `committer ${ident}\n\n` +
       `${message.trim()}\n`,
     'utf8',
   )
   return writeObject(objectsDir, 'commit', body)
+}
+
+// -- nested trees ---------------------------------------------------------------
+
+export interface FlatFile {
+  path: string
+  mode: '100644' | '100755'
+  content: Buffer
+}
+
+interface DirNode {
+  files: Array<{ mode: '100644' | '100755'; name: string; content: Buffer }>
+  dirs: Map<string, DirNode>
+}
+
+function emptyDir(): DirNode {
+  return { files: [], dirs: new Map() }
+}
+
+/** git tree entry sort: names compared byte-wise, directories as if suffixed '/'. */
+function entryCompare(a: { name: string; dir: boolean }, b: { name: string; dir: boolean }): number {
+  const an = a.dir ? `${a.name}/` : a.name
+  const bn = b.dir ? `${b.name}/` : b.name
+  return Buffer.compare(Buffer.from(an, 'utf8'), Buffer.from(bn, 'utf8'))
+}
+
+function writeTreeLevel(objectsDir: string, node: DirNode): string {
+  const entries: Array<{ mode: '100644' | '100755' | '40000'; name: string; sha?: string; content?: Buffer }> = [
+    ...node.files.map((f) => ({ mode: f.mode, name: f.name, content: f.content })),
+    ...[...node.dirs.entries()].map(([name, child]) => ({
+      mode: '40000' as const,
+      name,
+      sha: writeTreeLevel(objectsDir, child),
+    })),
+  ]
+  entries.sort((a, b) => entryCompare(a, b))
+  const chunks: Buffer[] = []
+  for (const e of entries) {
+    let sha = e.sha
+    if (sha === undefined) {
+      sha = writeObject(objectsDir, 'blob', e.content!)
+    }
+    chunks.push(Buffer.concat([Buffer.from(`${e.mode} ${e.name}\0`, 'ascii'), Buffer.from(sha, 'hex')]))
+  }
+  return writeObject(objectsDir, 'tree', Buffer.concat(chunks))
+}
+
+/** Builds arbitrarily deep trees from flat file paths (implicit directories). */
+export function buildNestedTree(objectsDir: string, files: Array<FlatFile>): string {
+  const root = emptyDir()
+  for (const f of files) {
+    const segments = f.path.split('/')
+    let node = root
+    for (let i = 0; i < segments.length - 1; i++) {
+      const seg = segments[i]!
+      let child = node.dirs.get(seg)
+      if (!child) {
+        child = emptyDir()
+        node.dirs.set(seg, child)
+      }
+      node = child
+    }
+    node.files.push({ mode: f.mode, name: segments[segments.length - 1]!, content: f.content })
+  }
+  return writeTreeLevel(objectsDir, root)
 }
 
 // -- reading -----------------------------------------------------------------
