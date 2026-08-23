@@ -291,7 +291,11 @@ describe('transfer', () => {
     expect(
       (await authed(app, 'POST', `/api/v1/projects/${after.id}/transfer`, { session: aliceSession, payload: { new_owner: 'alice' } })).statusCode,
     ).toBe(409)
-    await createProject(app, bobSession, { path: 'collision' })
+    // Occupied-path guard: bob re-claims the old path, which also retires his
+    // redirect to it; transferring back now conflicts.
+    await createProject(app, bobSession, { path: 'my-project', initialize_with_readme: false })
+    const staleRedirect = await app.inject({ method: 'GET', url: '/api/v1/bob/my-project' })
+    expect(staleRedirect.json()).toMatchObject({ full_path: 'bob/my-project' })
     expect(
       (await authed(app, 'POST', `/api/v1/projects/${after.id}/transfer`, { session: aliceSession, payload: { new_owner: 'bob' } })).statusCode,
     ).toBe(409)
