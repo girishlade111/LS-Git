@@ -8,6 +8,7 @@ import { can, scopeAllows } from '../authz.js'
 import { RateLimiter } from '../lib/rateLimiter.js'
 import { parsePersonalAccessToken, tokenDigest } from '../lib/crypto.js'
 import type { AppConfig } from '../config.js'
+import { ProjectsService } from '../services/projects.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
