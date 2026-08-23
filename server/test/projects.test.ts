@@ -166,7 +166,7 @@ describe('visibility', () => {
       description: 'findable',
       topics: ['rust'],
     })
-    expect(created.statusCode).toBe(201)
+    expect(created.status).toBe(201)
 
     expect((await app.inject({ method: 'GET', url: '/api/v1/alice/my-project' })).statusCode).toBe(200)
     const explore = (await app.inject({ method: 'GET', url: '/api/v1/projects/explore' })).json() as Array<Record<string, unknown>>
@@ -216,7 +216,7 @@ describe('rename', () => {
 
 describe('deletion', () => {
   it('requires typed confirmation and owner/admin rights', async () => {
-    const { app, aliceSession, bobSession } = await setup()
+    const { app, bobSession } = await setup()
     await createProject(app, bobSession, {})
     const project = app.store.projects.byOwnerPath('bob', 'my-project')!
 
@@ -302,7 +302,7 @@ describe('transfer', () => {
 
 describe('templates', () => {
   it('marks a project as template and seeds new projects from its files', async () => {
-    const { app, aliceSession, bobSession } = await setup()
+    const { app, aliceSession } = await setup()
     await createProject(app, aliceSession, {
       visibility: 'public',
       initialize_with_readme: true,
@@ -333,7 +333,7 @@ describe('templates', () => {
       path: 'from-template',
       template_project_id: template.id,
     })
-    expect(created.statusCode).toBe(201)
+    expect(created.status).toBe(201)
 
     const copy = app.store.projects.byOwnerPath('bob', 'from-template')!
     expect(copy.initialized).toBe(1)
