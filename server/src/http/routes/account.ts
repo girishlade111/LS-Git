@@ -158,10 +158,3 @@ export function registerAccountRoutes(app: FastifyInstance): void {
     }))
   })
 }
-
-function canSelf(req: { sessionId: number | null }): boolean {
-  // Session-authenticated users manage their own avatar; PATs may too (api/read_user
-  // semantics are enforced by scope gates on the routes that need them).
-  void req
-  return true
-}
