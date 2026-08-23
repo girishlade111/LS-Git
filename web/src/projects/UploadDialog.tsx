@@ -32,6 +32,7 @@ export function UploadDialog({
   const [targetMode, setTargetMode] = useState<'current' | 'new'>('current')
   const [newBranch, setNewBranch] = useState('')
   const [wantMr, setWantMr] = useState(false)
+  const [replaceExisting, setReplaceExisting] = useState(false)
   const [phase, setPhase] = useState<Phase>('idle')
   const [sent, setSent] = useState(0)
   const [total, setTotal] = useState(0)
@@ -211,6 +212,18 @@ export function UploadDialog({
                 </div>
               )}
             </fieldset>
+
+            {file && (
+              <label className="ls-checkbox">
+                <input
+                  type="checkbox"
+                  checked={replaceExisting}
+                  onChange={(e) => setReplaceExisting(e.target.checked)}
+                  disabled={busy}
+                />
+                Replace the existing file if one exists
+              </label>
+            )}
 
             <Input label="Commit message" required value={message} onChange={(e) => setMessage(e.target.value)} />
 
