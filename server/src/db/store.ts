@@ -680,10 +680,10 @@ export class RedirectsRepo {
   /** Drops redirects that point where a live project already sits (stale after rename chains). */
   pruneSuperseded(): void {
     this.db.run(
-      `DELETE FROM project_redirects r
+      `DELETE FROM project_redirects
        WHERE EXISTS (
          SELECT 1 FROM projects p JOIN users u ON u.id = p.owner_id
-         WHERE u.username = r.owner_username AND p.path = r.path
+         WHERE u.username = project_redirects.owner_username AND p.path = project_redirects.path
        )`,
     )
   }
