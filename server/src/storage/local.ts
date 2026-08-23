@@ -1,11 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
-import { inflateSync } from 'node:zlib'
 import {
   buildTree,
   commitTree,
   loadFilesUnderTree,
+  readObject,
   parseCommit,
   type TreeEntryInput,
 } from './gitobjects.js'

@@ -198,11 +198,11 @@ describe('rename', () => {
     expect(after.disk_path).toBe(before.disk_path)
     expect(app.projects.storage.exists(after.disk_path)).toBe(true)
 
-    // Old path redirects; new path resolves directly.
-    const oldUrl = await app.inject({ method: 'GET', url: '/api/v1/bob/my-project' })
+    // Old path redirects; new path resolves directly (authenticated: project is private).
+    const oldUrl = await authed(app, 'GET', '/api/v1/bob/my-project', { session: bobSession })
     expect(oldUrl.statusCode).toBe(200)
     expect(oldUrl.headers['x-lsgit-redirected-from']).toBe('bob/my-project')
-    expect((await app.inject({ method: 'GET', url: '/api/v1/bob/renamed-project' })).statusCode).toBe(200)
+    expect((await authed(app, 'GET', '/api/v1/bob/renamed-project', { session: bobSession })).statusCode).toBe(200)
 
     // Conflicts with existing projects are refused.
     await createProject(app, bobSession, { path: 'second' })
@@ -267,8 +267,8 @@ describe('transfer', () => {
     expect(after.disk_path).toBe(diskBefore)
     expect(app.projects.storage.exists(diskBefore)).toBe(true)
 
-    // Old URL still resolves via redirect.
-    const redirected = await app.inject({ method: 'GET', url: '/api/v1/bob/my-project' })
+    // Old URL still resolves via redirect (authenticated view).
+    const redirected = await authed(app, 'GET', '/api/v1/bob/my-project', { session: aliceSession })
     expect(redirected.statusCode).toBe(200)
     expect(redirected.headers['x-lsgit-redirected-from']).toBe('bob/my-project')
 
