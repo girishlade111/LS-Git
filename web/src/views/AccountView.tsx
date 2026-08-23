@@ -166,7 +166,7 @@ function PasswordPanel() {
         <div className="ds-stack" style={{ maxWidth: 380 }}>
           <Input label="Current password" type="password" required value={current} onChange={(e) => setCurrent(e.target.value)} />
           <Input label="New password" type="password" required minLength={10} value={next} onChange={(e) => setNext(e.target.value)} />
-          <Input label="Confirm new password" type="password" required <Input label="Confirm new password" type="password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          <Input label="Confirm new password" type="password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
           {local && <p role="alert" style={{ fontSize: 'var(--ls-fs-desc)', color: 'var(--ls-danger)' }}>{local}</p>}
           <Button type="submit" variant="primary" size="sm">Update password</Button>
         </div>
