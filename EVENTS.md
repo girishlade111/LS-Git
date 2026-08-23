@@ -11,23 +11,22 @@ limits, and failure behavior are adopted conceptually with LSGit naming.
 
 ```
 Domain action (web UI / API / git push post-receive / CI transition)
-        │  same transaction? NO — emit AFTER commit
+        │  emit AFTER commit (durable outbox row)
         ▼
-events table (durable outbox) ──► dispatcher worker ──► fan-out queues:
-                                                        ├─ webhook_delivery
-                                                        ├─ notifications (email)
-                                                        ├─ activity feed writer
-                                                        ├─ search indexer
-                                                        └─ ci pipeline creator
+events table ──► dispatcher worker ──► fan-out queues:
+                                        ├─ webhook_delivery
+                                        ├─ notifications (email)
+                                        ├─ activity feed writer
+                                        ├─ search indexer
+                                        └─ ci pipeline creator
 ```
 
 Contracts:
 
 1. **At-least-once delivery** internally; consumers must be idempotent
    (dedupe key = event uuid).
-2. Events are emitted after DB commit via an outbox row (no lost events on crash;
-   dispatcher sweeps unsent rows). Ordering is best-effort per aggregate
-   (project-scoped partition key).
+2. No lost events on crash: outbox rows swept by dispatcher; ordering is best-effort
+   per aggregate (project-scoped partition key).
 3. Payload versioning: every webhook payload carries `object_kind`, `event_type`,
    and `schema_version`; additive fields only within a schema_version.
 
@@ -55,7 +54,7 @@ from domain services to side effects.
 
 ## 3. Outbound webhook catalog (external contract)
 
-Header conventions (LSGit equivalents of GitLab's):
+Headers (LSGit equivalents of GitLab's):
 
 ```
 X-LSGit-Event: Push Hook            # kind, matching GitLab naming semantics
@@ -79,7 +78,7 @@ Member Hook · Project Hook.
   "schema_version": 1,
   "before": "<old sha>", "after": "<new sha>", "ref": "refs/heads/main",
   "user_id": 1, "user_name": "...", "user_username": "...",
-  "project": { "id": 5, "path_with_namespace": "grp/proj", "web_url": "...", ... },
+  "project": { "id": 5, "path_with_namespace": "grp/proj", "web_url": "..." },
   "total_commits_count": 3,
   "commits": [ { "id": "...", "message": "...", "timestamp": "...",
                  "added": [], "modified": [], "removed": [] } ]
@@ -106,25 +105,25 @@ System hooks (admin-only) mirror instance-wide events for automation tooling.
 
 ## 5. Delivery guarantees & failure policy
 
-- Retries with exponential backoff (e.g., 8 attempts over ~6h window).
-- Response must complete within timeout; slow receivers get cut off (log captures
-  status + first N KB).
-- **Auto-disable:** hook disabled automatically after threshold of consecutive failing
-  deliveries (4xx/5xx/timeouts); owner emailed; manual/reactive re-enable supported.
-- 4xx responses indicate receiver misconfiguration (counted toward disable faster);
-  receivers should ignore unknown kinds rather than 500-ing — documented guidance.
-- Delivery log retained per hook (recent N results) queryable via API for debugging.
+- Retries with exponential backoff (~8 attempts over hours-scale window).
+- Receiver must respond within timeout; slow receivers cut off, status + first N KB logged.
+- **Auto-disable** after threshold of consecutive failing deliveries (4xx/5xx/timeout);
+  owner notified; re-enable manual or automatic after healthy period.
+- 4xx signals receiver misconfiguration (counts toward disable faster); documented
+  receiver guidance: ignore unknown kinds instead of erroring.
+- Per-hook delivery log (recent N results) queryable via API for debugging.
 
-## 6. Activity feed & notifications (consumers)
+## 6. Consumers beyond webhooks
 
 - Activity feed rows written by consumer (not inline) — eventual consistency accepted.
-- Notification decisions (participating/on-mention/watch levels) resolve against
-  PERMISSIONS.md visibility rules before send; confidential issues notify only
-  authorized participants.
-- Emails batched/digested per user preference profile (Phase 2).
+- Notifications resolve participating/on-mention/watch levels against PERMISSIONS.md
+  visibility before send; confidential issues notify only authorized participants;
+  emails batched/digested per user preference profile (Phase 2).
+- CI pipeline creation reacts to `repo.push`, MR create/update, schedules, manual/API
+  triggers — never synchronously inside request handling.
 
 ## 7. Testing requirements
 
-Contract tests pin payload JSON schemas (golden files) — breaking payload changes
-require schema_version bump + changelog entry. Dispatcher idempotency tested by
-duplicate-event injection. Auto-disable logic covered by simulated failure sequences.
+Contract tests pin payload JSON schemas (golden files) — breaking changes require
+schema_version bump + changelog entry. Dispatcher idempotency tested via duplicate-event
+injection. Auto-disable logic covered by simulated failure sequences.
