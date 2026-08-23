@@ -11,7 +11,6 @@ import {
   TH,
   THead,
   TR,
-  ToastProvider,
   Toggle,
   useToast,
 } from '../design-system'
