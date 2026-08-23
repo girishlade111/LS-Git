@@ -4,7 +4,7 @@ export type IconName =
   | 'search' | 'menu' | 'close' | 'check' | 'chevron-down' | 'chevron-right'
   | 'chevron-left' | 'plus' | 'folder' | 'file' | 'star' | 'eye'
   | 'branch' | 'issue' | 'merge' | 'settings' | 'code' | 'tag'
-  | 'bell' | 'clock' | 'warning' | 'external' | 'copy' | 'trash' | 'more'
+  | 'bell' | 'clock' | 'warning' | 'external' | 'copy' | 'trash' | 'more' | 'key'
 
 const paths: Record<IconName, ReactElement> = {
   search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.8-3.8" /></>,
@@ -32,6 +32,7 @@ const paths: Record<IconName, ReactElement> = {
   copy: <><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></>,
   trash: <><path d="M4 7h16M10 11v6M14 11v6" /><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" /></>,
   more: <><circle cx="5" cy="12" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="19" cy="12" r="1.4" /></>,
+  key: <><circle cx="8" cy="14" r="4" /><path d="m11 11 9-9M17 5l3 3-2 2-3-3" /></>,
 }
 
 export interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, type AccessToken, type AuditEvent, type SelfUser, type SessionInfo, type SshKey } from '../auth/api'
-import { useAuth, useHashRoute } from '../auth/context'
+import { useAuth } from '../auth/context'
 import { Avatar } from '../design-system/Avatar'
 import { Badge } from '../design-system/Badge'
 import { Button } from '../design-system/Button'
@@ -521,10 +521,5 @@ function AccountInner() {
 }
 
 export function AccountView() {
-  return (
-    <ToastProvider>
-      <AccountInner />
-    </ToastProvider>
-  )
+  return <AccountInner />
 }
-void useHashRoute
