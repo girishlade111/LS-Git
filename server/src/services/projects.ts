@@ -311,13 +311,14 @@ export class ProjectsService {
         },
         spec.description?.trim() ? spec.description : `Copy of ${template.name}`,
       )
-    } catch {
+    } catch (err) {
       this.db.transaction(() => {
         this.s.redirects.deleteForProject(project.id)
         this.db.run('DELETE FROM projects WHERE id = ?', project.id)
         this.s.topics.pruneOrphans()
       })
-      throw new AppError(500, 'Failed to copy template repository contents')
+      if (err instanceof AppError) throw err
+      throw new AppError(500, `Failed to copy template repository contents: ${(err as Error).message}`)
     }
     return this.requireProject(project.id)
   }
