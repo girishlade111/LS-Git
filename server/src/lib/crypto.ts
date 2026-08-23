@@ -8,12 +8,22 @@ import { randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypt
  * behavioral contract (salted, slow, constant-time compare) is preserved.
  */
 
-const N = 16384
-const R = 8
-const P = 1
-const KEYLEN = 64
+/**
+ * Cost parameters. Defaults are production-grade (16 MiB memory factor);
+ * tests override via LSGIT_SCRYPT_* env vars to keep suites fast.
+ * Stored hashes embed their own parameters, so changing costs never breaks
+ * verification of existing passwords.
+ */
+function scryptParams() {
+  return {
+    N: Number(process.env.LSGIT_SCRYPT_N ?? 16384),
+    R: Number(process.env.LSGIT_SCRYPT_R ?? 8),
+    P: Number(process.env.LSGIT_SCRYPT_P ?? 1),
+  }
+}
 
 export function hashPassword(password: string): string {
+  const { N, R, P } = scryptParams()
   const salt = randomBytes(16)
   const hash = scryptSync(password, salt, KEYLEN, { N, r: R, p: P })
   return `scrypt$${N}$${R}$${P}$${salt.toString('base64')}$${hash.toString('base64')}`
