@@ -40,14 +40,12 @@ export function registerAccountRoutes(app: FastifyInstance): void {
 
   app.put('/api/v1/user/avatar', { preHandler: auth }, async (req) => {
     const data = String((req.body as { data_base64?: unknown })?.data_base64 ?? '')
-    if (!req.actor || !canSelf(req)) throw new AppError(403, 'Not allowed')
-    const out = app.identity.setAvatar(req.actor.userId, data)
+    const out = app.identity.setAvatar(req.actor!.userId, data)
     return out
   })
 
   app.delete('/api/v1/user/avatar', { preHandler: auth }, async (req) => {
-    if (!req.actor || !canSelf(req)) throw new AppError(403, 'Not allowed')
-    app.identity.removeAvatar(req.actor.userId)
+    app.identity.removeAvatar(req.actor!.userId)
     return { ok: true }
   })
 
