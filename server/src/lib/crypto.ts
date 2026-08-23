@@ -22,6 +22,8 @@ function scryptParams() {
   }
 }
 
+const KEYLEN = 64
+
 export function hashPassword(password: string): string {
   const { N, R, P } = scryptParams()
   const salt = randomBytes(16)
