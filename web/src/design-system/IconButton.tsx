@@ -1,8 +1,8 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react'
 import { Icon, type IconName } from './Icon'
 
-export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  /** Accessible name. Screen readers announce this; visual tooltip recommended. */
+export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
+  /** Accessible name — screen readers announce this; a visual Tooltip is recommended. */
   label: string
   icon: IconName
   active?: boolean
