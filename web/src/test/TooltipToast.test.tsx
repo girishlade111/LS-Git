@@ -1,27 +1,23 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Tooltip } from '../design-system/Tooltip'
 import { ToastProvider, useToast } from '../design-system/Toast'
 
 describe('Tooltip', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-  })
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
 
-  it('shows after delay on focus and hides on Escape', async () => {
+  it('shows after delay on focus, wires describedby, hides on Escape', async () => {
     render(
       <Tooltip content="Copy to clipboard" delay={100}>
         <button type="button">Copy</button>
       </Tooltip>,
     )
     const trigger = screen.getByText('Copy')
-    act(() => {
-      trigger.focus()
-    })
+
+    // Not shown before the delay elapses
+    fireEvent.focus(trigger)
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
 
     act(() => {
@@ -29,22 +25,28 @@ describe('Tooltip', () => {
     })
     const bubble = screen.getByRole('tooltip')
     expect(bubble).toHaveTextContent('Copy to clipboard')
-    // describedby wiring
-    expect(trigger.parentElement?.querySelector('[aria-describedby]')).toBeInTheDocument()
+    // The inner wrapper carries aria-describedby while visible
+    expect(trigger.parentElement).toHaveAttribute('aria-describedby')
 
-    await act(async () => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-    })
+    // Escape hides
+    fireEvent.keyDown(trigger, { key: 'Escape' })
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
   })
 })
 
-function ToastButton() {
+function ToastButton({ duration }: { duration?: number }) {
   const toast = useToast()
   return (
     <button
       type="button"
-      onClick={() => toast.show({ title: 'Saved', message: 'Settings updated.', variant: 'success', duration: 1000 })}
+      onClick={() =>
+        toast.show({
+          title: 'Saved',
+          message: 'Settings updated.',
+          variant: 'success',
+          duration,
+        })
+      }
     >
       Trigger toast
     </button>
@@ -52,12 +54,14 @@ function ToastButton() {
 }
 
 describe('Toast', () => {
+  afterEach(() => vi.useRealTimers())
+
   it('renders in a live region and auto-dismisses', async () => {
     vi.useFakeTimers()
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     render(
       <ToastProvider>
-        <ToastButton />
+        <ToastButton duration={1000} />
       </ToastProvider>,
     )
     await user.click(screen.getByText('Trigger toast'))
@@ -67,17 +71,16 @@ describe('Toast', () => {
     expect(region).toHaveTextContent('Settings updated.')
 
     act(() => {
-      vi.advanceTimersByTime(1200)
+      vi.advanceTimersByTime(1300)
     })
-    await waitFor(() => expect(region).not.toHaveTextContent('Saved'))
-    vi.useRealTimers()
+    expect(region).not.toHaveTextContent('Saved')
   })
 
   it('can be dismissed via its dismiss button', async () => {
     const user = userEvent.setup()
     render(
       <ToastProvider>
-        <ToastButton />
+        <ToastButton duration={Infinity} />
       </ToastProvider>,
     )
     await user.click(screen.getByText('Trigger toast'))
