@@ -22,18 +22,30 @@ export type Permission =
   | 'account:manage_credentials' // ssh keys, PATs, sessions, password change
   | 'audit:read_own'
   | 'admin:access'
+  | 'project:create'
+  | 'project:read'
+  | 'project:update'      // metadata: name/desc/website/topics/default-branch/visibility
+  | 'project:archive'
+  | 'project:delete'
+  | 'project:transfer'
+  | 'project:template'
 
 export interface AuthzContext {
   /** For *_self permissions: the resource owner being accessed. */
   resourceUserId?: number
+  /** Project-scoped checks. */
+  resourceProject?: {
+    ownerId: number
+    visibility: 'private' | 'internal' | 'public'
+    archived?: boolean
+  }
 }
 
 export function can(actor: Actor | null, permission: Permission, ctx: AuthzContext = {}): boolean {
   if (!actor) return false
   if (actor.state !== 'active') return false
 
-  // Admins may act on any account (audited at the call site).
-  if (actor.admin) return true
+  const project = ctx.resourceProject
 
   switch (permission) {
     case 'profile:update_self':
@@ -45,6 +57,31 @@ export function can(actor: Actor | null, permission: Permission, ctx: AuthzConte
       return ctx.resourceUserId === undefined || ctx.resourceUserId === actor.userId
     case 'admin:access':
       return false // non-admins never get admin access
+    case 'project:create':
+      return true // any active user may create projects (rate-limited elsewhere)
+    case 'project:read': {
+      if (!project) return false
+      if (project.visibility === 'public') return true
+      if (project.visibility === 'internal') return true // any authenticated user
+      return actor.userId === project.ownerId || actor.admin
+    }
+    case 'project:update':
+      if (!project) return false
+      return actor.admin || actor.userId === project.ownerId
+    case 'project:archive':
+      if (!project) return false
+      return actor.admin || actor.userId === project.ownerId
+    case 'project:template':
+      if (!project) return false
+      return actor.admin || actor.userId === project.ownerId
+    case 'project:transfer':
+      // GitLab parity: instance admins and the project Owner.
+      if (!project) return false
+      return actor.admin || actor.userId === project.ownerId
+    case 'project:delete':
+      // GitLab parity: Owner role or admin only (Maintainers cannot delete).
+      if (!project) return false
+      return actor.admin || actor.userId === project.ownerId
     default: {
       const exhaustive: never = permission
       void exhaustive
