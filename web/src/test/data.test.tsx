@@ -53,11 +53,13 @@ describe('Pagination', () => {
   it('marks the current page and emits changes', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
-    render(<Pagination page={4} pageCount={12} onChange={onChange} />)
+    const { unmount } = render(<Pagination page={4} pageCount={12} onChange={onChange} />)
 
     expect(screen.getByRole('button', { current: 'page' })).toHaveTextContent('4')
     await user.click(screen.getByRole('button', { name: 'Page 5' }))
     expect(onChange).toHaveBeenCalledWith(5)
+    unmount()
+
     // Prev disabled on first page
     render(<Pagination page={1} pageCount={3} onChange={onChange} />)
     expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled()
