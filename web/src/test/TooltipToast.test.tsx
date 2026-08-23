@@ -1,89 +1,89 @@
-/* Base element styles — everything token-driven, no raw values. */
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Tooltip } from '../design-system/Tooltip'
+import { ToastProvider, useToast } from '../design-system/Toast'
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
+describe('Tooltip', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('shows after delay on focus, wires describedby, hides on Escape', async () => {
+    render(
+      <Tooltip content="Copy to clipboard" delay={100}>
+        <button type="button">Copy</button>
+      </Tooltip>,
+    )
+    const trigger = screen.getByText('Copy')
+
+    // Not shown before the delay elapses
+    fireEvent.focus(trigger)
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+
+    act(() => {
+      vi.advanceTimersByTime(150)
+    })
+    const bubble = screen.getByRole('tooltip')
+    expect(bubble).toHaveTextContent('Copy to clipboard')
+    // The inner wrapper carries aria-describedby while visible
+    expect(trigger.parentElement).toHaveAttribute('aria-describedby')
+
+    // Escape hides
+    fireEvent.keyDown(trigger, { key: 'Escape' })
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+  })
+})
+
+function ToastButton({ duration }: { duration?: number }) {
+  const toast = useToast()
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        toast.show({
+          title: 'Saved',
+          message: 'Settings updated.',
+          variant: 'success',
+          duration,
+        })
+      }
+    >
+      Trigger toast
+    </button>
+  )
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-}
+describe('Toast', () => {
+  afterEach(() => vi.useRealTimers())
 
-body {
-  background: var(--ls-bg);
-  color: var(--ls-text);
-  font-family: var(--ls-font-ui);
-  font-size: var(--ls-fs-body);
-  line-height: var(--ls-lh-body);
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
+  it('renders in a live region and auto-dismisses', async () => {
+    // Real timers with a short duration keep this deterministic in jsdom.
+    const user = userEvent.setup()
+    render(
+      <ToastProvider>
+        <ToastButton duration={150} />
+      </ToastProvider>,
+    )
+    await user.click(screen.getByText('Trigger toast'))
 
-h1,
-h2,
-h3,
-p {
-  margin: 0;
-}
+    const region = screen.getByRole('region', { name: 'Notifications' })
+    expect(region).toHaveTextContent('Saved')
+    expect(region).toHaveTextContent('Settings updated.')
 
-h1 {
-  font-size: var(--ls-fs-h1);
-  font-weight: 600;
-  line-height: var(--ls-lh-tight);
-}
+    await waitFor(() => expect(region).not.toHaveTextContent('Saved'), { timeout: 2000 })
+  })
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
-  color: inherit;
-}
-
-a {
-  color: var(--ls-accent);
-  text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
-}
-
-ul,
-ol {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-:focus-visible {
-  outline: none;
-  box-shadow: var(--ls-focus-ring);
-  border-radius: var(--ls-radius-sm);
-}
-
-/* Screen-reader-only helper */
-.ls-sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
+  it('can be dismissed via its dismiss button', async () => {
+    const user = userEvent.setup()
+    render(
+      <ToastProvider>
+        <ToastButton duration={Infinity} />
+      </ToastProvider>,
+    )
+    await user.click(screen.getByText('Trigger toast'))
+    await user.click(screen.getByRole('button', { name: 'Dismiss notification' }))
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Notifications' })).not.toHaveTextContent('Saved'),
+    )
+  })
+})
