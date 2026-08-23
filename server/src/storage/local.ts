@@ -132,10 +132,3 @@ export class LocalHashedStorage implements RepositoryStorage {
     rmSync(trashPath, { recursive: true, force: true })
   }
 }
-
-// Local import indirection to avoid circulars in module init order.
-function inflateObject(objectsDir: string, sha: string): Buffer {
-  const { inflateSync } = require('node:zlib') as typeof import('node:zlib')
-  const hashDir = join(objectsDir, sha.slice(0, 2))
-  return inflateSync(readFileSync(join(hashDir, sha.slice(2))))
-}

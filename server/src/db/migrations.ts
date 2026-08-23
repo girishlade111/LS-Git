@@ -105,4 +105,52 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
       );
     `,
   },
+  {
+    version: 2,
+    sql: `
+      CREATE TABLE projects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL REFERENCES users(id),
+        name TEXT NOT NULL,
+        path TEXT NOT NULL COLLATE NOCASE,
+        visibility TEXT NOT NULL DEFAULT 'private'
+          CHECK (visibility IN ('private', 'internal', 'public')),
+        description TEXT NOT NULL DEFAULT '',
+        website_url TEXT NOT NULL DEFAULT '',
+        default_branch TEXT NOT NULL DEFAULT 'main',
+        archived INTEGER NOT NULL DEFAULT 0,
+        is_template INTEGER NOT NULL DEFAULT 0,
+        repository_storage TEXT NOT NULL DEFAULT 'default',
+        disk_path TEXT NOT NULL UNIQUE,
+        initialized INTEGER NOT NULL DEFAULT 0,
+        last_activity_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_projects_owner ON projects(owner_id);
+      CREATE INDEX idx_projects_visibility ON projects(visibility);
+
+      -- Canonical topic registry: lowercase-normalized, case-insensitively unique.
+      CREATE TABLE project_topics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL COLLATE NOCASE UNIQUE
+      );
+
+      CREATE TABLE project_topic_links (
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        topic_id INTEGER NOT NULL REFERENCES project_topics(id) ON DELETE CASCADE,
+        PRIMARY KEY (project_id, topic_id)
+      );
+      CREATE INDEX idx_topic_links_topic ON project_topic_links(topic_id);
+
+      -- Old owner/path → project mappings so renames and transfers do not break URLs.
+      CREATE TABLE project_redirects (
+        owner_username TEXT NOT NULL,
+        path TEXT NOT NULL COLLATE NOCASE,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (owner_username, path)
+      );
+    `,
+  },
 ]
