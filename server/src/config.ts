@@ -34,6 +34,11 @@ export interface AppConfig {
   repositoriesRoot: string
   /** Max topics per project (GitLab parity). */
   maxTopicsPerProject: number
+
+  /** Single-file upload cap (bytes). Enforced at initiate, transfer, and commit. */
+  maxUploadBytes: number
+  /** Temp staging directory for in-flight uploads. */
+  uploadsRoot: string
 }
 
 export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
