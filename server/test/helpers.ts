@@ -102,6 +102,7 @@ export async function authed(
   statusCode: number
   json(): Record<string, unknown>
   cookies: Array<{ name: string; value: string }>
+  headers: Record<string, string | string[] | undefined>
 }> {
   const headers: Record<string, string> = {}
   if (opts.bearer) {
