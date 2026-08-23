@@ -1,0 +1,68 @@
+/*
+ * LSGit design tokens — the single source of truth for all visual values.
+ * Feature code must never hard-code colors, sizes, or radii outside this file.
+ * Palette: dark, flat. No shadows, no gradients, no glass, no pure black/white.
+ */
+
+:root {
+  /* Surfaces */
+  --ls-bg: #0d0d0d;            /* app background */
+  --ls-panel: #161616;         /* cards, sidebar, panels */
+  --ls-surface-1: #1c1c1c;     /* secondary surface: hover rows, inputs */
+  --ls-surface-2: #242424;     /* tertiary surface: raised chips, thumbs */
+  --ls-border: #2a2a2a;        /* 1px borders everywhere */
+
+  /* Text */
+  --ls-text: #e8e8e8;          /* primary text */
+  --ls-text-secondary: #8a8a8a;/* descriptions, metadata */
+  --ls-text-disabled: #5c5c5c; /* disabled controls only */
+
+  /* Semantic */
+  --ls-accent: #e07856;
+  --ls-success: #3ecf5e;
+  --ls-danger: #e5484d;
+
+  /* Alpha derivatives of palette colors (hover/active/tint fills) */
+  --ls-hover: rgba(232, 232, 232, 0.05);
+  --ls-hover-strong: rgba(232, 232, 232, 0.09);
+  --ls-active: rgba(232, 232, 232, 0.13);
+  --ls-on-accent-hover: rgba(13, 13, 13, 0.12);
+  --ls-on-accent-active: rgba(13, 13, 13, 0.22);
+  --ls-tint-success: rgba(62, 207, 94, 0.14);
+  --ls-tint-danger: rgba(229, 72, 77, 0.14);
+  --ls-tint-accent: rgba(224, 120, 86, 0.14);
+  --ls-scrim: rgba(0, 0, 0, 0.6);
+
+  /* Typography — system UI stack only */
+  --ls-font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+  --ls-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  --ls-fs-body: 13px;
+  --ls-fs-h1: 22px;
+  --ls-fs-label: 12px;   /* section labels */
+  --ls-fs-row: 13.5px;   /* row titles */
+  --ls-fs-desc: 12.5px;  /* descriptions */
+  --ls-fs-table: 12px;
+
+  --ls-lh-body: 1.5;
+  --ls-lh-tight: 1.35;
+
+  /* Layout */
+  --ls-sidebar-w: 260px;
+  --ls-main-pad: clamp(32px, 4vw, 48px);
+  --ls-topbar-h: 48px;
+
+  /* Shape */
+  --ls-radius: 8px;
+  --ls-radius-sm: 5px;
+  --ls-radius-full: 999px;
+
+  /* Focus */
+  --ls-focus-ring: 0 0 0 2px var(--ls-bg), 0 0 0 4px var(--ls-accent);
+
+  /* Motion */
+  --ls-dur-fast: 100ms;
+  --ls-dur: 160ms;
+}
