@@ -41,7 +41,8 @@ export interface CommitOptions {
   branch?: string | null
   new_branch?: string | null
   start_branch?: string | null
-  commit_message: string
+  /** Required in practice; the service rejects missing/empty messages with 400. */
+  commit_message?: string
   replace?: boolean
 }
 
