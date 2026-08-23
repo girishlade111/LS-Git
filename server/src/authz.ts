@@ -25,6 +25,7 @@ export type Permission =
   | 'project:create'
   | 'project:read'
   | 'project:update'      // metadata: name/desc/website/topics/default-branch/visibility
+  | 'project:push_code'   // commit/upload to repository refs (developer-write equivalent)
   | 'project:archive'
   | 'project:delete'
   | 'project:transfer'
@@ -73,6 +74,11 @@ export function can(actor: Actor | null, permission: Permission, ctx: AuthzConte
       return actor.userId === project.ownerId || actor.admin
     }
     case 'project:update':
+      if (!project) return false
+      return actor.admin || actor.userId === project.ownerId
+    case 'project:push_code':
+      // GitLab Developer-role equivalent; membership tables arrive with the
+      // collaboration phase, so until then: owner or instance admin.
       if (!project) return false
       return actor.admin || actor.userId === project.ownerId
     case 'project:archive':

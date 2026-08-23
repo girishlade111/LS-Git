@@ -16,6 +16,8 @@ import {
   ProjectsRepo,
   TopicsRepo,
   RedirectsRepo,
+  UploadsRepo,
+  EventsRepo,
   PasswordResetsRepo,
   SessionsRepo,
   SshKeysRepo,
@@ -53,6 +55,8 @@ export interface IdentityServices {
   projects: ProjectsRepo
   topics: TopicsRepo
   redirects: RedirectsRepo
+  uploads: UploadsRepo
+  events: EventsRepo
 }
 
 export function makeServices(db: Database): IdentityServices {
@@ -69,6 +73,8 @@ export function makeServices(db: Database): IdentityServices {
     projects: new ProjectsRepo(db),
     topics: new TopicsRepo(db),
     redirects: new RedirectsRepo(db),
+    uploads: new UploadsRepo(db),
+    events: new EventsRepo(db),
   }
 }
 

@@ -688,3 +688,83 @@ export class RedirectsRepo {
     )
   }
 }
+
+// ---------------------------------------------------------------------------
+// Uploads & events (repository mutation pipeline)
+// ---------------------------------------------------------------------------
+
+export interface UploadRow {
+  id: string
+  project_id: number
+  user_id: number
+  file_path: string
+  declared_size: number
+  received_size: number
+  sha256: string | null
+  state: 'pending' | 'completed' | 'cancelled'
+  created_at: string
+  updated_at: string
+}
+
+export class UploadsRepo {
+  constructor(private db: Database) {}
+
+  create(data: { id: string; projectId: number; userId: number; filePath: string; declaredSize: number }): void {
+    const now = nowIso()
+    this.db.run(
+      `INSERT INTO uploads (id, project_id, user_id, file_path, declared_size, state, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`,
+      data.id,
+      data.projectId,
+      data.userId,
+      data.filePath,
+      data.declaredSize,
+      now,
+      now,
+    )
+  }
+
+  byId(id: string): UploadRow | undefined {
+    return this.db.get('SELECT * FROM uploads WHERE id = ?', id) as UploadRow | undefined
+  }
+
+  markReceived(id: string, size: number, sha256: string): void {
+    this.db.run(
+      "UPDATE uploads SET received_size = ?, sha256 = ?, state = 'pending', updated_at = ? WHERE id = ?",
+      size,
+      sha256,
+      nowIso(),
+      id,
+    )
+  }
+
+  markCompleted(id: string): void {
+    this.db.run("UPDATE uploads SET state = 'completed', updated_at = ? WHERE id = ?", nowIso(), id)
+  }
+
+  markCancelled(id: string): void {
+    this.db.run("UPDATE uploads SET state = 'cancelled', updated_at = ? WHERE id = ?", nowIso(), id)
+  }
+}
+
+export class EventsRepo {
+  constructor(private db: Database) {}
+
+  emit(projectId: number | null, type: string, payload: Record<string, unknown>): void {
+    this.db.run(
+      'INSERT INTO events (project_id, type, payload, created_at) VALUES (?, ?, ?, ?)',
+      projectId,
+      type,
+      JSON.stringify(payload),
+      nowIso(),
+    )
+  }
+
+  listForProject(projectId: number, limit = 50): Array<Row> {
+    return this.db.all(
+      'SELECT * FROM events WHERE project_id = ? ORDER BY id DESC LIMIT ?',
+      projectId,
+      limit,
+    )
+  }
+}
