@@ -1,15 +1,23 @@
 import { useState } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { AppShell } from '../shell/AppShell'
+import { AuthProvider } from '../auth/context'
 import { ToastProvider } from '../design-system/Toast'
+
+// Sidebar consumes the auth context; stub the network layer.
+vi.stubGlobal(
+  'fetch',
+  vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ authenticated: false }) })),
+)
 
 function Harness() {
   const [view, setView] = useState('overview')
   const [tab, setTab] = useState('overview')
   return (
-    <ToastProvider>
+    <AuthProvider>
+      <ToastProvider>
       <AppShell
         sidebarCurrent={view}
         onNavigate={(id) => {
@@ -34,7 +42,8 @@ function Harness() {
       >
         <h1>{view === 'settings' ? 'Settings page' : view === 'issues' ? 'Issues page' : 'Overview page'}</h1>
       </AppShell>
-    </ToastProvider>
+      </ToastProvider>
+    </AuthProvider>
   )
 }
 

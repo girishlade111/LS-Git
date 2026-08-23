@@ -25,15 +25,19 @@ describe('auth UI', () => {
     window.location.hash = ''
   })
 
-  it('submits credentials and follows the sign-in contract', async () => {
+  /** Route-based mock: deterministic regardless of call order. */
+  function mockApi(handlers: Record<string, () => Response>) {
+    fetchMock.mockImplementation(async (input: unknown) => {
+      const url = String(input)
+      for (const [fragment, respond] of Object.entries(handlers)) {
+        if (url.includes(fragment)) return respond()
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    })
+  }
+
+  it('submits credentials to /api/v1/auth/login', async () => {
     const user = userEvent.setup()
-    // First call: /auth/login succeeds; second: /auth/status reports authenticated.
-    fetchMock
-      .mockResolvedValueOnce(jsonResponse(200, {
-        user: { id: 1, username: 'alice', email: 'a@e.com', admin: false, state: 'active', email_verified: true },
-        csrf_token: 'x',
-      }))
-      .mockResolvedValueOnce(jsonResponse(200, { authenticated: false })) // any refresh
 
     render(
       <AuthProvider>
@@ -41,48 +45,51 @@ describe('auth UI', () => {
       </AuthProvider>,
     )
 
-    // AuthProvider's initial status call consumes one mock; re-seed remaining calls.
-    fetchMock.mockReset()
-    fetchMock
-      .mockResolvedValueOnce(jsonResponse(200, { authenticated: false })) // mount status
-      .mockResolvedValueOnce(jsonResponse(200, {
-        user: { id: 1, username: 'alice' }, csrf_token: 'x',
-      })) // login
-      .mockResolvedValueOnce(jsonResponse(200, { authenticated: true, user: { id: 1, username: 'alice', email: '', admin: false, state: 'active', email_verified: true } }))
+    mockApi({
+      '/auth/status': () => jsonResponse(200, { authenticated: false }),
+      '/auth/login': () =>
+        jsonResponse(200, {
+          user: { id: 1, username: 'alice' },
+          csrf_token: 'x',
+        }),
+    })
 
     await user.type(screen.getByLabelText('Username or email'), 'alice')
     await user.type(screen.getByLabelText('Password'), 'correct horse battery staple 42')
     await user.click(screen.getByRole('button', { name: /sign in/i }))
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
-    const loginCall = JSON.parse(fetchMock.mock.calls[1]![1]!.body as string)
-    expect(loginCall).toEqual({ login: 'alice', password: 'correct horse battery staple 42' })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    const loginCall = fetchMock.mock.calls.find((c) => String(c[0]).includes('/auth/login'))!
+    expect(loginCall[0]).toBe('/api/v1/auth/login')
+    expect(JSON.parse(loginCall[1]!.body as string)).toEqual({
+      login: 'alice',
+      password: 'correct horse battery staple 42',
+    })
+    // Cookie session requested (credentials include is set on every request).
+    expect(loginCall[1]!.credentials).toBe('same-origin')
   })
 
   it('surfaces server-side login failures accessibly', async () => {
     const user = userEvent.setup()
-    fetchMock.mockResolvedValue(jsonResponse(200, { authenticated: false }))
 
     render(
       <AuthProvider>
         <LoginView />
       </AuthProvider>,
     )
-    fetchMock.mockReset()
-    fetchMock
-      .mockResolvedValueOnce(jsonResponse(200, { authenticated: false }))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ message: 'Invalid login or password' }), { status: 400 }),
-      )
+
+    mockApi({
+      '/auth/status': () => jsonResponse(200, { authenticated: false }),
+      '/auth/login': () => jsonResponse(400, { message: 'Invalid login or password' }),
+    })
 
     await user.type(screen.getByLabelText('Username or email'), 'alice')
     await user.type(screen.getByLabelText('Password'), 'wrong-password-123')
     await user.click(screen.getByRole('button', { name: /sign in/i }))
 
-    await waitFor(() =>
-      expect(screen.getByText('Invalid login or password')).toBeInTheDocument(),
-    )
-    // Announced to assistive tech:
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
     expect(screen.getByRole('alert')).toHaveTextContent('Invalid login or password')
+    // The user stays on the login form.
+    expect(screen.getByLabelText('Username or email')).toHaveValue('alice')
   })
 })
