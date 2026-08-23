@@ -66,6 +66,13 @@ export function ProjectDetailView({ owner, path }: { owner: string; path: string
 
       {tab === 'overview' && (
         <section className="ls-section" aria-label="Overview">
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            {isOwner && (
+              <Button size="sm" variant="primary" iconStart="plus" onClick={() => setUploadOpen(true)}>
+                Upload file
+              </Button>
+            )}
+          </div>
           <h2 className="ls-section__title">Topics</h2>
           {project.topics.length === 0 ? (
             <p className="ls-page-desc">No topics yet.</p>
