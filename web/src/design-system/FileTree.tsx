@@ -26,6 +26,7 @@ export function FileTree({
   ariaLabel?: string
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [focusedPath, setFocusedPath] = useState<string | null>(null)
 
   const rows = useMemo(() => {
     const out: FlatRow[] = []
