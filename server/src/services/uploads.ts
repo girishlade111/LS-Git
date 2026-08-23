@@ -187,6 +187,9 @@ export class UploadService {
       throw new AppError(404, 'Upload data is missing — retry the transfer', 'upload_missing')
     }
     const content = readFileSync(tempPath)
+    if (row.sha256 === null || row.received_size !== content.length) {
+      throw new AppError(404, 'Upload transfer incomplete — retry the upload', 'upload_missing')
+    }
     const sha256 = createHash('sha256').update(content).digest('hex')
     if (row.sha256 && row.sha256 !== sha256) {
       throw new AppError(409, 'Uploaded data changed during transfer — retry the upload', 'hash_mismatch')
