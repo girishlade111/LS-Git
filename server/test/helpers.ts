@@ -122,5 +122,6 @@ export async function authed(
     statusCode: res.statusCode,
     json: () => res.json() as Record<string, unknown>,
     cookies: res.cookies as Array<{ name: string; value: string }>,
+    headers: res.headers as Record<string, string | string[] | undefined>,
   }
 }
