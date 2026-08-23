@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify'
-import { AppError } from '../../services/identity.js'
 import {
   selfUser,
   publicUser,

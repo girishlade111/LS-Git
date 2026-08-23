@@ -1,13 +1,13 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify'
 import { randomBytes } from 'node:crypto'
 import { Database } from '../db/database.js'
-import { makeServices, IdentityService, CredentialsService, AppError } from '../services/identity.js'
+import { makeServices, IdentityService, AppError } from '../services/identity.js'
+import { CredentialsService } from '../services/credentials.js'
 import type { Actor } from '../authz.js'
 import { can, scopeAllows } from '../authz.js'
 import { RateLimiter } from '../lib/rateLimiter.js'
 import { parsePersonalAccessToken, tokenDigest } from '../lib/crypto.js'
 import type { AppConfig } from '../config.js'
-import type { SessionRow } from '../db/store.js'
 
 declare module 'fastify' {
   interface FastifyRequest {

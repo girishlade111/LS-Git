@@ -1,14 +1,29 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { AppError } from '../../services/identity.js'
-import { clearAuthCookies, issueCookies, parseRequestCookieValue } from '../app.js'
-import { selfUser, publicUser, sessionView, sshKeyView, patView } from '../serializers.js'
+import { clearAuthCookies, issueCookies } from '../app.js'
+import { selfUser } from '../serializers.js'
 import { tokenDigest } from '../../lib/crypto.js'
 
 const loginSchema = z.object({
   login: z.string().min(1).max(255),
   password: z.string().min(1).max(128),
 })
+
+/** Pull one cookie value from the raw request header. */
+export function parseRequestCookieValue(
+  req: { headers: Record<string, unknown> },
+  name: string,
+): string | undefined {
+  const header = req.headers.cookie
+  if (typeof header !== 'string') return undefined
+  for (const part of header.split(';')) {
+    const eq = part.indexOf('=')
+    if (eq === -1) continue
+    if (part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1).trim())
+  }
+  return undefined
+}
 
 export function registerAuthRoutes(app: FastifyInstance): void {
   // -- registration ---------------------------------------------------------
