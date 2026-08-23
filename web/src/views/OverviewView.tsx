@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Button } from '../design-system/Button'
 import {
   ActivityItem,
   Avatar,

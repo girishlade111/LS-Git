@@ -1,6 +1,8 @@
 # LSGit — Storage
 
-Status: **PROPOSED (greenfield)**.
+Status: **PROPOSED (greenfield)** — §2–§4 repository layout is now **implemented** in
+`server/src/storage/` (pure-Node Git object writer `gitobjects.ts` + hashed-layout
+`LocalHashedStorage`; deletion moves repos to `@trash/<uuid>` before purge).
 Reference: GitLab repository/object-storage architecture
 (https://docs.gitlab.com/administration/repository_storage_paths/,
 https://docs.gitlab.com/development/file_storage/).

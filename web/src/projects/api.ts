@@ -1,5 +1,3 @@
-import type { SelfUser } from './api'
-
 export interface Project {
   id: number
   name: string
@@ -65,4 +63,3 @@ export const projectsApi = {
     request<{ ok: boolean }>(`/api/v1/projects/${id}?confirm_path=${encodeURIComponent(confirm_path)}`, 'DELETE'),
 }
 
-export type { SelfUser }
