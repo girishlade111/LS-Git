@@ -1,61 +1,102 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { AppShell } from './shell/AppShell'
 import { OverviewView } from './views/OverviewView'
 import { DesignSystemView } from './views/DesignSystemView'
 import { SettingsView } from './views/SettingsView'
+import { AccountView } from './views/AccountView'
+import {
+  LoginView,
+  RegisterView,
+  ForgotView,
+  ResetView,
+  VerifyEmailView,
+} from './views/auth'
 import { EmptyState, Button } from './design-system'
+import { useAuth, useHashRoute } from './auth/context'
+import { AuthLayout, FieldError, useAsyncSubmit, SubmitButton } from './views/auth/AuthLayout'
 
-const repoTabs = [
-  { id: 'overview', label: 'Code' },
-  { id: 'issues', label: 'Issues', count: 3 },
-  { id: 'mrs', label: 'Merge requests' },
-  { id: 'settings', label: 'Settings' },
-  { id: 'design-system', label: 'Design system' },
-]
+const PUBLIC_ROUTES = new Set(['/login', '/register', '/forgot', '/reset', '/verify-email'])
+
+function Placeholder({ title }: { title: string }) {
+  return (
+    <EmptyState icon="issue" title={title} description="This area will be populated in an upcoming phase of the roadmap." />
+  )
+}
+
+/** Full-page loading gate while the session is restored. */
+function Booting() {
+  return (
+    <AuthLayout title="Loading…" description="Restoring your session.">
+      <SubmitButton label="Please wait…" />
+    </AuthLayout>
+  )
+}
 
 export default function App() {
-  const [view, setView] = useState('overview')
-  const [tab, setTab] = useState('overview')
+  const { user, loading } = useAuth()
+  const { path, query, navigate } = useHashRoute()
 
-  function navigate(id: string) {
-    setView(id)
-    if (id === 'settings' || id === 'issues' || id === 'mrs' || id === 'design-system' || id === 'groups') {
-      setTab(id)
-    } else {
-      setTab('overview')
+  // Redirect unauthenticated visitors away from app routes.
+  useEffect(() => {
+    if (!loading && !user && !PUBLIC_ROUTES.has(path)) navigate('/login')
+    if (!loading && user && PUBLIC_ROUTES.has(path)) navigate('/')
+  }, [loading, user, path, navigate])
+
+  if (loading) return <Booting />
+
+  if (path === '/login') return user ? null : <LoginView />
+  if (path === '/register') return <RegisterView />
+  if (path === '/forgot') return <ForgotView />
+  if (path === '/reset') return <ResetView token={query.get('token') ?? ''} />
+  if (path === '/verify-email') return <VerifyEmailView token={query.get('token') ?? ''} />
+
+  if (!user) return null // redirect pending
+
+  if (path === '/account') {
+    return (
+      <AppShell sidebarCurrent="account" onNavigate={(id) => navigate(id === 'home' ? '/' : `/${id}`)} showRepoContext={false}>
+        <AccountView />
+      </AppShell>
+    )
+  }
+
+  const view = path.replace(/^\//, '') || 'overview'
+
+  function renderView() {
+    switch (view) {
+      case 'overview': return <OverviewView />
+      case 'design-system': return <DesignSystemView />
+      case 'settings': return <SettingsView />
+      case 'issues': return <Placeholder title="Issues" />
+      case 'mrs': return <Placeholder title="Merge requests" />
+      case 'groups': return <Placeholder title="Groups" />
+      default: return <Placeholder title="Not found" />
     }
   }
 
   return (
     <AppShell
       sidebarCurrent={view}
-      onNavigate={navigate}
+      onNavigate={(id) => navigate(id === 'overview' ? '/' : `/${id}`)}
       repo={{
         group: 'ls-git',
         project: 'web',
         visibility: 'Private',
-        tabs: repoTabs,
-        currentTab: tab,
-        onTab: (id) => {
-          setTab(id)
-          setView(id === 'overview' ? 'overview' : id)
-        },
+        tabs: [
+          { id: 'overview', label: 'Code' },
+          { id: 'issues', label: 'Issues', count: 3 },
+          { id: 'mrs', label: 'Merge requests' },
+          { id: 'settings', label: 'Settings' },
+        ],
+        currentTab: view,
+        onTab: (id) => navigate(id === 'overview' ? '/' : `/${id}`),
       }}
     >
-      {view === 'overview' && <OverviewView />}
-      {view === 'design-system' && <DesignSystemView />}
-      {view === 'settings' && <SettingsView />}
-      {(view === 'issues' || view === 'mrs') && (
-        <EmptyState
-          icon="issue"
-          title="Nothing here yet"
-          description="This area will be populated in the collaboration phase of the roadmap."
-          action={<Button variant="primary" size="sm">New item</Button>}
-        />
-      )}
-      {view === 'groups' && (
-        <EmptyState icon="folder" title="No groups" description="Groups organize related projects and members." />
-      )}
+      {renderView()}
     </AppShell>
   )
 }
+
+// Re-exported for tests
+void FieldError
+void useAsyncSubmit
