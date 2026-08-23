@@ -217,6 +217,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
 
   registerAuthRoutes(app)
   registerAccountRoutes(app)
+  registerProjectRoutes(app)
 
   app.get('/healthz', async () => ({ status: 'ok' }))
   return app
@@ -264,3 +265,4 @@ function stripQuery(url: string): string {
 
 import { registerAuthRoutes } from './routes/auth.js'
 import { registerAccountRoutes } from './routes/account.js'
+import { registerProjectRoutes } from './routes/projects.js'
