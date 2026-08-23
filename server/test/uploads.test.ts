@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { makeApp, registerUser, authed, extractSession, loginRaw, type Session } from './helpers.js'
-import { readObject, parseCommit, loadFilesUnderTree } from '../src/storage/gitobjects.js'
+import { readObject } from '../src/storage/gitobjects.js'
 
-async function setup(overrides: Record<string, unknown> = {}) {
+async function setup(overrides: { maxUploadBytes?: number } = {}) {
   const app = makeApp({ maxUploadBytes: overrides.maxUploadBytes ?? 1024 * 1024, ...overrides })
   await registerUser(app) // alice (admin)
   const aliceSession = extractSession((await loginRaw(app, 'alice')).cookies)
@@ -81,7 +81,7 @@ async function uploadFile(
   commitOpts: Record<string, unknown> = {},
 ): Promise<{ status: number; body: Record<string, unknown>; uploadId?: string }> {
   const buf = Buffer.isBuffer(content) ? content : Buffer.from(content, 'utf8')
-  const init = await initiate(app, session, projectId, filePath, buf.length, commitOpts.initiate ?? {})
+  const init = await initiate(app, session, projectId, filePath, buf.length, (commitOpts.initiate ?? {}) as Record<string, unknown>)
   if (init.status !== 200) return { status: init.status, body: init.body }
   const uploadId = String(init.body.uploadId)
   const putStatus = await putBytes(app, session, projectId, uploadId, buf)
@@ -254,7 +254,7 @@ describe('single-file upload workflow', () => {
       'seg/../../..',
     ]) {
       const res = await initiate(app, bobSession, project.id, bad, 4)
-      expect([400].includes(res.statusCode), `expected 400 for ${JSON.stringify(bad)}, got ${res.status ?? res.statusCode}`).toBe(true)
+      expect([400].includes(res.status), `expected 400 for ${JSON.stringify(bad)}, got ${res.status}`).toBe(true)
     }
     // Allowed dotfile still works.
     const ok = await uploadFile(app, bobSession, project.id, '.gitkeep', '')

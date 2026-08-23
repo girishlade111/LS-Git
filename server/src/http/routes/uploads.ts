@@ -32,7 +32,7 @@ export function registerUploadRoutes(app: FastifyInstance): void {
     return { ok: true }
   })
 
-  app.post('/api/v1/projects/:id/uploads/:uploadId/commit', { preHandler: app.requireAuth('write_api') }, async (req) => {
+  app.post('/api/v1/projects/:id/uploads/:uploadId/commit', { preHandler: app.requireAuth('write_api') }, async (req, reply) => {
     const id = Number((req.params as { id: string }).id)
     const uploadId = String((req.params as { uploadId: string }).uploadId)
     const body = (req.body ?? {}) as {
@@ -42,6 +42,8 @@ export function registerUploadRoutes(app: FastifyInstance): void {
       commit_message?: string
       replace?: boolean
     }
-    return app.uploads.commit(req.actor, id, uploadId, body)
+    // GitLab files-API parity: 201 for created, 200 for replaced.
+    const result = await app.uploads.commit(req.actor, id, uploadId, body)
+    return reply.code(result.replaced ? 200 : 201).send(result)
   })
 }

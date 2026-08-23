@@ -218,8 +218,17 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
       reply.code(err.status).send({ message: err.message, ...(err.extras ?? {}) })
       return
     }
-    if ((err as { statusCode?: number }).statusCode === 400) {
+    const status = (err as { statusCode?: number }).statusCode
+    if (status === 400) {
       reply.code(400).send({ message: 'Malformed request body' })
+      return
+    }
+    if (status === 413) {
+      reply.code(413).send({ message: 'Payload exceeds the configured size limit' })
+      return
+    }
+    if (status === 404 || status === 415) {
+      reply.code(status).send({ message: 'Request could not be processed' })
       return
     }
     reply.code(500).send({ message: 'Internal server error' })
