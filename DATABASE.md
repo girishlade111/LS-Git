@@ -1,9 +1,11 @@
 # LSGit — Database
 
 Status: **PROPOSED (greenfield)**.
-Engine: **PostgreSQL** (only choice consistent with the GitLab reference and with the
-JSONB + partitioning + sequence features this design needs). No other database exists in
-the repo; nothing to migrate from.
+Engine: **PostgreSQL** (target). The identity phase ships on Node's built-in
+**`node:sqlite`** (file-backed, WAL) behind a repository layer (`server/src/db/`)
+because the current dev environment has no PostgreSQL instance; all SQL is
+parameterized and dialect-portable, so the Phase 0 swap to PostgreSQL is mechanical.
+Tracked as an open decision — see the identity-phase summary.
 
 ---
 
