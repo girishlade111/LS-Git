@@ -53,13 +53,17 @@ export function can(actor: Actor | null, permission: Permission, ctx: AuthzConte
   switch (permission) {
     case 'profile:update_self':
     case 'account:manage_credentials':
-      return ctx.resourceUserId === undefined || ctx.resourceUserId === actor.userId
+      return (
+        actor.admin ||
+        ctx.resourceUserId === undefined ||
+        ctx.resourceUserId === actor.userId
+      )
     case 'profile:read_self':
       return true
     case 'audit:read_own':
-      return ctx.resourceUserId === undefined || ctx.resourceUserId === actor.userId
+      return actor.admin || ctx.resourceUserId === undefined || ctx.resourceUserId === actor.userId
     case 'admin:access':
-      return false // non-admins never get admin access
+      return actor.admin
     case 'project:create':
       return true // any active user may create projects (rate-limited elsewhere)
     case 'project:read': {
