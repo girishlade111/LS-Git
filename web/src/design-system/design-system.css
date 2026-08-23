@@ -1,0 +1,299 @@
+/* LSGit component styles: controls. Every value comes from tokens.css. */
+
+/* ---------- Button ---------- */
+.ls-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--ls-radius-sm);
+  background: none;
+  font-size: var(--ls-fs-body);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--ls-dur-fast), border-color var(--ls-dur-fast),
+    color var(--ls-dur-fast);
+}
+.ls-btn:disabled {
+  color: var(--ls-text-disabled);
+  background: var(--ls-surface-1);
+  border-color: var(--ls-border);
+  cursor: not-allowed;
+}
+.ls-btn--sm { height: 26px; padding: 0 9px; font-size: var(--ls-fs-label); }
+.ls-btn--lg { height: 34px; padding: 0 16px; }
+
+.ls-btn--primary { background: var(--ls-accent); color: var(--ls-bg); }
+.ls-btn--primary:hover:not(:disabled) {
+  background-image: linear-gradient(var(--ls-on-accent-hover), var(--ls-on-accent-hover));
+}
+.ls-btn--primary:active:not(:disabled) {
+  background-image: linear-gradient(var(--ls-on-accent-active), var(--ls-on-accent-active));
+}
+
+.ls-btn--secondary { background: var(--ls-surface-1); border-color: var(--ls-border); color: var(--ls-text); }
+.ls-btn--secondary:hover:not(:disabled) { background: var(--ls-surface-2); }
+
+.ls-btn--ghost { color: var(--ls-text-secondary); }
+.ls-btn--ghost:hover:not(:disabled) { background: var(--ls-hover); color: var(--ls-text); }
+
+.ls-btn--danger { background: var(--ls-danger); color: var(--ls-bg); }
+.ls-btn--danger:hover:not(:disabled) {
+  background-image: linear-gradient(var(--ls-on-accent-hover), var(--ls-on-accent-hover));
+}
+
+/* ---------- IconButton ---------- */
+.ls-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: var(--ls-radius-sm);
+  background: none;
+  color: var(--ls-text-secondary);
+  cursor: pointer;
+}
+.ls-iconbtn:hover:not(:disabled) { background: var(--ls-hover); color: var(--ls-text); }
+.ls-iconbtn:disabled { color: var(--ls-text-disabled); cursor: not-allowed; }
+.ls-iconbtn--active { background: var(--ls-active); color: var(--ls-text); }
+
+/* ---------- Fields ---------- */
+.ls-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.ls-field__label {
+  font-size: var(--ls-fs-label);
+  font-weight: 500;
+  color: var(--ls-text-secondary);
+}
+.ls-field__hint,
+.ls-field__error { font-size: var(--ls-fs-desc); line-height: 1.4; }
+.ls-field__hint { color: var(--ls-text-secondary); }
+.ls-field__error { color: var(--ls-danger); }
+
+.ls-input,
+.ls-textarea,
+.ls-select {
+  width: 100%;
+  background: var(--ls-bg);
+  border: 1px solid var(--ls-border);
+  border-radius: var(--ls-radius-sm);
+  color: var(--ls-text);
+  transition: border-color var(--ls-dur-fast);
+}
+.ls-input,
+.ls-select { height: 30px; padding: 0 10px; font-size: var(--ls-fs-body); }
+.ls-textarea {
+  min-height: 72px;
+  padding: 7px 10px;
+  font-size: var(--ls-fs-body);
+  resize: vertical;
+}
+.ls-input::placeholder,
+.ls-textarea::placeholder { color: var(--ls-text-disabled); }
+.ls-input:focus-visible,
+.ls-textarea:focus-visible,
+.ls-select:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-color: var(--ls-accent);
+}
+.ls-input[aria-invalid="true"],
+.ls-textarea[aria-invalid="true"] { border-color: var(--ls-danger); }
+.ls-input:disabled,
+.ls-textarea:disabled,
+.ls-select:disabled {
+  color: var(--ls-text-disabled);
+  background: var(--ls-panel);
+  cursor: not-allowed;
+}
+
+.ls-select { appearance: none; padding-right: 28px; cursor: pointer; }
+.ls-field__control { position: relative; display: flex; align-items: center; }
+.ls-field__chevron {
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+  color: var(--ls-text-secondary);
+  display: inline-flex;
+}
+
+/* ---------- Combobox ---------- */
+.ls-combobox { position: relative; }
+.ls-combobox__listbox {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  background: var(--ls-panel);
+  border: 1px solid var(--ls-border);
+  border-radius: var(--ls-radius-sm);
+}
+.ls-combobox__option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--ls-radius-sm);
+  background: none;
+  text-align: left;
+  font-size: var(--ls-fs-body);
+  color: var(--ls-text);
+  cursor: pointer;
+}
+.ls-combobox__option:hover { background: var(--ls-hover); }
+.ls-combobox__option[aria-selected="true"] { background: var(--ls-tint-accent); }
+.ls-combobox__option[data-active="true"] { background: var(--ls-hover-strong); }
+.ls-combobox__empty {
+  padding: 8px;
+  font-size: var(--ls-fs-desc);
+  color: var(--ls-text-secondary);
+}
+
+/* ---------- Checkbox / Toggle ---------- */
+.ls-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: var(--ls-fs-body);
+}
+.ls-checkbox input[type="checkbox"] {
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  flex: none;
+  margin: 0;
+  border: 1px solid var(--ls-border);
+  border-radius: 4px;
+  background: var(--ls-bg);
+  cursor: pointer;
+  display: inline-grid;
+  place-content: center;
+}
+.ls-checkbox input[type="checkbox"]:checked { background: var(--ls-accent); border-color: var(--ls-accent); }
+.ls-checkbox input[type="checkbox"]:checked::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  background: var(--ls-bg);
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+.ls-checkbox input[type="checkbox"]:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.ls-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: var(--ls-fs-body);
+  color: var(--ls-text);
+}
+.ls-toggle__track {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  flex: none;
+  border-radius: var(--ls-radius-full);
+  background: var(--ls-surface-2);
+  border: 1px solid var(--ls-border);
+  transition: background-color var(--ls-dur-fast);
+}
+.ls-toggle__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ls-text-secondary);
+  transition: transform var(--ls-dur-fast), background-color var(--ls-dur-fast);
+}
+.ls-toggle[aria-checked="true"] .ls-toggle__track { background: var(--ls-accent); border-color: var(--ls-accent); }
+.ls-toggle[aria-checked="true"] .ls-toggle__thumb { transform: translateX(14px); background: var(--ls-bg); }
+.ls-toggle:disabled { cursor: not-allowed; }
+.ls-toggle:disabled .ls-toggle__thumb { background: var(--ls-text-disabled); }
+
+/* ---------- Tabs ---------- */
+.ls-tabs__list {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-bottom: 1px solid var(--ls-border);
+  overflow-x: auto;
+}
+.ls-tabs__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  border: none;
+  background: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  border-radius: 0;
+  font-size: var(--ls-fs-row);
+  font-weight: 400;
+  color: var(--ls-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ls-tabs__tab:hover { color: var(--ls-text); }
+.ls-tabs__tab[aria-selected="true"] {
+  color: var(--ls-text);
+  font-weight: 500;
+  border-bottom-color: var(--ls-accent);
+}
+
+/* ---------- Dropdown ---------- */
+.ls-dropdown { position: relative; display: inline-block; }
+.ls-menu {
+  position: absolute;
+  z-index: 70;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 180px;
+  margin: 0;
+  padding: 4px;
+  background: var(--ls-panel);
+  border: 1px solid var(--ls-border);
+  border-radius: var(--ls-radius-sm);
+}
+.ls-menu--right { left: auto; right: 0; }
+.ls-menu__item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--ls-radius-sm);
+  background: none;
+  text-align: left;
+  font-size: var(--ls-fs-body);
+  color: var(--ls-text);
+  cursor: pointer;
+}
+.ls-menu__item:hover:not([aria-disabled="true"]),
+.ls-menu__item:focus-visible { background: var(--ls-hover-strong); outline: none; box-shadow: none; }
+.ls-menu__item[aria-disabled="true"] { color: var(--ls-text-disabled); cursor: not-allowed; }
+.ls-menu__sep { height: 1px; margin: 4px 6px; background: var(--ls-border); border: none; }
+.ls-menu__check { visibility: hidden; margin-left: auto; display: inline-flex; }
+.ls-menu__item[aria-checked="true"] .ls-menu__check { visibility: visible; }

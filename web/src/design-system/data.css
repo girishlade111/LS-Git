@@ -1,0 +1,208 @@
+/* LSGit component styles: data display. Token-driven. */
+
+/* ---------- Table ---------- */
+.ls-table-wrap { overflow-x: auto; border: 1px solid var(--ls-border); border-radius: var(--ls-radius); }
+.ls-table { width: 100%; border-collapse: collapse; font-size: var(--ls-fs-table); font-weight: 500; }
+.ls-table th,
+.ls-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--ls-border);
+}
+.ls-table th {
+  color: var(--ls-text-secondary);
+  font-weight: 500;
+  font-size: var(--ls-fs-label);
+  white-space: nowrap;
+}
+.ls-table tbody tr:hover { background: var(--ls-hover); }
+.ls-table tbody tr:last-child td { border-bottom: none; }
+
+/* ---------- Pagination ---------- */
+.ls-pagination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+}
+.ls-pagination__page {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--ls-radius-sm);
+  background: none;
+  font-size: var(--ls-fs-label);
+  font-weight: 500;
+  color: var(--ls-text-secondary);
+  cursor: pointer;
+}
+.ls-pagination__page:hover:not(:disabled):not([aria-current="page"]) {
+  background: var(--ls-hover);
+  color: var(--ls-text);
+}
+.ls-pagination__page[aria-current="page"] {
+  background: var(--ls-tint-accent);
+  color: var(--ls-accent);
+  border-color: var(--ls-accent);
+  cursor: default;
+}
+.ls-pagination__page:disabled { color: var(--ls-text-disabled); cursor: not-allowed; }
+.ls-pagination__ellipsis { color: var(--ls-text-disabled); padding: 0 2px; }
+
+/* ---------- EmptyState ---------- */
+.ls-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 40px 24px;
+  border: 1px dashed var(--ls-border);
+  border-radius: var(--ls-radius);
+  background: var(--ls-panel);
+}
+.ls-empty__icon { color: var(--ls-text-disabled); display: inline-flex; margin-bottom: 4px; }
+.ls-empty__title { font-size: var(--ls-fs-row); font-weight: 500; color: var(--ls-text); }
+.ls-empty__desc { font-size: var(--ls-fs-desc); color: var(--ls-text-secondary); max-width: 380px; }
+
+/* ---------- Skeleton ---------- */
+@keyframes ls-pulse { from { opacity: 1; } to { opacity: 0.45; } }
+.ls-skeleton {
+  background: var(--ls-surface-2);
+  border-radius: var(--ls-radius-sm);
+  animation: ls-pulse 1.2s ease-in-out infinite alternate;
+}
+.ls-skeleton--circle { border-radius: var(--ls-radius-full); }
+.ls-skeleton--text { height: 10px; }
+
+/* ---------- FileTree ---------- */
+.ls-filetree { font-size: var(--ls-fs-body); user-select: none; }
+.ls-treeitem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--ls-radius-sm);
+  background: none;
+  text-align: left;
+  font-family: var(--ls-font-mono);
+  font-size: var(--ls-fs-label);
+  color: var(--ls-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ls-treeitem:hover { background: var(--ls-hover); color: var(--ls-text); }
+.ls-treeitem[aria-selected="true"] { background: var(--ls-tint-accent); color: var(--ls-text); }
+.ls-treeitem[aria-selected="true"] .ls-treeitem__name { color: var(--ls-accent); }
+.ls-treeitem__icon { display: inline-flex; flex: none; color: inherit; }
+.ls-treeitem__chev {
+  transition: transform var(--ls-dur-fast);
+  display: inline-flex;
+  flex: none;
+  visibility: hidden;
+}
+.ls-treeitem[data-has-children="true"] .ls-treeitem__chev { visibility: visible; }
+.ls-treeitem[aria-expanded="true"] > .ls-treeitem__chev { transform: rotate(90deg); }
+.ls-treegroup { margin: 0; padding: 0; list-style: none; }
+
+/* ---------- CodeBlock ---------- */
+.ls-codeblock {
+  border: 1px solid var(--ls-border);
+  border-radius: var(--ls-radius);
+  background: var(--ls-bg);
+  overflow: hidden;
+}
+.ls-codeblock__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  background: var(--ls-surface-1);
+  border-bottom: 1px solid var(--ls-border);
+}
+.ls-codeblock__file {
+  font-family: var(--ls-font-mono);
+  font-size: var(--ls-fs-label);
+  color: var(--ls-text-secondary);
+}
+.ls-codeblock pre {
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+  font-family: var(--ls-font-mono);
+  font-size: var(--ls-fs-label);
+  line-height: 1.6;
+  color: var(--ls-text);
+}
+
+/* ---------- DiffViewer ---------- */
+.ls-diff { display: flex; flex-direction: column; gap: 16px; }
+.ls-diff__file {
+  border: 1px solid var(--ls-border);
+  border-radius: var(--ls-radius);
+  overflow: hidden;
+  background: var(--ls-bg);
+}
+.ls-diff__fileheader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--ls-surface-1);
+  border-bottom: 1px solid var(--ls-border);
+  font-family: var(--ls-font-mono);
+  font-size: var(--ls-fs-label);
+  color: var(--ls-text);
+}
+.ls-diff table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--ls-font-mono);
+  font-size: var(--ls-fs-label);
+  line-height: 1.6;
+}
+.ls-diff td { padding: 0 8px; vertical-align: top; white-space: pre-wrap; word-break: break-word; }
+.ls-diff__lineno {
+  width: 44px;
+  min-width: 44px;
+  text-align: right;
+  color: var(--ls-text-disabled);
+  user-select: none;
+}
+.ls-diff__sign { width: 14px; min-width: 14px; user-select: none; color: var(--ls-text-secondary); }
+.ls-diff__row--add td { background: var(--ls-tint-success); }
+.ls-diff__row--add .ls-diff__sign { color: var(--ls-success); }
+.ls-diff__row--del td { background: var(--ls-tint-danger); }
+.ls-diff__row--del .ls-diff__sign { color: var(--ls-danger); }
+.ls-diff__hunk td {
+  background: var(--ls-surface-1);
+  color: var(--ls-text-secondary);
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+/* ---------- ActivityItem ---------- */
+.ls-activity {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ls-border);
+}
+.ls-activity:last-child { border-bottom: none; }
+.ls-activity__body { flex: 1; min-width: 0; }
+.ls-activity__title {
+  font-size: var(--ls-fs-row);
+  font-weight: 500;
+  color: var(--ls-text);
+  overflow-wrap: anywhere;
+}
+.ls-activity__desc { font-size: var(--ls-fs-desc); color: var(--ls-text-secondary); margin-top: 1px; }
+.ls-activity__time { font-size: var(--ls-fs-label); color: var(--ls-text-secondary); white-space: nowrap; }
