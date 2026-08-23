@@ -37,7 +37,8 @@ describe('Toggle', () => {
     const sw = screen.getByRole('switch')
     await user.click(sw)
     expect(sw).toHaveAttribute('aria-checked', 'true')
-    await user.keyboard('{Space}')
+    // Native <button> activation via keyboard
+    await user.keyboard('{Enter}')
     expect(sw).toHaveAttribute('aria-checked', 'false')
   })
 })
