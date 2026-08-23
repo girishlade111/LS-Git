@@ -1,6 +1,6 @@
 import { loadConfig, type AppConfig } from '../src/config.js'
 import { buildApp } from '../src/http/app.js'
-import type { FastifyInstance, InjectPayload } from 'fastify'
+import type { FastifyInstance } from 'fastify'
 
 // Keep the test suite fast: reduced scrypt cost (hashes embed their params, so
 // production data at full cost still verifies).
@@ -109,7 +109,7 @@ export async function authed(
     method,
     url,
     headers,
-    ...(opts.payload !== undefined ? { payload: opts.payload as InjectPayload } : {}),
+    ...(opts.payload !== undefined ? { payload: opts.payload as object } : {}),
   }
   const res = await app.inject(options)
   return {

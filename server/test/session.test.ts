@@ -46,19 +46,19 @@ describe('session management', () => {
 
     const noHeader = await app.inject({
       method: 'POST', url: '/api/v1/sessions/revoke-others',
-      headers: { cookie: session.cookie },
+      headers: { cookie: session!.cookie },
     })
     expect(noHeader.statusCode).toBe(403)
 
     const badHeader = await app.inject({
       method: 'POST', url: '/api/v1/sessions/revoke-others',
-      headers: { cookie: session.cookie, 'x-csrf-token': 'wrong-value' },
+      headers: { cookie: session!.cookie, 'x-csrf-token': 'wrong-value' },
     })
     expect(badHeader.statusCode).toBe(403)
 
     const good = await app.inject({
       method: 'POST', url: '/api/v1/sessions/revoke-others',
-      headers: { cookie: session.cookie, 'x-csrf-token': session.csrf },
+      headers: { cookie: session!.cookie, 'x-csrf-token': session.csrf },
     })
     expect(good.statusCode).toBe(200)
   })
