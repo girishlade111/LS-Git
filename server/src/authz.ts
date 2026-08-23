@@ -42,7 +42,10 @@ export interface AuthzContext {
 }
 
 export function can(actor: Actor | null, permission: Permission, ctx: AuthzContext = {}): boolean {
-  if (!actor) return false
+  // Anonymous actors may ONLY read public projects (existence not leaked for others).
+  if (!actor) {
+    return permission === 'project:read' && ctx.resourceProject?.visibility === 'public'
+  }
   if (actor.state !== 'active') return false
 
   const project = ctx.resourceProject
