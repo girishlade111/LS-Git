@@ -112,8 +112,10 @@ export class LocalHashedStorage implements RepositoryStorage {
     const refFile = join(abs, 'refs', 'heads', branch)
     if (!existsSync(refFile)) throw new Error(`branch not found: ${branch}`)
     const headSha = readFileSync(refFile, 'utf8').trim()
-    const commitBody = inflateSync(readFileSync(join(abs, 'objects', headSha.slice(0, 2), headSha.slice(2))))
-    return loadFilesUnderTree(join(abs, 'objects'), parseCommit(commitBody).tree)
+    const objectsDir = join(abs, 'objects')
+    // readObject strips the "commit <size>\0" header before parsing.
+    const { body } = readObject(objectsDir, headSha)
+    return loadFilesUnderTree(objectsDir, parseCommit(body).tree)
   }
 
   deleteRepository(diskPath: string): void {
