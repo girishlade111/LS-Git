@@ -18,11 +18,8 @@ export function RepoContextNav({
   group,
   project,
   visibility,
-  tabs,
-  currentTab,
-  onTab,
   onOpenMobileNav,
-}: RepoContextNavProps) {
+}: Omit<RepoContextNavProps, 'tabs' | 'currentTab' | 'onTab'>) {
   const cloneItems: MenuItem[] = [
     { kind: 'item', id: 'https', label: 'Clone with HTTPS' },
     { kind: 'item', id: 'ssh', label: 'Clone with SSH' },

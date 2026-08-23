@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Sidebar } from './Sidebar'
 import { RepoContextNav, RepoTabs } from './RepoContextNav'
-import { Drawer } from '../design-system/Drawer'
+import { Drawer } from '../design-system/Dialog'
 import './shell.css'
 
 export interface AppShellProps {

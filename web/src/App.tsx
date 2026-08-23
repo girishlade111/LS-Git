@@ -30,7 +30,6 @@ export default function App() {
     <AppShell
       sidebarCurrent={view}
       onNavigate={navigate}
-      showRepoContext
       repo={{
         group: 'ls-git',
         project: 'web',
