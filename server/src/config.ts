@@ -74,6 +74,8 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     patMaxTtlDays: 365, // GitLab 16.0+: non-expiring PATs removed; 365-day default & max
     repositoriesRoot: process.env.LSGIT_REPOSITORIES_ROOT ?? './data/repositories',
     maxTopicsPerProject: Number(process.env.LSGIT_MAX_TOPICS ?? 30),
+    maxUploadBytes: Number(process.env.LSGIT_MAX_UPLOAD_BYTES ?? 50 * 1024 * 1024),
+    uploadsRoot: process.env.LSGIT_UPLOADS_ROOT ?? join(tmpdir(), 'lsgit-uploads'),
     ...overrides,
   }
   return base
