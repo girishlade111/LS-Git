@@ -16,6 +16,7 @@ export function ProjectDetailView({ owner, path }: { owner: string; path: string
   const [project, setProject] = useState<Project | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [tab, setTab] = useState<'overview' | 'settings'>('overview')
+  const [uploadOpen, setUploadOpen] = useState(false)
 
   async function reload() {
     try {
@@ -68,12 +69,18 @@ export function ProjectDetailView({ owner, path }: { owner: string; path: string
       {tab === 'overview' && (
         <section className="ls-section" aria-label="Overview">
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-            {isOwner && (
+            {isOwner && !project.archived && (
               <Button size="sm" variant="primary" iconStart="plus" onClick={() => setUploadOpen(true)}>
                 Upload file
               </Button>
             )}
           </div>
+          <UploadDialog
+            project={project}
+            open={uploadOpen}
+            onClose={() => setUploadOpen(false)}
+            onCommitted={() => void reload()}
+          />
           <h2 className="ls-section__title">Topics</h2>
           {project.topics.length === 0 ? (
             <p className="ls-page-desc">No topics yet.</p>
