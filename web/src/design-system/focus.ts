@@ -8,9 +8,9 @@ const FOCUSABLE = [
 ].join(',')
 
 export function getFocusable(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-    (el) => el.offsetParent !== null || el === document.activeElement,
-  )
+  // Note: no visibility filtering — layout APIs (offsetParent) are unavailable in
+  // jsdom and hidden overlays are managed by conditional rendering anyway.
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE))
 }
 
 /** Traps Tab keydown inside `container`. Attach to the container's onKeyDown. */
@@ -28,7 +28,7 @@ export function trapTabKey(e: React.KeyboardEvent, container: HTMLElement) {
   if (e.shiftKey && (active === first || !container.contains(active))) {
     e.preventDefault()
     last.focus()
-  } else if (!e.shiftKey && active === last) {
+  } else if (!e.shiftKey && (active === last || !container.contains(active))) {
     e.preventDefault()
     first.focus()
   }
