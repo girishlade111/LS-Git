@@ -13,6 +13,9 @@ import {
 } from './views/auth'
 import { EmptyState } from './design-system'
 import { useAuth, useHashRoute } from './auth/context'
+import { ProjectsView } from './projects/ProjectsView'
+import { NewProjectView } from './projects/NewProjectView'
+import { ProjectDetailView } from './projects/ProjectDetailView'
 
 const PUBLIC_ROUTES = new Set(['/login', '/register', '/forgot', '/reset', '/verify-email'])
 
