@@ -50,8 +50,9 @@ describe('Combobox', () => {
     const input = screen.getByRole('combobox')
     await user.type(input, 'lin')
     const opts = screen.getAllByRole('option')
-    expect(opts.some((o) => o.textContent === 'Linus Torvalds')).toBe(true)
-    expect(opts.every((o) => o.textContent !== 'Ada Lovelace')).toBe(true)
+    // Options include their description text (e.g. "@linus"), so match loosely.
+    expect(opts.some((o) => o.textContent?.includes('Linus Torvalds'))).toBe(true)
+    expect(opts.every((o) => !o.textContent?.includes('Ada Lovelace'))).toBe(true)
   })
 
   it('Escape closes the listbox without changing selection', async () => {
