@@ -247,7 +247,7 @@ describe('deletion', () => {
 
 describe('transfer', () => {
   it('moves ownership, keeps history on disk, and leaves a working redirect', async () => {
-    const { app, bobSession } = await setup()
+    const { app, aliceSession, bobSession } = await setup()
     await createProject(app, bobSession, { initialize_with_readme: true })
     const before = app.store.projects.byOwnerPath('bob', 'my-project')!
     const diskBefore = before.disk_path
@@ -277,36 +277,25 @@ describe('transfer', () => {
     })
     expect(exOwnerTry.statusCode).toBe(403)
     const newOwnerOk = await authed(app, 'PATCH', `/api/v1/projects/${after.id}`, {
-      session: (await import('./helpers.js')).extractSession((await (await import('./helpers.js')).loginRaw(app, 'alice')).cookies),
+      session: aliceSession,
       payload: { description: 'now mine' },
     })
     expect(newOwnerOk.statusCode).toBe(200)
 
     // Guard rails: missing target, self-transfer, occupied path at target.
     expect(
-      (await authed(app, 'POST', `/api/v1/projects/${after.id}/transfer`, { session: newOwnerSession(app), payload: { new_owner: 'ghost' } })).statusCode,
+      (await authed(app, 'POST', `/api/v1/projects/${after.id}/transfer`, { session: aliceSession, payload: { new_owner: 'ghost' } })).statusCode,
     ).toBe(404)
     expect(
-      (await authed(app, 'POST', `/api/v1/projects/${after.id}/transfer`, { session: newOwnerSession(app), payload: { new_owner: 'alice' } })).statusCode,
+      (await authed(app, 'POST', `/api/v1/projects/${after.id}/transfer`, { session: aliceSession, payload: { new_owner: 'alice' } })).statusCode,
     ).toBe(409)
     await createProject(app, bobSession, { path: 'collision' })
     expect(
-      (await authed(app, 'POST', `/api/v1/projects/${after.id}/transfer`, { session: newOwnerSession(app), payload: { new_owner: 'bob' } })).statusCode,
+      (await authed(app, 'POST', `/api/v1/projects/${after.id}/transfer`, { session: aliceSession, payload: { new_owner: 'bob' } })).statusCode,
     ).toBe(409)
+
+    void aliceSession
   })
-
-  function newOwnerSession(app: ReturnType<typeof makeApp>): Session {
-    return extractSessionSync(app, 'alice')
-  }
-
-  function extractSessionSync(app: ReturnType<typeof makeApp>, user: string): Session {
-    // Synchronous helper via pre-warmed cache would be complex; reuse loginUser lazily.
-    let cached: Session | null = null
-    void cached
-    void app
-    void user
-    throw new Error('replaced below')
-  }
 })
 
 describe('templates', () => {
