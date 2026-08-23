@@ -62,7 +62,7 @@ export default function App() {
 
   if (path === '/account') {
     return (
-      <AppShell sidebarCurrent="account" onNavigate={(id) => navigate(id === 'home' ? '/' : `/${id}`)} showRepoContext={false}>
+      <AppShell sidebarCurrent="account" onNavigate={(id) => navigate(id === 'overview' ? '/' : `/${id}`)}>
         <AccountView />
       </AppShell>
     )
@@ -104,7 +104,3 @@ export default function App() {
     </AppShell>
   )
 }
-
-// Re-exported for tests
-void FieldError
-void useAsyncSubmit
