@@ -65,20 +65,27 @@ describe('session management', () => {
 
   it('lists sessions with a current flag and revokes individually', async () => {
     const app = makeApp()
-    await registerUser(app, { username: 'dana', email: 'dana@example.com' })
+    const reg = await registerUser(app, { username: 'dana', email: 'dana@example.com' })
     const s1 = extractSession((await loginRaw(app, 'dana')).cookies)
     const s2 = extractSession((await loginRaw(app, 'dana')).cookies)
 
+    // dana has THREE sessions: the registration auto-login + two explicit logins.
     const list = (await authed(app, 'GET', '/api/v1/sessions', { session: s2 })).json() as unknown as Array<{ id: number; current: boolean }>
-    expect(list).toHaveLength(2)
+    expect(list).toHaveLength(3)
     expect(list.filter((r) => r.current)).toHaveLength(1)
 
-    const other = list.find((r) => !r.current)!
-    const del = await authed(app, 'DELETE', `/api/v1/sessions/${other.id}`, { session: s2 })
+    // Delete the REGISTRATION session by id (not s1/s2).
+    const s1Id = (await authed(app, 'GET', '/api/v1/sessions', { session: s1 })).json() as unknown as Array<{ id: number; current: boolean }>
+    const regSessionId = s1Id.find((r) => r.current)!.id
+    const del = await authed(app, 'DELETE', `/api/v1/sessions/${regSessionId}`, { session: s2 })
     expect(del.statusCode).toBe(200)
 
-    const stale = await authed(app, 'GET', '/api/v1/user', { session: s1 })
-    expect(stale.statusCode).toBe(401)
+    // s1 is untouched; deleting the same row again → 404.
+    const still = await authed(app, 'GET', '/api/v1/user', { session: s1 })
+    expect(still.statusCode).toBe(200)
+    const gone = await authed(app, 'DELETE', `/api/v1/sessions/${regSessionId}`, { session: s2 })
+    expect(gone.statusCode).toBe(404)
+    void reg
   })
 
   it('revoke-others keeps only the current session; password change does the same', async () => {
@@ -87,8 +94,10 @@ describe('session management', () => {
     const keep = extractSession((await loginRaw(app, 'erin')).cookies)
     const drop = extractSession((await loginRaw(app, 'erin')).cookies)
 
+    // erin has three sessions (registration + two logins); revoking others from
+    // `keep` removes the registration session AND `drop`.
     const res = await authed(app, 'POST', '/api/v1/sessions/revoke-others', { session: keep })
-    expect(res.json()).toEqual({ revoked: 1 })
+    expect(res.json()).toEqual({ revoked: 2 })
 
     expect((await authed(app, 'GET', '/api/v1/user', { session: keep })).statusCode).toBe(200)
     expect((await authed(app, 'GET', '/api/v1/user', { session: drop })).statusCode).toBe(401)
@@ -117,9 +126,9 @@ describe('session management', () => {
 
   it('admin gate routes through the central authorization service', async () => {
     const app = makeApp()
-    const admin = extractSession((await loginRaw(app, 'alice')).cookies) // first user = admin
-    const nonAdminRes = await registerUser(app, { username: 'bob', email: 'bob@example.com' })
-    void nonAdminRes
+    await registerUser(app) // alice = first user = admin (GitLab parity)
+    const admin = extractSession((await loginRaw(app, 'alice')).cookies)
+    await registerUser(app, { username: 'bob', email: 'bob@example.com' })
     const bob = extractSession((await loginRaw(app, 'bob')).cookies)
 
     expect((await authed(app, 'GET', '/api/v1/admin/ping', { session: admin })).statusCode).toBe(200)
