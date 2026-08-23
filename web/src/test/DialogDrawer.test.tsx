@@ -49,7 +49,6 @@ describe('Dialog', () => {
     fireEvent.click(screen.getByText('Open dialog'))
 
     const close = screen.getByRole('button', { name: 'Close dialog' })
-    const input = screen.getByLabelText('Project path')
     const confirm = screen.getByText('Confirm')
 
     // Tab from the last focusable wraps to the first (trap handler).
