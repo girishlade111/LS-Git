@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { makeApp, registerUser, loginUser, authed, extractSession, PASSWORD } from './helpers.js'
+import { makeApp, registerUser, loginUser, authed, PASSWORD } from './helpers.js'
 
 describe('registration', () => {
   it('registers the first user as admin (GitLab parity) and starts a session', async () => {

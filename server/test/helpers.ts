@@ -89,7 +89,7 @@ export async function authed(
   method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
   url: string,
   opts: {
-    session?: Session
+    session?: Session | null
     bearer?: string
     payload?: unknown
   } = {},
@@ -105,7 +105,9 @@ export async function authed(
     headers.cookie = opts.session.cookie
     if (!['GET', 'HEAD'].includes(method)) headers['x-csrf-token'] = opts.session.csrf
   }
-  const res = await app.inject({ method, url, headers, ...(opts.payload !== undefined ? { payload: opts.payload } : {}) })
+  const options: Parameters<typeof app.inject>[0] = { method, url, headers }
+  if (opts.payload !== undefined) options.payload = opts.payload
+  const res = await app.inject(options)
   return {
     statusCode: res.statusCode,
     json: () => res.json() as Record<string, unknown>,
