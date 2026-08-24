@@ -413,17 +413,20 @@ describe('finalize — idempotency, structured failures, no partial commits', ()
 
     const COUNT = 500
     const manifest: ManifestEntry[] = []
-    for (let i = 0; i < COUNT; i++) manifest.push({ file_path: `bulk/f-${i}.txt`, size: 4 })
+    for (let i = 0; i < COUNT; i++) manifest.push({ file_path: `bulk/f-${String(i).padStart(4, '0')}.txt`, size: 4 })
     const created = await createSession(app, bobSession, project.id, manifest)
     expect(created.status).toBe(201)
     const sid = String(created.body.session_id)
-    const items = created.body.items as Array<{ id: string }>
+    // Response is sorted by file_path — build an id map instead of positional indexing.
+    const items = created.body.items as Array<{ id: string; file_path: string }>
+    const idOf = new Map(items.map((it) => [it.file_path, it.id]))
 
     // Deliver 497 of 500 — three "fail" mid-transfer.
-    const failedItems = new Set([7, 123, 456].map((i) => items[i]!.id))
+    const failedIdx = new Set([7, 123, 456])
+    const pathOf = (i: number) => `bulk/f-${String(i).padStart(4, '0')}.txt`
     for (let i = 0; i < COUNT; i++) {
-      if (failedItems.has(items[i]!.id)) continue
-      const res = await putChunk(app, bobSession, project.id, sid, items[i]!.id, 0, Buffer.from(`c${i}`))
+      if (failedIdx.has(i)) continue
+      const res = await putChunk(app, bobSession, project.id, sid, idOf.get(pathOf(i))!, 0, Buffer.from(String(i).padStart(4, '0')))
       expect(res.status).toBe(200)
     }
 
@@ -434,7 +437,7 @@ describe('finalize — idempotency, structured failures, no partial commits', ()
     const report = blocked.body.items as Array<Record<string, unknown>>
     expect(report).toHaveLength(3)
     expect(new Set(report.map((r) => r.file_path))).toEqual(
-      new Set(['bulk/f-7.txt', 'bulk/f-123.txt', 'bulk/f-456.txt']),
+      new Set([pathOf(7), pathOf(123), pathOf(456)]),
     )
     for (const r of report) {
       expect(r.failure_code).toBe('incomplete_transfer')
@@ -467,9 +470,12 @@ describe('finalize — idempotency, structured failures, no partial commits', ()
       { file_path: corrupt, size: 4, sha256: sha256('want') },
     ])
     const sid = String(created.body.session_id)
-    const items = created.body.items as Array<{ id: string }>
-    await putChunk(app, bobSession, project.id, sid, items[0]!.id, 0, Buffer.from('ok--'))
-    await putChunk(app, bobSession, project.id, sid, items[1]!.id, 0, Buffer.from('got!'))
+    // Items are listed in file_path order — address them by path, never position.
+    const byPath = Object.fromEntries(
+      (created.body.items as Array<{ id: string; file_path: string }>).map((i) => [i.file_path, i.id]),
+    )
+    await putChunk(app, bobSession, project.id, sid, byPath[good]!, 0, Buffer.from('ok--'))
+    await putChunk(app, bobSession, project.id, sid, byPath[corrupt]!, 0, Buffer.from('got!'))
 
     const blocked = await finalize(app, bobSession, project.id, sid, { commit_message: 'verify me' })
     expect(blocked.status).toBe(409)
