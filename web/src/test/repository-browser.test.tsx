@@ -90,6 +90,8 @@ const nav: BrowserNav = {
   fileHistory: (ref, p) => `/proj/o/p/commits/${ref}?path=${p}`,
   commit: (sha) => `/proj/o/p/commit/${sha}`,
   blame: (ref, p) => `/proj/o/p/blame/${ref}/${p}`,
+  edit: (ref, p) => `/proj/o/p/edit/${ref}/${p}`,
+  createFile: (ref, dir) => `/proj/o/p/new/${ref}/${dir}`,
 }
 
 describe('code surface (developer view)', () => {

@@ -202,6 +202,56 @@
   clip-path: inset(50%); overflow: hidden; white-space: nowrap;
 }
 
+/* ---------------------------------------------------------------------------
+   Web editor — quiet chrome around the code surface only.
+   --------------------------------------------------------------------------- */
+
+.ls-editor { border: 1px solid var(--ls-border); border-radius: var(--ls-radius); overflow: hidden; height: min(62vh, 720px); }
+.ls-editor .cm-editor { height: 100%; }
+
+/* Draft recovery banner */
+.ls-editor-draft {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 8px 12px;
+  background: var(--ls-tint-accent);
+  border: 1px solid var(--ls-border); border-radius: var(--ls-radius);
+  color: var(--ls-text); font-size: var(--ls-fs-desc);
+}
+.ls-editor-draft svg { color: var(--ls-accent); }
+
+/* Diff preview above the editor */
+.ls-editor-diffpreview {
+  max-height: 320px; overflow: auto;
+  border: 1px solid var(--ls-border); border-radius: var(--ls-radius);
+}
+
+/* Commit dialog internals */
+.ls-editor-commit { display: flex; flex-direction: column; gap: 14px; }
+.ls-editor-commit__target { border: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.ls-editor-commit__target legend { float: left; padding: 0; margin-bottom: 4px; width: 100%; }
+.ls-editor-commit__diffs { max-height: 300px; overflow: auto; border: 1px solid var(--ls-border); border-radius: var(--ls-radius); padding: 4px; }
+
+/* Conflict state — explicit, calm, actionable */
+.ls-editor-conflict {
+  border: 1px solid var(--ls-danger-muted);
+  background: var(--ls-tint-danger);
+  border-radius: var(--ls-radius);
+  padding: 10px 14px;
+  font-size: var(--ls-fs-body); color: var(--ls-text);
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+}
+.ls-editor-conflict__title { color: var(--ls-danger); font-weight: 600; margin: 0; }
+.ls-editor-conflict p { margin: 0; }
+
+/* Generic inline error */
+.ls-editor-error {
+  border: 1px solid var(--ls-danger);
+  color: var(--ls-danger);
+  background: var(--ls-tint-danger);
+  border-radius: var(--ls-radius);
+  padding: 8px 12px; font-size: var(--ls-fs-desc);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ls-rb *, .ls-code *, .ls-blame * { transition: none !important; animation: none !important; }
 }

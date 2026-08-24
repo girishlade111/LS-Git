@@ -165,6 +165,8 @@ export function RepositoryBrowser({
 
 function BrowserBody({
   project,
+  owner,
+  projectPath: ownerProjectPath,
   route,
   resolvedRef,
   restSegments,
@@ -247,7 +249,7 @@ function BrowserBody({
           key={`${route.action}:${resolvedRef}:${path}`}
           projectId={project.id}
           projectName={project.name}
-          projectPath={`${owner}/${projectPath}`}
+          projectPath={`${owner}/${ownerProjectPath}`}
           defaultBranch={project.default_branch}
           refName={resolvedRef}
           path={path}
