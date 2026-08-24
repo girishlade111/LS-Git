@@ -566,6 +566,7 @@ export class UploadService {
     let result
     try {
       result = this.applyCommitFromShas(repo, baseEntries, changes, {
+        actor: actor!,
         baseBranch,
         targetBranch,
         message,
