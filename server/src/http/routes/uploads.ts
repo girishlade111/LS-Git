@@ -16,10 +16,11 @@ import { Buffer } from 'node:buffer'
  *   POST   /api/v1/projects/:id/uploads/:uploadId/commit → blob→tree→commit→ref→event (single file)
  */
 export function registerUploadRoutes(app: FastifyInstance): void {
-  app.post('/api/v1/projects/:id/uploads/batches', { preHandler: app.requireAuth('write_api') }, async (req) => {
+  app.post('/api/v1/projects/:id/uploads/batches', { preHandler: app.requireAuth('write_api') }, async (req, reply) => {
     const id = Number((req.params as { id: string }).id)
     if (!Number.isInteger(id)) throw new AppError(400, 'Invalid project id')
-    return app.uploads.createBatch(req.actor, id, (req.body ?? {}) as Record<string, unknown>)
+    const result = app.uploads.createBatch(req.actor, id, (req.body ?? {}) as Record<string, unknown>)
+    return reply.code(201).send(result)
   })
 
   app.get('/api/v1/projects/:id/uploads/batches/:batchId', { preHandler: app.requireAuth('read_api') }, async (req) => {

@@ -141,7 +141,8 @@ function writeTreeLevel(objectsDir: string, node: DirNode): string {
   )
   const chunks: Buffer[] = []
   for (const e of entries) {
-    chunks.push(Buffer.concat([Buffer.from(`${e.mode} ${e.name}\0`, 'ascii'), Buffer.from(e.sha!, 'hex')]))
+    // Names must be encoded utf8 (not ascii): git trees carry arbitrary unicode paths.
+    chunks.push(Buffer.concat([Buffer.from(`${e.mode} ${e.name}\0`, 'utf8'), Buffer.from(e.sha!, 'hex')]))
   }
   return writeObject(objectsDir, 'tree', Buffer.concat(chunks))
 }
