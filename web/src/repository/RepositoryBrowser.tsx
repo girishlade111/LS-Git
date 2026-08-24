@@ -5,6 +5,7 @@ import { Input } from '../design-system/Input'
 import { projectsApi, type Project } from '../projects/api'
 import { repositoryApi, encodePath, type RefsResult } from './api'
 import { BranchesView, CompareView, TagsView } from './branches'
+import { NetworkView } from './forks'
 import { FileEditorView } from './editor/FileEditorView'
 import {
   BlobViewPage,
@@ -236,6 +237,13 @@ function BrowserBody({
           path={route.query.get('path')}
           page={route.page}
           nav={nav}
+        />
+      )
+    case 'network':
+      return (
+        <NetworkView
+          projectId={project.id}
+          currentFullPath={`${owner}/${ownerProjectPath}`}
         />
       )
     case 'commit':

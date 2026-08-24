@@ -8,6 +8,7 @@ import { useToast } from '../design-system/Toast'
 import { useAuth, useHashRoute } from '../auth/context'
 import { projectsApi, type Project } from './api'
 import { FolderUploadDialog } from './FolderUploadDialog'
+import { ForkButton, ForkStatusPanel } from '../repository/forks'
 
 export function ProjectDetailView({ owner, path }: { owner: string; path: string }) {
   const toast = useToast()
@@ -57,6 +58,20 @@ export function ProjectDetailView({ owner, path }: { owner: string; path: string
           </>
         )}
       </p>
+
+      {/* Fork controls: entry point on the source; relationship panel on forks. */}
+      {!project.upstream_full_path && !project.archived && (
+        <div style={{ marginBottom: 12 }}>
+          <ForkButton project={project} />
+        </div>
+      )}
+      {project.upstream_full_path && (
+        <ForkStatusPanel
+          project={project}
+          isOwner={!!isOwner}
+          onChanged={() => void reload()}
+        />
+      )}
 
       <div className="ls-tabs__list" role="tablist" aria-label="Project sections">
         {(['overview', 'settings'] as const).map((t) => (

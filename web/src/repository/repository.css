@@ -266,6 +266,14 @@
 }
 .ls-rb__parentlink:hover { background: var(--ls-hover); }
 
+/* Fork relationship panel */
+.ls-fk { display: flex; flex-direction: column; gap: 10px; margin-bottom: var(--ls-gap, 12px); }
+.ls-fk__row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: var(--ls-fs-body); }
+.ls-fk__row svg { color: var(--ls-text-secondary); }
+
+/* Current-project row emphasis in the network table (accent tint only). */
+.ls-rb__table tr[data-current] td { background: var(--ls-tint-accent); }
+
 /* Dense row action clusters inside tables */
 .ls-rb__rowactions { display: inline-flex; gap: 2px; }
 .ls-rb__cellcommit { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
