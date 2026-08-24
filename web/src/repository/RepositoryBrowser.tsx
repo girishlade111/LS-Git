@@ -117,6 +117,8 @@ export function RepositoryBrowser({
   if (!project) {
     return <div className="ls-rb__loading" role="status">Loading repository…</div>
   }
+  const activeProject = project
+  const activeRef = resolved.ref || project.default_branch
 
   const nav = makeNav(owner, projectPath)
 
@@ -126,8 +128,8 @@ export function RepositoryBrowser({
 
   function sectionUrl(section: 'tree' | 'commits' | 'branches' | 'tags' | 'compare'): string {
     switch (section) {
-      case 'tree': return nav.tree(resolved.ref || project.default_branch, '')
-      case 'commits': return nav.history(resolved.ref || project.default_branch)
+      case 'tree': return nav.tree(activeRef, '')
+      case 'commits': return nav.history(activeRef)
       case 'branches': return `/proj/${encodeURIComponent(owner)}/${encodeURIComponent(projectPath)}/branches`
       case 'tags': return `/proj/${encodeURIComponent(owner)}/${encodeURIComponent(projectPath)}/tags`
       case 'compare': return `/proj/${encodeURIComponent(owner)}/${encodeURIComponent(projectPath)}/compare`
