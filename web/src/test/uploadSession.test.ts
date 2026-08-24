@@ -211,12 +211,13 @@ describe('FolderUploadSession — queue engine', () => {
     const listener = vi.fn()
     const unsubscribe = session.subscribe(listener)
     await session.start()
-    await flush(5)
+    // Notifications are coalesced on a ~120ms timer — give it one tick of real time.
+    await new Promise((r) => setTimeout(r, 160))
     expect(listener).toHaveBeenCalled()
     const a = session.getSnapshot()
     const b = session.getSnapshot()
     expect(a).toBe(b) // cached between mutations
     expect(a.stats.totalFiles).toBe(1)
     unsubscribe()
-  })
+  }, 10_000)
 })
