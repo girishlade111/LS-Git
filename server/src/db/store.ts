@@ -397,6 +397,8 @@ export type AuditEventName =
   | 'repo_commit_created'
   | 'repo_branch_created'
   | 'repo_branch_deleted'
+  | 'repo_branch_renamed'
+  | 'repo_default_branch_changed'
   | 'repo_tag_created'
   | 'repo_tag_deleted'
   | 'repo_ref_updated'

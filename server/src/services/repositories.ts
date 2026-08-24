@@ -21,7 +21,7 @@ import {
 } from '../storage/repository.js'
 import type { LocalHashedStorage } from '../storage/local.js'
 import { validateRepoFilePath, sanitizeCommitMessage } from '../lib/pathsafe.js'
-import { matchLines } from '../lib/linediff.js'
+import { matchLines, unifiedPatch } from '../lib/linediff.js'
 
 /**
  * Repository service — the authorization-gated face of the core Git engine.
