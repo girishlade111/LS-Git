@@ -37,8 +37,6 @@ const EVENT_TYPE_MAP: Record<string, NotificationType> = {
   fork: 'fork',
 }
 
-const WATCH_LEVELS: WatchLevel[] = ['disabled', 'participating', 'mention', 'watch']
-
 function truncate(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s
 }
