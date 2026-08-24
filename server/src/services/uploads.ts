@@ -607,7 +607,6 @@ export class UploadService {
   private applyCommit(
     objectsDir: string,
     absRepo: string,
-    project: ProjectRow,
     args: {
       actor: Actor
       baseBranch: string
