@@ -113,34 +113,7 @@ async function finalize(
   return { status: res.statusCode, body: res.json() }
 }
 
-/** Splits content on a chunk boundary and PUTs every chunk with checksums. */
-async function stageWholeItem(
-  app: ReturnType<typeof makeApp>,
-  session: Session,
-  projectId: number,
-  sid: string,
-  itemId: string,
-  content: Buffer,
-  chunkCount: number,
-): Promise<void> {
-  const cs = Math.ceil(content.length / chunkCount) || 1
-  for (let i = 0; i < chunkCount; i++) {
-    const part = content.subarray(i * cs, Math.min((i + 1) * cs, content.length))
-    const res = await putChunk(app, session, projectId, sid, itemId, i, part, { sha: true })
-    expect(res.status, `chunk ${i}`).toBe(200)
-  }
-}
-
-function stagingDir(app: ReturnType<typeof makeApp>, sid: string): string {
-  return join(app.cfg.uploadsRoot, 'resumable', sid)
-}
-
-let counter = 0
-const nextPath = (prefix: string) => `${prefix}-${(counter += 1)}.txt`
-
-// ---------------------------------------------------------------------------
-
-describe('session creation — manifest reception + authorization', () => {
+async function getChunkMap(
   it('creates a session with per-item chunk plans and echoes limits', async () => {
     const { app, bobSession } = await setup()
     const project = app.store.projects.byOwnerPath('bob', 'resumable')!
