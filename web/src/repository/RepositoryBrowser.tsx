@@ -285,9 +285,9 @@ function BrowserBody({
       return (
         <CompareView
           projectId={project.id}
-          defaultBranch={resolved.ref || project.default_branch}
+          defaultBranch={resolvedRef || project.default_branch}
           initialFrom={route.query.get('from') ?? project.default_branch}
-          initialTo={route.query.get('to') ?? resolved.ref || project.default_branch}
+          initialTo={route.query.get('to') ?? (resolvedRef || project.default_branch)}
           nav={nav}
           navigate={(h) => { window.location.hash = h.replace(/^#/, '') }}
         />
