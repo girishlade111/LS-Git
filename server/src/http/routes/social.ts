@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { AppError } from '../../services/identity.js'
-import type { WatchLevel } from '../../db/store.js'
+import { resolveNotificationSetting, type WatchLevel } from '../../db/store.js'
 
 /**
  * Social discovery routes: stars, watch subscriptions, notification
@@ -52,12 +52,14 @@ export function registerSocialRoutes(app: FastifyInstance): void {
   })
 
   app.get('/api/v1/user/stars', { preHandler: auth }, async (req) => {
-    return app.store.stars.listByUser(req.actor!.userId).map((p) => ({
-      id: p.id,
-      full_path: fullPath(app, p),
-      name: p.name,
-      visibility: p.visibility,
-    }))
+    return {
+      stars: app.store.stars.listByUser(req.actor!.userId).map((p) => ({
+        id: p.id,
+        full_path: fullPath(app, p),
+        name: p.name,
+        visibility: p.visibility,
+      })),
+    }
   })
 
   // -- watches -----------------------------------------------------------------
@@ -82,10 +84,17 @@ export function registerSocialRoutes(app: FastifyInstance): void {
   app.get('/api/v1/projects/:id/watch', { preHandler: auth }, async (req) => {
     const project = requireProject(app, projectId(req))
     const explicit = app.store.watchSubscriptions.get(req.actor!.userId, project.id)
-    const resolved = app.store.notificationPreferences.resolve(req.actor!.userId, project.id)
+    const resolved = resolveNotificationSetting(
+      app.store.watchSubscriptions,
+      app.store.notificationPreferences,
+      req.actor!.userId,
+      project.id,
+    )
     return {
-      level: explicit,
+      level: explicit?.level ?? null,
+      muted_events: explicit?.muted_events ?? [],
       effective_level: resolved.level,
+      source: resolved.source,
       default_level: 'participating',
     }
   })
@@ -96,12 +105,19 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     const q = req.query as { project_id?: string }
     if (q.project_id !== undefined) {
       const pid = Number(q.project_id)
-      const specific = app.store.notificationPreferences.getForProject(req.actor!.userId, pid)
-      const resolved = app.store.notificationPreferences.resolve(req.actor!.userId, pid)
+      // Repository-level levels live in the watch subscription; mutes are global.
+      const watchLevel = app.store.watchSubscriptions.get(req.actor!.userId, pid)
+      const resolved = resolveNotificationSetting(
+        app.store.watchSubscriptions,
+        app.store.notificationPreferences,
+        req.actor!.userId,
+        pid,
+      )
       return {
         project_id: pid,
-        level: specific?.level ?? null,
+        level: watchLevel,
         effective_level: resolved.level,
+        source: resolved.source,
         muted_events: resolved.muted_events,
         default_level: 'participating',
       }
@@ -116,36 +132,39 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     }
   })
 
+  /**
+   * Sets notification preferences. With a project_id this writes the
+   * repository watch level (single source of truth); without one it writes
+   * the user's GLOBAL default. muted_events are global-only.
+   */
   app.put('/api/v1/user/notification_preferences', { preHandler: auth }, async (req) => {
     const body = (req.body ?? {}) as Record<string, unknown>
     const level = String(body.level ?? '') as WatchLevel
     if (!LEVELS.includes(level)) {
       throw new AppError(400, `level must be one of ${LEVELS.join(', ')}`, 'validation_failed')
     }
-    const projectId = body.project_id === undefined || body.project_id === null
-      ? null
-      : Number(body.project_id)
-    if (projectId !== null && !Number.isInteger(projectId)) {
+    const hasProject = body.project_id !== undefined && body.project_id !== null
+    const projectId = hasProject ? Number(body.project_id) : null
+    if (hasProject && !Number.isInteger(projectId)) {
       throw new AppError(400, 'project_id must be an integer or null for global', 'validation_failed')
     }
+
     const mutedEvents = Array.isArray(body.muted_events)
       ? [...new Set((body.muted_events as unknown[]).map(String))]
       : undefined
 
-    const existing = projectId !== null
-      ? app.store.notificationPreferences.getForProject(req.actor!.userId, projectId)
-      : app.store.notificationPreferences.getGlobal(req.actor!.userId)
-
-    app.store.notificationPreferences.set(
-      req.actor!.userId,
-      projectId,
-      level,
-      mutedEvents ?? existing?.muted_events ?? [],
-    )
+    if (hasProject) {
+      app.store.watchSubscriptions.set(req.actor!.userId, projectId!, level, mutedEvents)
+    } else {
+      const existing = app.store.notificationPreferences.getGlobal(req.actor!.userId)
+      app.store.notificationPreferences.setGlobal(req.actor!.userId, level, mutedEvents ?? existing?.muted_events ?? [])
+    }
     return {
       project_id: projectId,
       level,
-      muted_events: mutedEvents ?? existing?.muted_events ?? [],
+      muted_events: (hasProject
+        ? app.store.notificationPreferences.getGlobal(req.actor!.userId)?.muted_events ?? []
+        : mutedEvents),
     }
   })
 

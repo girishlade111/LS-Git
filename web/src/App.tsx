@@ -95,7 +95,7 @@ export default function App() {
     if (owner && projPath) {
       // Repository browser sub-routes: tree|blob|commits|commit|blame|search
       const segments = path.replace(/#L\d+$/, '').split('/').filter(Boolean)
-      const BROWSER_ACTIONS = new Set(['tree', 'blob', 'commits', 'commit', 'blame', 'search', 'edit', 'new', 'branches', 'tags', 'compare', 'network'])
+      const BROWSER_ACTIONS = new Set(['tree', 'blob', 'commits', 'commit', 'blame', 'search', 'edit', 'new', 'branches', 'tags', 'compare', 'network', 'notifications'])
       const action = segments[3]
       if (action && BROWSER_ACTIONS.has(action)) {
         return (

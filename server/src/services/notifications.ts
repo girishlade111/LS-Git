@@ -1,4 +1,5 @@
 import type { IdentityServices } from './identity.js'
+import { resolveNotificationSetting } from '../db/store.js'
 import type { EventRow, NotificationType, WatchLevel } from '../db/store.js'
 
 /**
@@ -127,14 +128,17 @@ export function notifyOnEvent(s: IdentityServices, row: EventRow): void {
   const candidates = new Map<number, WatchLevel>()
   for (const w of s.watchSubscriptions.listForProject(projectId)) candidates.set(w.user_id, w.level)
   for (const uid of [...participants, ...mentioned]) {
-    if (!candidates.has(uid)) candidates.set(uid, s.notificationPreferences.resolve(uid, projectId).level)
+    if (!candidates.has(uid)) {
+      candidates.set(uid, resolveNotificationSetting(s.watchSubscriptions, s.notificationPreferences, uid, projectId).level)
+    }
   }
 
   let created = 0
   for (const [userId] of candidates) {
     if (actorId !== null && userId === actorId) continue // never notify yourself
 
-    const pref = s.notificationPreferences.resolve(userId, projectId)
+    const setting = resolveNotificationSetting(s.watchSubscriptions, s.notificationPreferences, userId, projectId)
+    const pref = setting
     if (pref.muted_events.includes(rendered.type)) continue
 
     let eligible = false

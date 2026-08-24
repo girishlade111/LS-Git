@@ -245,6 +245,9 @@ export class ForksService {
       source_full_path: this.fullPath(source),
       fork_id: fork.id,
       fork_full_path: this.fullPath(fork),
+      // The UPSTREAM owner participates in fork events about their repo even
+      // though the emitting project is the fork itself.
+      participant_user_ids: [source.owner_id],
       actor_user_id: actor!.userId,
     })
     this.s.audit.record({

@@ -345,4 +345,12 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
       CREATE INDEX idx_notifications_user_unread ON notifications(user_id) WHERE read_at IS NULL;
     `,
   },
+  {
+    version: 8,
+    sql: `
+      -- Per-repository muted categories live alongside the watch level so a
+      -- repository preference is fully self-contained.
+      ALTER TABLE watch_subscriptions ADD COLUMN muted_events TEXT NOT NULL DEFAULT '[]';
+    `,
+  },
 ]

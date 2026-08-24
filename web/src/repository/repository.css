@@ -274,6 +274,51 @@
 /* Current-project row emphasis in the network table (accent tint only). */
 .ls-rb__table tr[data-current] td { background: var(--ls-tint-accent); }
 
+/* ---------------------------------------------------------------------------
+   Social discovery — quiet star control + dense hairline inbox.
+   --------------------------------------------------------------------------- */
+
+.ls-star {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 9px;
+  background: transparent; border: 1px solid var(--ls-border); border-radius: 5px;
+  color: var(--ls-text-secondary); font-size: var(--ls-fs-label);
+  cursor: pointer;
+}
+.ls-star:hover { background: var(--ls-hover); color: var(--ls-text); }
+.ls-star--active { color: var(--ls-accent); border-color: var(--ls-border); }
+.ls-star--active svg { fill: currentColor; }
+
+/* Inbox */
+.ls-inbox__list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--ls-border); }
+.ls-inbox__row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; border-bottom: 1px solid var(--ls-border);
+  text-decoration: none; color: var(--ls-text); font-size: var(--ls-fs-body);
+}
+.ls-inbox__list li:last-child .ls-inbox__row { border-bottom: none; }
+.ls-inbox__row:hover { background: var(--ls-hover); }
+.ls-inbox__row--read { color: var(--ls-text-secondary); }
+.ls-inbox__dot {
+  width: 6px; height: 6px; flex: none; border-radius: var(--ls-radius-full, 999px);
+  background: var(--ls-accent);
+}
+.ls-inbox__dot--read { background: var(--ls-text-disabled); }
+.ls-inbox__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ls-inbox__proj {
+  font-family: var(--ls-font-mono); font-size: var(--ls-fs-label);
+  color: var(--ls-text-disabled);
+  margin-left: auto; white-space: nowrap;
+}
+.ls-inbox__meta { font-size: var(--ls-fs-label); color: var(--ls-text-disabled); white-space: nowrap; min-width: 24px; text-align: right; }
+.ls-inbox__count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: var(--ls-radius-full, 999px);
+  background: var(--ls-tint-accent); color: var(--ls-accent);
+  font-size: var(--ls-fs-label); font-weight: 600;
+}
+
 /* Dense row action clusters inside tables */
 .ls-rb__rowactions { display: inline-flex; gap: 2px; }
 .ls-rb__cellcommit { display: flex; align-items: baseline; gap: 8px; min-width: 0; }

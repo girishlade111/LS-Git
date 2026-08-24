@@ -979,8 +979,23 @@ export type WatchLevel = 'disabled' | 'participating' | 'mention' | 'watch'
 export class WatchSubscriptionsRepo {
   constructor(private db: Database) {}
 
-  set(userId: number, projectId: number, level: WatchLevel): void {
+  set(userId: number, projectId: number, level: WatchLevel, mutedEvents?: string[]): void {
     const now = nowIso()
+    if (mutedEvents !== undefined) {
+      this.db.run(
+        `INSERT INTO watch_subscriptions (user_id, project_id, level, muted_events, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(user_id, project_id) DO UPDATE SET
+           level = excluded.level, muted_events = excluded.muted_events, updated_at = excluded.updated_at`,
+        userId,
+        projectId,
+        level,
+        JSON.stringify(mutedEvents),
+        now,
+        now,
+      )
+      return
+    }
     this.db.run(
       `INSERT INTO watch_subscriptions (user_id, project_id, level, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?)
@@ -998,13 +1013,14 @@ export class WatchSubscriptionsRepo {
     this.db.run('DELETE FROM watch_subscriptions WHERE user_id = ? AND project_id = ?', userId, projectId)
   }
 
-  get(userId: number, projectId: number): WatchLevel | null {
+  get(userId: number, projectId: number): { level: WatchLevel; muted_events: string[] } | null {
     const row = this.db.get(
-      'SELECT level FROM watch_subscriptions WHERE user_id = ? AND project_id = ?',
+      'SELECT level, muted_events FROM watch_subscriptions WHERE user_id = ? AND project_id = ?',
       userId,
       projectId,
     ) as Row | undefined
-    return row ? (row.level as WatchLevel) : null
+    if (!row) return null
+    return { level: row.level as WatchLevel, muted_events: JSON.parse(String(row.muted_events)) as string[] }
   }
 
   listForProject(projectId: number, level?: WatchLevel): Array<{ user_id: number; level: WatchLevel }> {
@@ -1018,8 +1034,17 @@ export class WatchSubscriptionsRepo {
 /** Reserved project_id sentinel meaning "the user's global default". */
 export const GLOBAL_PREF_PROJECT_ID = 0
 
+/**
+ * Global-only preference rows (defaults + muted event categories).
+ * Per-REPOSITORY levels live in watch_subscriptions — the single source of
+ * truth — so there is exactly one writer per concept.
+ */
 export class NotificationPreferencesRepo {
   constructor(private db: Database) {}
+
+  setGlobal(userId: number, level: WatchLevel, mutedEvents: string[] = []): void {
+    this.set(userId, GLOBAL_PREF_PROJECT_ID, level, mutedEvents)
+  }
 
   set(
     userId: number,
@@ -1042,10 +1067,11 @@ export class NotificationPreferencesRepo {
   }
 
   getForProject(userId: number, projectId: number): { level: WatchLevel; muted_events: string[] } | null {
+    const pid = projectId ?? GLOBAL_PREF_PROJECT_ID
     const row = this.db.get(
       'SELECT level, muted_events FROM notification_preferences WHERE user_id = ? AND project_id = ?',
       userId,
-      projectId,
+      pid,
     ) as Row | undefined
     if (!row) return null
     return { level: row.level as WatchLevel, muted_events: JSON.parse(String(row.muted_events)) as string[] }
@@ -1054,19 +1080,30 @@ export class NotificationPreferencesRepo {
   getGlobal(userId: number): { level: WatchLevel; muted_events: string[] } | null {
     return this.getForProject(userId, GLOBAL_PREF_PROJECT_ID)
   }
+}
 
-  /**
-   * Resolution chain: explicit repository preference → global preference →
-   * built-in default ('participating', GitLab parity). Global mutes apply on
-   * top of any resolution.
-   */
-  resolve(userId: number, projectId: number): { level: WatchLevel; muted_events: string[] } {
-    const global = this.getGlobal(userId)
-    const specific = this.getForProject(userId, projectId)
-    const level = specific?.level ?? global?.level ?? 'participating'
-    const muted = [...new Set([...(global?.muted_events ?? []), ...(specific?.muted_events ?? [])])]
-    return { level, muted_events: muted }
+/**
+ * Unified resolution used by fanout and API reads:
+ *   explicit repository watch level → global preference level → 'participating'.
+ * Global muted categories apply everywhere.
+ */
+export function resolveNotificationSetting(
+  watch: WatchSubscriptionsRepo,
+  prefs: NotificationPreferencesRepo,
+  userId: number,
+  projectId: number,
+): { level: WatchLevel; muted_events: string[]; source: 'repository' | 'global' | 'default' } {
+  const explicit = watch.get(userId, projectId)
+  const global = prefs.getGlobal(userId)
+  if (explicit) {
+    return {
+      level: explicit.level,
+      muted_events: [...new Set([...explicit.muted_events, ...(global?.muted_events ?? [])])],
+      source: 'repository',
+    }
   }
+  if (global) return { level: global.level, muted_events: global.muted_events, source: 'global' }
+  return { level: 'participating', muted_events: [], source: 'default' }
 }
 
 export type NotificationType =
@@ -1125,9 +1162,9 @@ export class NotificationsRepo {
     const clauses: string[] = ['user_id = ?']
     const params: SqlParam[] = [userId]
     if (opts.unreadOnly) clauses.push('read_at IS NULL')
-    if (opts.type) clauses.push('type = ?')
-    if (opts.projectId !== undefined) clauses.push('project_id = ?')
-    params.push(opts.limit ?? 50)
+    if (opts.type) { clauses.push('type = ?'); params.push(opts.type) }
+    if (opts.projectId !== undefined) { clauses.push('project_id = ?'); params.push(opts.projectId) }
+    params.push(Math.max(1, Math.min(opts.limit ?? 50, 500)))
     return this.db.all(
       `SELECT * FROM notifications WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC, id DESC LIMIT ?`,
       ...params,

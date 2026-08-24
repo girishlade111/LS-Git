@@ -6,6 +6,7 @@ import { projectsApi, type Project } from '../projects/api'
 import { repositoryApi, encodePath, type RefsResult } from './api'
 import { BranchesView, CompareView, TagsView } from './branches'
 import { NetworkView } from './forks'
+import { InboxView } from './social'
 import { FileEditorView } from './editor/FileEditorView'
 import {
   BlobViewPage,
@@ -246,6 +247,8 @@ function BrowserBody({
           currentFullPath={`${owner}/${ownerProjectPath}`}
         />
       )
+    case 'notifications':
+      return <InboxView navigate={(h) => { window.location.hash = h.replace(/^#/, '') }} />
     case 'commit':
       return <CommitDetailView projectId={project.id} projectName={project.name} sha={resolvedRef} nav={nav} />
     case 'blame':

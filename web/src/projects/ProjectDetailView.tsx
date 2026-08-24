@@ -9,6 +9,7 @@ import { useAuth, useHashRoute } from '../auth/context'
 import { projectsApi, type Project } from './api'
 import { FolderUploadDialog } from './FolderUploadDialog'
 import { ForkButton, ForkStatusPanel } from '../repository/forks'
+import { StarButton, WatchSelector } from '../repository/social'
 
 export function ProjectDetailView({ owner, path }: { owner: string; path: string }) {
   const toast = useToast()
@@ -59,19 +60,23 @@ export function ProjectDetailView({ owner, path }: { owner: string; path: string
         )}
       </p>
 
-      {/* Fork controls: entry point on the source; relationship panel on forks. */}
-      {!project.upstream_full_path && !project.archived && (
-        <div style={{ marginBottom: 12 }}>
-          <ForkButton project={project} />
-        </div>
-      )}
-      {project.upstream_full_path && (
-        <ForkStatusPanel
-          project={project}
-          isOwner={!!isOwner}
-          onChanged={() => void reload()}
-        />
-      )}
+      {/* Social + fork controls: star/watch on the source page; relationship panel on forks. */}
+      <div className="ds-row" style={{ marginBottom: 12, alignItems: 'center' }}>
+        {!project.upstream_full_path && !project.archived && <ForkButton project={project} />}
+        {project.upstream_full_path && (
+          <ForkStatusPanel
+            project={project}
+            isOwner={!!isOwner}
+            onChanged={() => void reload()}
+          />
+        )}
+        {isOwner || project.visibility === 'public' ? (
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginLeft: 8 }}>
+            <StarButton projectId={project.id} />
+            <WatchSelector projectId={project.id} />
+          </div>
+        ) : null}
+      </div>
 
       <div className="ls-tabs__list" role="tablist" aria-label="Project sections">
         {(['overview', 'settings'] as const).map((t) => (
