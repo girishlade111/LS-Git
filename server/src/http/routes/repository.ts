@@ -32,7 +32,7 @@ export function registerRepositoryRoutes(app: FastifyInstance): void {
 
   // -- web-editor commit (create/edit/delete/rename; multi-file in one commit) ----
 
-  app.post('/api/v1/projects/:id/repository/commit', { preHandler: auth }, async (req) => {
+  app.post('/api/v1/projects/:id/repository/commit', { preHandler: auth }, async (req, reply) => {
     const body = (req.body ?? {}) as Record<string, unknown>
     const id = projectId(req)
     const rawChanges = Array.isArray(body.changes) ? body.changes : []
@@ -69,6 +69,7 @@ export function registerRepositoryRoutes(app: FastifyInstance): void {
       reject_overwrite: body.reject_overwrite === true,
     })
 
+    reply.code(201)
     return {
       ...outcome,
       // Merge requests arrive with the collaboration phase; the new-branch flow
