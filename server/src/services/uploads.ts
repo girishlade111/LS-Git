@@ -399,7 +399,7 @@ export class UploadService {
     const abs = join(this.cfg.repositoriesRoot, project.disk_path)
     const objectsDir = join(abs, 'objects')
 
-    const result = this.applyCommit(objectsDir, abs, project, {
+    const result = this.applyCommit(objectsDir, abs, {
       actor: actor!,
       baseBranch,
       targetBranch,
