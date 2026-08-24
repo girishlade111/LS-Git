@@ -184,4 +184,38 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
       CREATE INDEX idx_events_project ON events(project_id, id DESC);
     `,
   },
+  {
+    version: 4,
+    sql: `
+      -- Multi-file upload sessions (folder/project upload). A batch groups the
+      -- per-file staging rows so the whole set lands as ONE git commit and ONE
+      -- event — never one database transaction per file.
+      CREATE TABLE upload_batches (
+        id TEXT PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        state TEXT NOT NULL DEFAULT 'open'
+          CHECK (state IN ('open', 'completed', 'cancelled')),
+        declared_files INTEGER NOT NULL DEFAULT 0,
+        declared_bytes INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_upload_batches_project ON upload_batches(project_id, state);
+
+      ALTER TABLE uploads ADD COLUMN batch_id TEXT REFERENCES upload_batches(id) ON DELETE CASCADE;
+      CREATE INDEX idx_uploads_batch ON uploads(batch_id, state);
+
+      -- Minimal protected-ref enforcement (PERMISSIONS.md §4–5). Exact branch
+      -- names only for now; glob patterns arrive with the collaboration phase.
+      -- The default branch is protected with Maintainer-push at project creation.
+      CREATE TABLE protected_branches (
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        name TEXT NOT NULL COLLATE NOCASE,
+        push_access_level TEXT NOT NULL DEFAULT 'maintainer'
+          CHECK (push_access_level IN ('no_one', 'maintainer')),
+        PRIMARY KEY (project_id, name)
+      );
+    `,
+  },
 ]

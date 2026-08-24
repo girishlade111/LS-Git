@@ -702,6 +702,7 @@ export interface UploadRow {
   received_size: number
   sha256: string | null
   state: 'pending' | 'completed' | 'cancelled'
+  batch_id: string | null
   created_at: string
   updated_at: string
 }
@@ -709,16 +710,24 @@ export interface UploadRow {
 export class UploadsRepo {
   constructor(private db: Database) {}
 
-  create(data: { id: string; projectId: number; userId: number; filePath: string; declaredSize: number }): void {
+  create(data: {
+    id: string
+    projectId: number
+    userId: number
+    filePath: string
+    declaredSize: number
+    batchId?: string | null
+  }): void {
     const now = nowIso()
     this.db.run(
-      `INSERT INTO uploads (id, project_id, user_id, file_path, declared_size, state, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`,
+      `INSERT INTO uploads (id, project_id, user_id, file_path, declared_size, batch_id, state, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
       data.id,
       data.projectId,
       data.userId,
       data.filePath,
       data.declaredSize,
+      data.batchId ?? null,
       now,
       now,
     )
@@ -726,6 +735,23 @@ export class UploadsRepo {
 
   byId(id: string): UploadRow | undefined {
     return this.db.get('SELECT * FROM uploads WHERE id = ?', id) as UploadRow | undefined
+  }
+
+  /** Live (non-terminal) rows of a batch, used by finalize/cancel and duplicate checks. */
+  listByBatch(batchId: string): Array<UploadRow> {
+    return this.db.all(
+      'SELECT * FROM uploads WHERE batch_id = ? ORDER BY created_at, id',
+      batchId,
+    ) as unknown as Array<UploadRow>
+  }
+
+  /** Finds a live staging row for the same path inside the same batch. */
+  liveByBatchAndPath(batchId: string, filePath: string): UploadRow | undefined {
+    return this.db.get(
+      `SELECT * FROM uploads WHERE batch_id = ? AND file_path = ? AND state = 'pending'`,
+      batchId,
+      filePath,
+    ) as UploadRow | undefined
   }
 
   markReceived(id: string, size: number, sha256: string): void {
@@ -744,6 +770,119 @@ export class UploadsRepo {
 
   markCancelled(id: string): void {
     this.db.run("UPDATE uploads SET state = 'cancelled', updated_at = ? WHERE id = ?", nowIso(), id)
+  }
+}
+
+export interface UploadBatchRow {
+  id: string
+  project_id: number
+  user_id: number
+  state: 'open' | 'completed' | 'cancelled'
+  declared_files: number
+  declared_bytes: number
+  created_at: string
+  updated_at: string
+}
+
+export class UploadBatchesRepo {
+  constructor(private db: Database) {}
+
+  create(data: {
+    id: string
+    projectId: number
+    userId: number
+    declaredFiles: number
+    declaredBytes: number
+  }): UploadBatchRow {
+    const now = nowIso()
+    this.db.run(
+      `INSERT INTO upload_batches (id, project_id, user_id, declared_files, declared_bytes, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      data.id,
+      data.projectId,
+      data.userId,
+      data.declaredFiles,
+      data.declaredBytes,
+      now,
+      now,
+    )
+    return this.byId(data.id)!
+  }
+
+  byId(id: string): UploadBatchRow | undefined {
+    return this.db.get('SELECT * FROM upload_batches WHERE id = ?', id) as
+      | UploadBatchRow
+      | undefined
+  }
+
+  setState(id: string, state: UploadBatchRow['state']): void {
+    this.db.run('UPDATE upload_batches SET state = ?, updated_at = ? WHERE id = ?', state, nowIso(), id)
+  }
+
+  /** Pending batches untouched for longer than the TTL — browser-refresh orphans. */
+  staleOpenBefore(cutoffIso: string): Array<UploadBatchRow> {
+    return this.db.all(
+      "SELECT * FROM upload_batches WHERE state = 'open' AND updated_at < ?",
+      cutoffIso,
+    ) as unknown as Array<UploadBatchRow>
+  }
+}
+
+export type ProtectedPushLevel = 'no_one' | 'maintainer'
+
+export interface ProtectedBranchRow {
+  project_id: number
+  name: string
+  push_access_level: ProtectedPushLevel
+}
+
+export class ProtectedBranchesRepo {
+  constructor(private db: Database) {}
+
+  ensure(projectId: number, name: string, level: ProtectedPushLevel = 'maintainer'): void {
+    this.db.run(
+      `INSERT OR IGNORE INTO protected_branches (project_id, name, push_access_level)
+       VALUES (?, ?, ?)`,
+      projectId,
+      name,
+      level,
+    )
+  }
+
+  set(projectId: number, name: string, level: ProtectedPushLevel): void {
+    this.db.run(
+      `INSERT INTO protected_branches (project_id, name, push_access_level) VALUES (?, ?, ?)
+       ON CONFLICT(project_id, name) DO UPDATE SET push_access_level = excluded.push_access_level`,
+      projectId,
+      name,
+      level,
+    )
+  }
+
+  listForProject(projectId: number): Array<ProtectedBranchRow> {
+    return this.db.all(
+      'SELECT * FROM protected_branches WHERE project_id = ? ORDER BY name',
+      projectId,
+    ) as unknown as Array<ProtectedBranchRow>
+  }
+
+  byName(projectId: number, name: string): ProtectedBranchRow | undefined {
+    return this.db.get(
+      'SELECT * FROM protected_branches WHERE project_id = ? AND name = ?',
+      projectId,
+      name,
+    ) as ProtectedBranchRow | undefined
+  }
+
+  /**
+   * Central protected-ref decision (GitLab "push access level" parity).
+   * Maintainer-level rules allow owner/admin; `no_one` denies everyone except
+   * instance admins. Exact names only until glob support lands.
+   */
+  pushAllowed(actorIsOwnerOrAdmin: boolean, actorIsAdmin: boolean, row: ProtectedBranchRow | undefined): boolean {
+    if (!row) return true
+    if (row.push_access_level === 'maintainer') return actorIsOwnerOrAdmin
+    return actorIsAdmin // no_one
   }
 }
 
