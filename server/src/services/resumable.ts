@@ -300,6 +300,9 @@ export class ResumableUploadService {
         (rawItems as ManifestInput[]).map((raw) => {
           const path = String(raw.file_path).trim() // validated above via validateRepoFilePath
           const size = Number(raw.size)
+          // Effective chunk size never exceeds the file itself: tiny files
+          // collapse to a single chunk whose boundary is the whole file.
+          const itemChunkSize = size === 0 ? chunkSize : Math.min(chunkSize, size)
           return {
             id: randomUUID(),
             filePath: path,
@@ -307,8 +310,8 @@ export class ResumableUploadService {
             mime: typeof raw.mime === 'string' && raw.mime ? raw.mime.slice(0, 255) : 'application/octet-stream',
             lastModified: Number.isFinite(Number(raw.last_modified)) ? Math.trunc(Number(raw.last_modified)) : null,
             sha256: raw.sha256 ? String(raw.sha256) : null,
-            chunkSize,
-            chunkCount: Math.max(1, Math.ceil(size / chunkSize)),
+            chunkSize: itemChunkSize,
+            chunkCount: Math.max(1, Math.ceil(size / itemChunkSize)),
           }
         }),
       )
