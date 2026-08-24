@@ -7,7 +7,7 @@ import { Select } from '../design-system/Select'
 import { useToast } from '../design-system/Toast'
 import { useAuth, useHashRoute } from '../auth/context'
 import { projectsApi, type Project } from './api'
-import { UploadDialog } from './UploadDialog'
+import { FolderUploadDialog } from './FolderUploadDialog'
 
 export function ProjectDetailView({ owner, path }: { owner: string; path: string }) {
   const toast = useToast()
