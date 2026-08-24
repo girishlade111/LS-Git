@@ -172,6 +172,37 @@ stores only protection rules and the default-branch pointer. UI surfaces dense t
 styled tables (`web/src/repository/branches.tsx`) with keyboard-accessible actions,
 parent-commit links and browse-at-commit navigation.
 
+### 3.7 Fork system (IMPLEMENTED)
+
+Forks are real repository clones at the storage layer: the entire object database plus
+refs are copied verbatim, so commit SHAs (history/branches/tags) are identical to the
+source. PostgreSQL stores only two columns on `projects` — `forked_from_project_id`
+(direct upstream) and `fork_network_id` (network root's project id) — both indexed, so
+the whole network loads in ONE query and the tree is assembled in memory.
+
+```
+POST /api/v1/projects/:id/fork               {path?, name?, visibility?, namespace?}
+                                             → 201 {project{...full_path}, source}
+                                             409 path_taken · 400 visibility_exceeds_source ·
+                                             422 namespace_unsupported (orgs → groups phase)
+GET  /api/v1/projects/:id/fork/divergence(?branch=)
+                                             → state up_to_date|ahead|behind|diverged +
+                                               behind_count/ahead_count + tips
+POST /api/v1/projects/:id/fork/sync          fast-forward ONLY; transfers missing objects
+                                             upstream→fork then CAS ref update;
+                                             diverged → 409 fork_diverged (never overwrites)
+POST /api/v1/projects/:id/fork/detach        {confirm_path} — owner/admin + typed full-path
+                                             confirmation; clears both relationship columns
+GET  /api/v1/projects/:id/fork/network       root + members + direct_forks/descendant counts
+```
+
+Policy: fork visibility can never exceed source visibility at creation; protection
+rules are not inherited — forks define their own posture; sync targets the same-named
+branch upstream (no silent fallback); detached forks leave the network entirely.
+UI (`web/src/repository/forks.tsx`): Fork button with capped visibility selector,
+"Forked from" reference + divergence badge + Sync control, strong-confirmed detach,
+and a dense indented network table under `#/proj/<owner>/<project>/network`.
+
 Behavioral notes: directories list dirs-first with pagination (`per_page` ≤ 200);
 binary files are sniffed (NUL byte / invalid UTF-8) and never inlined; large files
 return `too_large` flags so the UI offers raw/download; deleted paths keep their
