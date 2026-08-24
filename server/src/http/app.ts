@@ -23,6 +23,7 @@ declare module 'fastify' {
     identity: IdentityService
     credentials: CredentialsService
     projects: ProjectsService
+    repositories: RepositoriesService
     uploads: UploadService
     uploadSessions: ResumableUploadService
     authRateLimiter: RateLimiter
@@ -91,6 +92,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   app.identity = new IdentityService(services, cfg, services.outbox)
   app.credentials = new CredentialsService(services, cfg.patMaxTtlDays, cfg.patDefaultTtlDays)
   app.projects = new ProjectsService(services, cfg)
+  app.repositories = new RepositoriesService(services, cfg, app.projects.storage)
   app.uploads = new UploadService(services, cfg, app.projects.storage)
   app.uploadSessions = new ResumableUploadService(
     services,
