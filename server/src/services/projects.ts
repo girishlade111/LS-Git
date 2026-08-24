@@ -152,7 +152,9 @@ export class ProjectsService {
     // The hashed path needs the generated id; update within the same logical step.
     const diskPath = this.storage.diskPathFor(project.id)
     this.s.db.transaction(() => {
-      this.s.db.run('UPDATE projects SET disk_path = ?, initialized = ? WHERE id = ?', diskPath, shouldInitialize ? 1 : 0, project.id)
+      this.db.run('UPDATE projects SET disk_path = ?, initialized = ? WHERE id = ?', diskPath, shouldInitialize ? 1 : 0, project.id)
+      // PERMISSIONS.md §5: default branch is protected (Maintainer-push) from creation.
+      this.s.protectedBranches.ensure(project.id, input.default_branch, 'maintainer')
       if (input.topics.length > 0) this.s.topics.setForProject(project.id, input.topics)
       // Claiming a redirected path retires that redirect (GitLab parity).
       this.s.redirects.pruneSuperseded()

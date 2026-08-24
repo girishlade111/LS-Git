@@ -173,6 +173,30 @@ export function registerProjectRoutes(app: FastifyInstance): void {
     return projectView(app, project)
   })
 
+  // -- protected branches (minimal enforcement point; globs arrive later) -----------
+  app.get('/api/v1/projects/:id/protected_branches', { preHandler: auth }, async (req) => {
+    const id = Number((req.params as { id: string }).id)
+    const project = app.store.projects.byId(id)
+    if (!project) throw new AppError(404, 'Project not found')
+    app.projects.authorize(req.actor, 'project:read', project)
+    return app.store.protectedBranches.listForProject(id)
+  })
+
+  app.put('/api/v1/projects/:id/protected_branches', { preHandler: auth }, async (req) => {
+    const id = Number((req.params as { id: string }).id)
+    const body = (req.body ?? {}) as { name?: unknown; push_access_level?: unknown }
+    const name = String(body.name ?? '').trim()
+    const level = String(body.push_access_level ?? '')
+    if (!name || name.length > 255) throw new AppError(400, 'A branch name is required')
+    if (!['no_one', 'maintainer'].includes(level)) {
+      throw new AppError(400, "push_access_level must be 'no_one' or 'maintainer'")
+    }
+    const project = app.projects.visibleTo(req.actor, id)
+    app.projects.authorize(req.actor, 'project:update', project)
+    app.store.protectedBranches.set(id, name, level as 'no_one' | 'maintainer')
+    return app.store.protectedBranches.listForProject(id)
+  })
+
   // -- deletion ----------------------------------------------------------------------------------
   app.delete('/api/v1/projects/:id', { preHandler: auth }, async (req) => {
     const id = Number((req.params as { id: string }).id)
