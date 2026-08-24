@@ -597,7 +597,7 @@ export class ResumableUploadService {
         409,
         `${failures.length} of ${included.length} item(s) are not ready — nothing was committed`,
         'session_incomplete',
-        { code: 'session_incomplete', items: failures },
+        { code: 'session_incomplete', committed: false, items: failures },
       )
     }
     if (assembled.size === 0) {

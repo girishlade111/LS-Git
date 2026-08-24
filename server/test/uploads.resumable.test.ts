@@ -225,8 +225,6 @@ describe('chunk protocol — boundaries, checksums, idempotency, attempt caps', 
     expect((await putChunk(app, bobSession, project.id, sid, itemId, 2, c2)).status).toBe(200)
 
     // Wrong declared checksum → rejected, not counted.
-    const badSha = await putChunk(app, bobSession, project.id, sid, itemId, 0, c0, { sha: false })
-    void badSha
     const mismatch = await app.inject({
       method: 'PUT',
       url: `/api/v1/projects/${project.id}/upload_sessions/${sid}/items/${itemId}/chunks/0`,
