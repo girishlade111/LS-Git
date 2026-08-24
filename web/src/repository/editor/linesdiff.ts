@@ -88,15 +88,10 @@ function hashOps(a: string[], b: string[]): Array<Op> {
 
 const CONTEXT_LINES = 3
 
-export interface DiffStats {
-  added: number
-  removed: number
-}
-
 /**
  * Builds a unified-diff text between two file versions.
- * Empty `oldText` with `newPath` produces GitLab-style "new file" output;
- * the reverse yields "deleted file".
+ * Empty `oldText` produces new-file output; empty `newText` a deletion.
+ * Returns '' when the contents are identical.
  */
 export function unifiedDiff(
   oldText: string,
@@ -106,10 +101,6 @@ export function unifiedDiff(
   const oldLines = oldText === '' ? [] : oldText.replace(/\n$/, '').split('\n')
   const newLines = newText === '' ? [] : newText.replace(/\n$/, '').split('\n')
   const ops = lcsOps(oldLines, newLines)
-  const header =
-    `diff --git a/${path} b/${path}\n` +
-    `--- a/${path}\n` +
-    `+++ b/${path}\n`
 
   let added = 0
   let removed = 0
@@ -119,88 +110,58 @@ export function unifiedDiff(
   }
   if (added === 0 && removed === 0) return { text: '', stats: { added: 0, removed: 0 } }
 
-  // Group ops into hunks with context windows.
-  const hunks: Array<Array<{ prefix: string; text: string }>> = []
-  let current: Array<{ prefix: string; text: string }> = []
-  let sinceChange = Number.MAX_SAFE_INTEGER
-  let oldNo = 1
-  let newNo = 1
-  const starts: Array<{ oldStart: number; newStart: number; lines: Array<{ prefix: string; text: string }> }> = []
-
-  interface HunkBuilder {
-    lines: Array<{ prefix: string; text: string }>
-    oldStart: number
-    newStart: number
-    open: boolean
-    lastOld: number
-    lastNew: number
-  }
-  const hunk: HunkBuilder = { lines: [], oldStart: 0, newStart: 0, open: false, lastOld: 0, lastNew: 0 }
-
-  const pendingCtx: Array<{ prefix: string; text: string; oldNo: number; newNo: number }> = []
-
-  function flushContext(into: boolean): void {
-    if (!into) {
-      pendingCtx.length = 0
-      return
-    }
-    for (const c of pendingCtx) {
-      if (!hunk.open) {
-        hunk.open = true
-        hunk.oldStart = c.oldNo
-        hunk.newStart = c.newNo
-      }
-      hunk.lines.push({ prefix: ' ', text: c.text })
-      hunk.lastOld = c.oldNo
-      hunk.lastNew = c.newNo
-    }
-    pendingCtx.length = 0
-  }
-
-  for (const op of ops) {
-    switch (op.type) {
-      case 'equal':
-        pendingCtx.push({ prefix: ' ', text: op.newLine ?? '', oldNo, newNo })
-        oldNo++
-        newNo++
-        break
-      case 'delete':
-        flushContext(pendingCtx.length > 0 || hunk.open ? true : false)
-        if (!hunk.open) { hunk.open = true; hunk.oldStart = oldNo; hunk.newStart = newNo }
-        hunk.lines.push({ prefix: '-', text: op.oldLine ?? '' })
-        hunk.lastOld = oldNo
-        oldNo++
-        break
-      case 'insert':
-        flushContext(hunk.open || pendingCtx.length > 0)
-        if (!hunk.open) { hunk.open = true; hunk.oldStart = oldNo; hunk.newStart = newNo }
-        hunk.lines.push({ prefix: '+', text: op.newLine ?? '' })
-        hunk.lastNew = newNo
-        newNo++
-        break
-    }
-    // Trim long context runs between changes.
-    if (op.type === 'equal' && pendingCtx.length > CONTEXT_LINES && !hunk.open) {
-      pendingCtx.splice(0, pendingCtx.length - CONTEXT_LINES)
-    } else if (op.type === 'equal' && hunk.open && pendingCtx.length > CONTEXT_LINES * 2) {
-      flushContext(true)
-      if (hunk.lines.length > 0) starts.push({ oldStart: hunk.oldStart, newStart: hunk.newStart, lines: [...hunk.lines] })
-      hunk.lines = []
-      hunk.open = false
+  // Line numbers per op index.
+  const nums = new Array<{ oldNo: number | null; newNo: number | null }>(ops.length)
+  let o = 1
+  let nn = 1
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i]!
+    nums[i] = {
+      oldNo: op.type === 'insert' ? null : o++,
+      newNo: op.type === 'delete' ? null : nn++,
     }
   }
-  flushContext(hunk.open)
-  if (hunk.lines.length > 0) starts.push({ oldStart: hunk.oldStart, newStart: hunk.newStart, lines: hunk.lines })
 
-  void current
-  void hunks
+  // Include-window around every change.
+  const include = new Array<boolean>(ops.length).fill(false)
+  for (let i = 0; i < ops.length; i++) {
+    if (ops[i]!.type === 'equal') continue
+    for (let j = Math.max(0, i - CONTEXT_LINES); j <= Math.min(ops.length - 1, i + CONTEXT_LINES); j++) {
+      include[j] = true
+    }
+  }
 
-  let out = header
-  for (const hk of starts) {
-    const oldCount = hk.lines.filter((l) => l.prefix !== '+').length
-    const newCount = hk.lines.filter((l) => l.prefix !== '-').length
-    out += `@@ -${hk.oldStart},${oldCount} +${hk.newStart},${newCount} @@\n`
-    out += hk.lines.map((l) => `${l.prefix}${l.text}`).join('\n') + '\n'
+  // Group included runs into hunks.
+  const groups: Array<Array<number>> = []
+  let current: Array<number> | null = null
+  for (let i = 0; i < ops.length; i++) {
+    if (!include[i]) {
+      if (current) { groups.push(current); current = null }
+      continue
+    }
+    if (!current) current = []
+    current.push(i)
+  }
+  if (current) groups.push(current)
+
+  let out =
+    `diff --git a/${path} b/${path}\n` +
+    `--- a/${path}\n` +
+    `+++ b/${path}\n`
+  for (const group of groups) {
+    const first = nums[group[0]!]!
+    const last = nums[group[group.length - 1]!]!
+    const oldStart = first.oldNo ?? Math.max(1, (last.oldNo ?? 1))
+    const newStart = first.newNo ?? Math.max(1, (last.newNo ?? 1))
+    const oldCount = group.filter((i) => ops[i]!.type !== 'insert').length
+    const newCount = group.filter((i) => ops[i]!.type !== 'delete').length
+    out += `@@ -${oldStart},${oldCount} +${newStart},${newCount} @@\n`
+    for (const i of group) {
+      const op = ops[i]!
+      if (op.type === 'equal') out += ` ${op.newLine ?? ''}\n`
+      else if (op.type === 'delete') out += `-${op.oldLine ?? ''}\n`
+      else out += `+${op.newLine ?? ''}\n`
+    }
   }
   return { text: out, stats: { added, removed } }
 }
