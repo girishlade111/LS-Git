@@ -24,6 +24,7 @@ declare module 'fastify' {
     credentials: CredentialsService
     projects: ProjectsService
     uploads: UploadService
+    uploadSessions: ResumableUploadService
     authRateLimiter: RateLimiter
     store: ReturnType<typeof makeServices>
     requireAuth: (needed?: 'read_api' | 'write_api' | 'read_user') => PreHandlerFn
