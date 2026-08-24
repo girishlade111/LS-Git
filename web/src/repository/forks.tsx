@@ -69,7 +69,7 @@ export function ForkButton({ project }: { project: Project }) {
           <>
             <Button onClick={() => setOpen(false)}>Cancel</Button>
             <Button variant="primary" data-autofocus disabled={busy || !path.trim()} onClick={() => void doFork()}>
-              {busy ? 'Forking…' : 'Fork'}
+              {busy ? 'Forking…' : 'Fork repository'}
             </Button>
           </>
         }
@@ -197,13 +197,18 @@ export function ForkStatusPanel({
       </div>
 
       <div className="ls-fk__row">
-        <Button size="sm" variant="primary" disabled={busy || report?.state === 'up_to_date' || report?.state === 'ahead'} onClick={() => void doSync()}>
-          {busy ? 'Syncing…' : 'Sync fork'}
-        </Button>
         {isOwner && (
-          <Button size="sm" variant="ghost" onClick={() => setDetachOpen(true)}>
-            Detach fork…
-          </Button>
+          <>
+            <Button size="sm" variant="primary" disabled={busy || report?.state === 'up_to_date' || report?.state === 'ahead'} onClick={() => void doSync()}>
+              {busy ? 'Syncing…' : 'Sync fork'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setDetachOpen(true)}>
+              Detach fork…
+            </Button>
+          </>
+        )}
+        {!isOwner && (
+          <span className="ls-rb__muted">Sign in as the fork owner to sync or detach.</span>
         )}
       </div>
 

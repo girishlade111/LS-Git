@@ -62,7 +62,7 @@ describe('fork dialog', () => {
     // Visibility options never exceed the source's rank.
     const options = screen.getAllByRole('option').map((o) => o.textContent)
     expect(options).toContain('public') // public source → all levels allowed
-    await user.click(screen.getByRole('button', { name: 'Fork' })) // submit (dialog button)
+    await user.click(screen.getByRole('button', { name: 'Fork repository' })) // submit
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
     const [url, init] = fetchMock.mock.calls[0]!
@@ -84,7 +84,7 @@ describe('fork dialog', () => {
     const user = userEvent.setup()
     render(<ForkButton project={sourceProject} />)
     await user.click(screen.getByRole('button', { name: 'Fork' }))
-    await user.click(screen.getByRole('button', { name: 'Fork' }))
+    await user.click(screen.getByRole('button', { name: 'Fork repository' }))
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('already been taken'))
     expect(window.location.hash).not.toContain('/proj/bob')
@@ -97,7 +97,7 @@ describe('fork dialog', () => {
 
 describe('fork status panel', () => {
   it('shows the upstream reference and a divergence badge; sync fast-forwards', async () => {
-    const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
       if (String(url).includes('/fork/divergence')) {
         return Promise.resolve(jsonResponse({
           state: 'behind', branch: 'main', upstream_branch: 'main',
@@ -168,7 +168,8 @@ describe('fork status panel', () => {
   })
 
   it('detach requires typing the exact full project path', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ detached: true }))))
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ detached: true })))
+    vi.stubGlobal('fetch', fetchMock)
 
     const user = userEvent.setup()
     render(<ForkStatusPanel project={forkProject()} isOwner />)
