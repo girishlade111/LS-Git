@@ -10,6 +10,7 @@ import { parsePersonalAccessToken, tokenDigest } from '../lib/crypto.js'
 import type { AppConfig } from '../config.js'
 import { ProjectsService } from '../services/projects.js'
 import { UploadService } from '../services/uploads.js'
+import { ResumableUploadService } from '../services/resumable.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
