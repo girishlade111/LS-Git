@@ -97,7 +97,7 @@ describe('fork dialog', () => {
 
 describe('fork status panel', () => {
   it('shows the upstream reference and a divergence badge; sync fast-forwards', async () => {
-    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       if (String(url).includes('/fork/divergence')) {
         return Promise.resolve(jsonResponse({
           state: 'behind', branch: 'main', upstream_branch: 'main',
@@ -184,9 +184,10 @@ describe('fork status panel', () => {
     fireEventChange(confirmInput, 'bob/my-fork')
     await user.click(screen.getByRole('button', { name: 'Detach permanently' }))
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
-    const body = JSON.parse(
-      (fetchMock.mock.calls.find((c) => String(c[0]).includes('/fork/detach'))![1] as RequestInit).body as string,
+    const detachCall = (fetchMock.mock.calls as unknown as Array<[string, RequestInit]>).find(
+      (c) => String(c[0]).includes('/fork/detach'),
     )
+    const body = JSON.parse(detachCall![1]!.body as string)
     expect(body.confirm_path).toBe('bob/my-fork')
   })
 
