@@ -8,7 +8,6 @@ import { can as authzCan } from '../../authz.js'
 
 export function projectView(app: FastifyInstance, p: ProjectRow) {
   const owner = app.store.users.byId(p.owner_id)
-  const upstream = p.forked_from_project_id ? app.store.projects.byId(p.forked_from_project_id) : undefined
   return {
     id: p.id,
     name: p.name,
@@ -26,17 +25,17 @@ export function projectView(app: FastifyInstance, p: ProjectRow) {
     last_activity_at: p.last_activity_at,
     // Existence-only booleans; no storage internals leak (hashed paths stay server-side).
     repository_empty: !p.initialized,
-    fork_of: null as null, // fork relationships arrive with the collaboration phase
-    upstream_full_path:
-      p.forked_from_project_id != null
-        ? (() => {
-            const src = app.store.projects.byId(p.forked_from_project_id)
-            if (!src) return null
-            const srcOwner = app.store.users.byId(src.owner_id)
-            return srcOwner ? `${srcOwner.username}/${src.path}` : null
-          })()
-        : null,
+    upstream_full_path: upstreamFullPath(app, p),
   }
+}
+
+/** "owner/path" of the fork's direct upstream, when present. */
+function upstreamFullPath(app: FastifyInstance, p: ProjectRow): string | null {
+  if (p.forked_from_project_id == null) return null
+  const src = app.store.projects.byId(p.forked_from_project_id)
+  if (!src) return null
+  const srcOwner = app.store.users.byId(src.owner_id)
+  return srcOwner ? `${srcOwner.username}/${src.path}` : null
 }
 
 export function registerProjectRoutes(app: FastifyInstance): void {
