@@ -104,7 +104,9 @@ export function TreeView({
         </div>
       </header>
 
-      {data.tip_commit && <TipCommit commit={data.tip_commit} onHistory={() => undefined} historyHref={nav.history(refName)} />}
+      {data.tip_commit && (
+        <TipCommit commit={data.tip_commit} historyHref={nav.history(refName)} commitUrl={nav.commit} />
+      )}
 
       {rows.length === 0 ? (
         <EmptyState icon="folder" title="Nothing here" description="This directory has no entries on this page." />
@@ -147,18 +149,27 @@ export function TreeView({
   )
 }
 
-function TipCommit({ commit, historyHref }: { commit: CommitView; onHistory: () => void; historyHref: string }) {
-  void onHistory
+function TipCommit({ commit, historyHref }: { commit: CommitView; historyHref: string }) {
   return (
     <div className="ls-rb__tip">
       <span className="ls-rb__tipmsg">{commit.title}</span>
-      <a className="ls-rb__tipsha" href={`#${''}`} onClick={(e) => { e.preventDefault(); window.location.hash = historyHref.replace(/^#/, '') }}>
+      <a
+        className="ls-rb__tipsha"
+        href={`#${historyHrefCommit(commit.sha)}`}
+        aria-label={`Commit ${commit.short_sha}`}
+      >
         {commit.short_sha}
       </a>
       <span className="ls-rb__muted">· {commit.author_name} · {timeAgo(commit.committed_at)}</span>
       <a className="ls-rb__tiplink" href={historyHref}>History</a>
     </div>
   )
+}
+
+/** Commit URL built lazily — TipCommit receives the nav through closure. */
+let historyHrefCommit: (sha: string) => string = () => '#'
+export function registerCommitUrlBuilder(fn: (sha: string) => string): void {
+  historyHrefCommit = fn
 }
 
 function TreeSkeleton() {
