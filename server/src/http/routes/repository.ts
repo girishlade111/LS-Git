@@ -284,11 +284,6 @@ export function registerRepositoryRoutes(app: FastifyInstance): void {
 
   // -- protected-branch rules (management centralized in the service) ---------------------
 
-  app.get('/api/v1/projects/:id/protected_branches2', async (req) => {
-    void req
-    throw new AppError(404, 'Not found')
-  })
-
   app.put('/api/v1/projects/:id/repository/protected_branches', { preHandler: auth }, async (req) => {
     const body = (req.body ?? {}) as Record<string, unknown>
     const level = String(body.push_access_level ?? 'maintainer')
