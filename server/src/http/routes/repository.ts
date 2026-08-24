@@ -27,6 +27,55 @@ import { buildArchive, type ArchiveEntry } from '../../storage/archive.js'
 
 export function registerRepositoryRoutes(app: FastifyInstance): void {
   const repos = app.repositories
+  // Repository mutations require an authenticated writer (write_api PAT scope).
+  const auth = app.requireAuth('write_api')
+
+  // -- web-editor commit (create/edit/delete/rename; multi-file in one commit) ----
+
+  app.post('/api/v1/projects/:id/repository/commit', { preHandler: auth }, async (req) => {
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const id = projectId(req)
+    const rawChanges = Array.isArray(body.changes) ? body.changes : []
+    const changes = rawChanges.map((c) => {
+      const change = c as Record<string, unknown>
+      const mapped: Record<string, unknown> = {
+        path: String(change.path ?? ''),
+        mode: change.mode === '100755' ? '100755' : '100644',
+      }
+      if (change.delete === true) mapped.delete = true
+      if (typeof change.content === 'string') mapped.content = change.content
+      else if (typeof change.content_base64 === 'string') {
+        // Binary replace path: bytes arrive base64-encoded (JSON transport).
+        const decoded = Buffer.from(change.content_base64, 'base64')
+        if (decoded.length === 0 && String(change.content_base64).length > 0) {
+          throw new AppError(400, `'${mapped.path}' has invalid base64 content`, 'validation_failed')
+        }
+        mapped.content = decoded
+      } else if (typeof change.sha === 'string') mapped.sha = change.sha
+      return mapped
+    })
+
+    const outcome = repos.commitChanges(req.actor, id, {
+      changes: changes as unknown as Parameters<typeof repos.commitChanges>[2]['changes'],
+      message: String(body.commit_message ?? body.message ?? ''),
+      branch: typeof body.branch === 'string' ? body.branch : null,
+      new_branch: typeof body.new_branch === 'string' ? body.new_branch : null,
+      start_branch: typeof body.start_branch === 'string' ? body.start_branch : null,
+      expected_base_tip: body.expected_base_tip === null
+        ? null
+        : typeof body.expected_base_tip === 'string'
+          ? body.expected_base_tip
+          : undefined,
+      reject_overwrite: body.reject_overwrite === true,
+    })
+
+    return {
+      ...outcome,
+      // Merge requests arrive with the collaboration phase; the new-branch flow
+      // is already MR-shaped so a PR/MR can be created from this result later.
+      merge_request: { created: false, reason: 'Merge requests arrive with the collaboration phase.' },
+    }
+  })
 
   // -- refs (branch/tag selectors) ---------------------------------------------
 

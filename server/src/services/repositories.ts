@@ -58,6 +58,14 @@ export interface CommitInput {
   /** Base for new_branch (default: default branch). */
   start_branch?: string | null
   /**
+   * Optimistic-concurrency guard (GitLab `last_commit_id` parity): the branch
+   * tip the client based its edit on. When provided and the tip has moved,
+   * the commit is refused with 409 ref_update_conflict — newer changes are
+   * never silently rebased or overwritten. The engine's own CAS remains the
+   * backstop for the read→write window.
+   */
+  expected_base_tip?: string | null
+  /**
    * false (default): overwriting an existing path replaces it (browser edit).
    * true: refuse when a change would overwrite an existing path.
    */
@@ -247,14 +255,40 @@ export class RepositoriesService {
       if (!change.delete && !change.sha && change.content === undefined) {
         throw new AppError(400, `'${change.path}' needs content or a blob sha`, 'validation_failed')
       }
+      const byteLength = typeof change.content === 'string'
+        ? Buffer.byteLength(change.content, 'utf8')
+        : (change.content?.length ?? 0)
+      if (byteLength > this.cfg.maxUploadBytes) {
+        throw new AppError(
+          413,
+          `File exceeds the ${Math.floor(this.cfg.maxUploadBytes / 1024 / 1024)} MB limit`,
+          'too_large',
+        )
+      }
     }
 
     // An explicitly named base must exist unless we are simply committing to
     // the (still empty) default branch — that is the initial-commit flow.
-    if (input.new_branch || input.start_branch) {
+    const isPlainCommit = !input.new_branch && !input.start_branch
+    if (!isPlainCommit) {
       const hasBase = !!repo.resolveBranch(baseBranch)
       if (!hasBase && baseBranch !== targetBranch) {
         throw new AppError(400, `Source branch does not exist: ${baseBranch}`, 'branch_missing')
+      }
+    }
+
+    // Client-declared base tip (stale-edit detection). A mismatch means the
+    // user started editing against a different commit than the current tip.
+    let observedTip: string | null = null
+    if (isPlainCommit && input.expected_base_tip !== undefined) {
+      observedTip = repo.resolveBranch(targetBranch)
+      if ((input.expected_base_tip ?? null) !== observedTip) {
+        throw new AppError(
+          409,
+          `The branch changed while you were editing — it now points at ${(observedTip ?? '<new>').slice(0, 10)}. Reload and reapply your change.`,
+          'ref_update_conflict',
+          { code: 'ref_update_conflict', expected: input.expected_base_tip ?? null, current: observedTip },
+        )
       }
     }
 
