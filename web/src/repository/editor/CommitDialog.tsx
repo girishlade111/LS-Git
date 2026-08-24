@@ -221,9 +221,9 @@ export function CommitDialog({
 
           {/* Per-file diff preview (existing design-system renderer). */}
           <div className="ls-editor-commit__diffs" aria-label="Diff preview">
-            {diffs.map(({ text, path }) =>
-              text ? <DiffViewer key={path} diff={text} /> : (
-                <p key={path} className="ls-rb__muted">No textual change in {path}.</p>
+            {diffs.map(({ text, buffer: buf }) =>
+              text ? <DiffViewer key={buf.path} diff={text} /> : (
+                <p key={buf.path} className="ls-rb__muted">No textual change in {buf.path}.</p>
               ),
             )}
           </div>

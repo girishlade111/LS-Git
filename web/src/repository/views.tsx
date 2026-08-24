@@ -29,6 +29,9 @@ export interface BrowserNav {
   fileHistory: (ref: string, path: string) => string
   commit: (sha: string) => string
   blame: (ref: string, path: string) => string
+  /** Web-editor routes. */
+  edit: (ref: string, path: string) => string
+  createFile: (ref: string, dir: string) => string
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +97,9 @@ export function TreeView({
       <header className="ls-rb__head">
         <CrumbTrail trail={trail} />
         <div className="ls-rb__actions">
+          <Button size="sm" variant="primary" onClick={() => { window.location.hash = nav.createFile(refName, data.path).replace(/^#/, '') }}>
+            New file
+          </Button>
           <a className="ls-btn ls-btn--sm ls-btn--secondary" href={repositoryApi.downloadUrl(projectId, refName, data.path || null)}>
             <Icon name="external" size={13} /> Download {data.path ? 'directory' : 'repository'}
           </a>
@@ -187,6 +193,11 @@ function TreeSkeleton() {
 
 const RENDER_TEXT_MAX_LINES = 20_000
 
+/** Files the web editor can open as text (not binary, within size limits). */
+function editableForWeb(b: Pick<BlobResult, 'is_binary' | 'too_large'>): boolean {
+  return !b.is_binary && !b.too_large
+}
+
 export function BlobViewPage({
   projectId,
   projectName,
@@ -253,6 +264,13 @@ export function BlobViewPage({
           <IconButton label="File history" icon="clock" onClick={() => { window.location.hash = nav.fileHistory(refName, data.path).replace(/^#/, '') }} />
           {!data.is_binary && (
             <IconButton label="Blame" icon="eye" onClick={() => { window.location.hash = nav.blame(refName, data.path).replace(/^#/, '') }} />
+          )}
+          {editableForWeb(data) && (
+            <Tooltip content="Edit this file">
+              <Button size="sm" variant="primary" onClick={() => { window.location.hash = nav.edit(refName, data.path).replace(/^#/, '') }}>
+                Edit
+              </Button>
+            </Tooltip>
           )}
           <Tooltip content="Raw file">
             <a className="ls-iconbtn" href={repositoryApi.rawUrl(projectId, refName, data.path)} target="_blank" rel="noreferrer noopener">

@@ -236,6 +236,24 @@ function BrowserBody({
         />
       )
     }
+    case 'edit':
+    case 'new':
+      if (route.action === 'edit' && !path) {
+        return <EmptyState icon="warning" title="A file path is required" description="Provide the file to edit." />
+      }
+      return (
+        <FileEditorView
+          key={`${route.action}:${resolvedRef}:${path}`}
+          projectId={project.id}
+          projectName={project.name}
+          projectPath={`${owner}/${projectPath}`}
+          defaultBranch={project.default_branch}
+          refName={resolvedRef}
+          path={path}
+          mode={route.action === 'edit' ? 'edit' : 'new'}
+          navigate={(to) => { window.location.hash = to.replace(/^#/, '') }}
+        />
+      )
     default:
       return <EmptyState icon="warning" title="Unknown view" description={`'${route.action}' is not a repository browser section.`} />
   }
@@ -309,5 +327,7 @@ export function makeNav(owner: string, projectPath: string): BrowserNav & { sear
     commit: (sha) => `${base}/commit/${enc(sha)}`,
     blame: (ref, p) => `${base}/blame/${enc(ref)}/${encodePath(p)}`,
     searchUrl: (ref) => `${base}/search/${enc(ref)}`,
+    edit: (ref, p) => `${base}/edit/${enc(ref)}/${encodePath(p)}`,
+    createFile: (ref, dir) => `${base}/new/${enc(ref)}${dir ? `/${encodePath(dir)}` : ''}`,
   }
 }
