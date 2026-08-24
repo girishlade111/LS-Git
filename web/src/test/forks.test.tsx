@@ -217,20 +217,18 @@ describe('fork status panel', () => {
 
 describe('fork network graph view', () => {
   it('renders root-first indented rows with upstream links and counts', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
-      total_size: 3,
-      max_depth: 2,
-      root: {
-        id: 1, name: 'Source Repo', path: 'source-repo', full_path: 'alice/source-repo',
-        visibility: 'public', default_branch: 'main', forked_from: null,
-        is_root: true, direct_forks: 1, total_descendants: 2, children: [],
-      },
-      members: [
-        { id: 1, name: 'Source Repo', path: 'source-repo', full_path: 'alice/source-repo', visibility: 'public', default_branch: 'main', forked_from: null, is_root: true, direct_forks: 1, total_descendants: 2, children: [] },
-        { id: 2, name: 'Level One', path: 'level-one', full_path: 'bob/level-one', visibility: 'public', default_branch: 'main', forked_from: 1, is_root: false, direct_forks: 1, total_descendants: 1, children: [] },
-        { id: 3, name: 'Level Two', path: 'level-two', full_path: 'carol/level-two', visibility: 'private', default_branch: 'main', forked_from: 2, is_root: false, direct_forks: 0, total_descendants: 0, children: [] },
-      ],
-    })))
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      void url
+      const levelTwo = { id: 3, name: 'Level Two', path: 'level-two', full_path: 'carol/level-two', visibility: 'private', default_branch: 'main', forked_from: 2, is_root: false, direct_forks: 0, total_descendants: 0, children: [] }
+      const levelOne = { id: 2, name: 'Level One', path: 'level-one', full_path: 'bob/level-one', visibility: 'public', default_branch: 'main', forked_from: 1, is_root: false, direct_forks: 1, total_descendants: 1, children: [levelTwo] }
+      const root = { id: 1, name: 'Source Repo', path: 'source-repo', full_path: 'alice/source-repo', visibility: 'public', default_branch: 'main', forked_from: null, is_root: true, direct_forks: 1, total_descendants: 2, children: [levelOne] }
+      return Promise.resolve(jsonResponse({
+        total_size: 3,
+        max_depth: 2,
+        root,
+        members: [root, levelOne, levelTwo],
+      }))
+    }))
 
     render(<NetworkView projectId={1} currentFullPath="alice/source-repo" />)
 
