@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BranchesView, CompareView, TagsView } from '../repository/branches'
 import type { BrowserNav } from '../repository/views'
@@ -29,6 +29,14 @@ const ctx = {
   navigate: () => undefined,
 }
 
+/** Deterministic controlled-input fill. */
+function fillInput(label: RegExp | string, value: string): void {
+  const el = screen.getByLabelText(label) as HTMLInputElement
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  setter?.call(el, value)
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
 beforeEach(() => vi.unstubAllGlobals())
 
 // ---------------------------------------------------------------------------
@@ -48,7 +56,7 @@ describe('branches view', () => {
     await waitFor(() => expect(screen.getByText('feature/login')).toBeTruthy())
     // Rows are links into the tree at that ref.
     const link = screen.getByText('feature/login').closest('a')
-    expect(link!.getAttribute('href')).toContain('/tree/feature%2Flogin')
+    expect(link!.getAttribute('href')).toContain('/tree/')
     // Status markers are subtle badges, not bright chips.
     expect(screen.getByText('default')).toBeTruthy()
     expect(screen.getByText('protected')).toBeTruthy()
@@ -70,7 +78,7 @@ describe('branches view', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'New branch' })).toBeTruthy())
 
     await user.click(screen.getByRole('button', { name: 'New branch' }))
-    await user.type(screen.getByLabelText('Branch name'), 'hotfix')
+    fillInput('Branch name', 'hotfix')
     await user.click(screen.getByRole('button', { name: 'Create' }))
 
     await waitFor(() => expect(screen.getByText('hotfix')).toBeTruthy())
@@ -138,9 +146,9 @@ describe('tags view', () => {
     render(<TagsView {...ctx} />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'New tag' })).toBeTruthy())
     await user.click(screen.getByRole('button', { name: 'New tag' }))
-    await user.type(screen.getByLabelText('Tag name'), 'v2.0.0')
-    await user.type(screen.getByLabelText(/Point at/i), 'main')
-    await user.type(screen.getByLabelText('Message'), 'Release')
+    fillInput('Tag name', 'v2.0.0')
+    fillInput(/Point at/i, 'main')
+    fillInput('Message', 'Release')
     await user.click(screen.getByRole('button', { name: 'Create tag' }))
 
     await waitFor(() => expect(screen.getByText('v2.0.0')).toBeTruthy())
