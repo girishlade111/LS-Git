@@ -328,23 +328,11 @@ export class FolderUploadSession {
     this.phase = 'running'
     this.paused = false
     this.notify()
-    const queue = this.items.filter((i) => i.status === 'queued')
-    let cursor = 0
-    const runWorker = async (): Promise<void> => {
-      while (!this.cancelled) {
-        if (this.paused) {
-          await new Promise((r) => setTimeout(r, 150))
-          continue
-        }
-        const item = queue[cursor]
-        cursor += 1
-        if (!item) return
-        await this.processItem(item)
-      }
-    }
-    void Promise.all(Array.from({ length: Math.min(3, queue.length) }, runWorker)).then(() => {
+    void this.runPool().then(() => {
       if (this.cancelled) return
-      this.phase = 'awaiting-commit'
+      if (!this.items.some((i) => i.status === 'queued' || i.status === 'hashing' || i.status === 'uploading')) {
+        this.phase = 'awaiting-commit'
+      }
       this.notify()
     })
   }
@@ -442,12 +430,6 @@ export class FolderUploadSession {
         note: e.message === 'size_mismatch' ? 'Transfer interrupted — retry' : e.message,
       })
     }
-  }
-
-  private fileMap = new Map<string, File>()
-
-  registerFile(itemId: string, file: File): void {
-    this.fileMap.set(itemId, file)
   }
 
   private fileOf(item: ManifestItem): File {
