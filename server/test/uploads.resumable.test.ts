@@ -457,7 +457,7 @@ describe('finalize — idempotency, structured failures, no partial commits', ()
   }, 120_000)
 
   it('verifies whole-file checksums at finalize and reports mismatches structurally', async () => {
-    const { app, bobSession } = await setup()
+    const { app, bobSession } = await setup({ minChunkSize: 4 })
     const project = app.store.projects.byOwnerPath('bob', 'resumable')!
     const good = nextPath('good')
     const corrupt = nextPath('corrupt')
@@ -578,10 +578,12 @@ describe('expiration & abandoned-session cleanup', () => {
     expect(status.json().code ?? '').toBe('session_expired')
     expect(existsSync(stagingDir(app, sid))).toBe(false)
 
+    // After the lazy expiry the session is terminal — later ops see session_closed.
     const latePut = await putChunk(app, bobSession, project.id, sid, itemId, 0, Buffer.from('late'))
-    expect(latePut.status).toBe(410)
+    expect(latePut.status).toBe(409)
+    expect(latePut.body.code ?? '').toBe('session_closed')
     const lateFinalize = await finalize(app, bobSession, project.id, sid, { commit_message: 'ghost' })
-    expect(lateFinalize.status).toBe(410)
+    expect(lateFinalize.status).toBe(409)
   })
 
   it('purgeAbandoned expires past-TTL sessions and removes orphan staging directories', async () => {
