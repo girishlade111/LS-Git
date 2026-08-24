@@ -829,7 +829,6 @@ export class UploadBatchesRepo {
 }
 
 export type ProtectedPushLevel = 'no_one' | 'maintainer'
-
 export interface ProtectedBranchRow {
   project_id: number
   name: string
