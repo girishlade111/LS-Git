@@ -5,6 +5,7 @@ import { IconButton } from '../design-system/IconButton'
 import { Dropdown } from '../design-system/Dropdown'
 import { useAuth } from '../auth/context'
 import { useHashRoute } from '../auth/context'
+import { BrandLogo } from './BrandLogo'
 
 export interface SidebarProps {
   current: string

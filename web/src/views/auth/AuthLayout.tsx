@@ -1,5 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Button } from '../../design-system/Button'
+import { BrandLogo } from '../../shell/BrandLogo'
 
 /** Centered dense auth card — same token system as the shell, no new styles. */
 export function AuthLayout({
