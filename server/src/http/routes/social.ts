@@ -191,8 +191,6 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     }
     return { ok: true }
   })
-
-  app.post('/api/v1/dev/fanout/probe', { preHandler: auth }, async () => ({ ok: true }))
 }
 
 function requireProject(app: FastifyInstance, id: number) {
