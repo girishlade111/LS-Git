@@ -248,7 +248,7 @@ export function NetworkView({ projectId, currentFullPath }: { projectId: number;
   }, [projectId])
 
   if (error) return <EmptyState icon="warning" title="Could not load network" description={error} />
-  if (!graph) return <TreeSkeleton />
+  if (!graph) return <LoadingRows />
 
   // Depth-indented flattened rows via BFS from the root.
   const rows: Array<{ node: ForkNetworkGraph['root']; depth: number }> = []
