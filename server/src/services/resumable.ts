@@ -507,8 +507,7 @@ export class ResumableUploadService {
     const baseHead = resolveRef(abs, baseBranch)
     const targetHead = resolveRef(abs, targetBranch)
     if (!(targetBranch === baseBranch && !targetHead && !baseHead) && !baseHead && targetBranch === baseBranch) {
-      const blocked: FinalizeBlocked = { code: 'branch_missing', message: `Source branch does not exist: ${baseBranch}`, committed: false }
-      throw Object.assign(new AppError(400, blocked.message, blocked.code), blocked)
+      throw new AppError(400, `Source branch does not exist: ${baseBranch}`, 'branch_missing')
     }
     const baseEntries = baseHead
       ? loadTreeEntries(objectsDir, parseCommit(readObject(objectsDir, baseHead).body).tree)
