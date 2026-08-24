@@ -16,6 +16,8 @@ import { useAuth, useHashRoute } from './auth/context'
 import { ProjectsView } from './projects/ProjectsView'
 import { NewProjectView } from './projects/NewProjectView'
 import { ProjectDetailView } from './projects/ProjectDetailView'
+import { RepositoryRoute } from './repository/RepositoryBrowser'
+import './repository/repository.css'
 
 const PUBLIC_ROUTES = new Set(['/login', '/register', '/forgot', '/reset', '/verify-email'])
 
@@ -91,6 +93,17 @@ export default function App() {
   if (path.startsWith('/proj/')) {
     const [, , owner, projPath] = path.split('/')
     if (owner && projPath) {
+      // Repository browser sub-routes: tree|blob|commits|commit|blame|search
+      const segments = path.replace(/#L\d+$/, '').split('/').filter(Boolean)
+      const BROWSER_ACTIONS = new Set(['tree', 'blob', 'commits', 'commit', 'blame', 'search'])
+      const action = segments[3]
+      if (action && BROWSER_ACTIONS.has(action)) {
+        return (
+          <AppShell sidebarCurrent="projects" onNavigate={(id) => navigate(`/${id}`)} repo={{ group: owner, project: projPath, visibility: 'Private', tabs: [], currentTab: '', onTab: () => undefined }}>
+            <RepositoryRoute owner={owner} projectPath={projPath} rawPath={path} query={query} />
+          </AppShell>
+        )
+      }
       return (
         <AppShell sidebarCurrent="projects" onNavigate={(id) => navigate(`/${id}`)} repo={{ group: owner, project: projPath, visibility: 'Private', tabs: [], currentTab: '', onTab: () => undefined }}>
           <ProjectDetailView owner={owner} path={projPath} />

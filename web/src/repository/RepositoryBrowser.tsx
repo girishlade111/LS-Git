@@ -27,6 +27,41 @@ export interface BrowserRoute {
 }
 
 /**
+ * Route adapter: parses the hash-router path into a BrowserRoute.
+ * Supports a trailing `#L<n>` line-permalink fragment on blob URLs and
+ * `?page=` for paginated listings.
+ */
+export function RepositoryRoute({
+  owner,
+  projectPath,
+  rawPath,
+  query,
+}: {
+  owner: string
+  projectPath: string
+  /** Hash-router path WITHOUT the leading '#', e.g. /proj/alice/web/blob/main/src/a.ts */
+  rawPath: string
+  query: URLSearchParams
+}) {
+  const lineMatch = /#L(\d+)$/.exec(rawPath)
+  const line = lineMatch ? Number(lineMatch[1]) : null
+  const cleanPath = rawPath.replace(/#L\d+$/, '')
+  const segments = cleanPath.split('/').filter(Boolean)
+  const action = segments[3] ?? 'tree'
+  // ref + path remain joined; RepositoryBrowser resolves greedily against refs.
+  const refAndRest = segments.slice(4).join('/')
+  const route: BrowserRoute = {
+    action,
+    ref: refAndRest,
+    path: '',
+    line,
+    page: Math.max(1, Number(query.get('page') ?? 1)),
+    query,
+  }
+  return <RepositoryBrowser owner={owner} projectPath={projectPath} route={route} />
+}
+
+/**
  * Repository code-browser shell: loads project + refs, resolves the ref
  * segment greedily against known branches/tags (branch names may contain '/'),
  * then renders the requested view.
@@ -150,6 +185,7 @@ function BrowserBody({
           projectId={project.id}
           projectName={project.name}
           refName={resolvedRef}
+          path={path}
           page={route.page}
           nav={nav}
         />

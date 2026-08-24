@@ -39,6 +39,7 @@ export function TreeView({
   projectId,
   projectName,
   refName,
+  path,
   page,
   perPage = 100,
   nav,
@@ -46,6 +47,7 @@ export function TreeView({
   projectId: number
   projectName: string
   refName: string
+  path: string
   page: number
   perPage?: number
   nav: BrowserNav
@@ -56,18 +58,13 @@ export function TreeView({
   useEffect(() => {
     let alive = true
     setError(null)
+    setData(null)
     repositoryApi
-      .tree(projectId, refName, currentPath ?? '', { page, perPage })
+      .tree(projectId, refName, path, { page, perPage })
       .then((t) => { if (alive) setData(t) })
       .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load') })
     return () => { alive = false }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, refName, page, perPage])
-
-  // Path comes from the route; recompute here to keep the effect deps honest.
-  function currentPath(): string {
-    return data?.path ?? ''
-  }
+  }, [projectId, refName, path, page, perPage])
 
   if (error) return <ErrorState message={error} />
   if (!data) return <TreeSkeleton />
@@ -224,7 +221,6 @@ export function BlobViewPage({
 
   const segments = data.path.split('/')
   const fileName = segments[segments.length - 1]!
-  const dirPath = segments.slice(0, -1).join('/')
   const isMarkdown = /\.md$/i.test(fileName)
   const showRendered = rendered && isMarkdown && !data.too_large && !data.is_binary
 
@@ -240,7 +236,7 @@ export function BlobViewPage({
         <CrumbTrail trail={parentTrail} />
         <div className="ls-rb__actions">
           {isMarkdown && !data.too_large && !data.is_binary && (
-            <Tooltip label={showRendered ? 'Show source' : 'Render Markdown'}>
+            <Tooltip content={showRendered ? 'Show source' : 'Render Markdown'}>
               <Button size="sm" variant="ghost" onClick={() => setRendered(!showRendered)}>
                 {showRendered ? 'Source' : 'Preview'}
               </Button>
@@ -248,7 +244,7 @@ export function BlobViewPage({
           )}
           {!data.is_binary && data.text !== null && <CopyButton value={data.text} label="Copy file contents" />}
           <CopyButton value={data.path} label="Copy path" />
-          <Tooltip label="Copy permalink (fixed SHA)">
+          <Tooltip content="Copy permalink (fixed SHA)">
             <CopyButton
               value={`${window.location.origin}${window.location.pathname}#${nav.blob(data.resolved_sha, data.path, line ?? undefined)}`}
               label="Copy permalink"
@@ -258,13 +254,13 @@ export function BlobViewPage({
           {!data.is_binary && (
             <IconButton label="Blame" icon="eye" onClick={() => { window.location.hash = nav.blame(refName, data.path).replace(/^#/, '') }} />
           )}
-          <Tooltip label="Raw file">
+          <Tooltip content="Raw file">
             <a className="ls-iconbtn" href={repositoryApi.rawUrl(projectId, refName, data.path)} target="_blank" rel="noreferrer noopener">
               <Icon name="code" size={15} />
               <span className="ls-visually-hidden">Raw file</span>
             </a>
           </Tooltip>
-          <Tooltip label="Download file">
+          <Tooltip content="Download file">
             <a className="ls-iconbtn" href={repositoryApi.rawUrl(projectId, refName, data.path)} download={fileName}>
               <Icon name="external" size={15} />
               <span className="ls-visually-hidden">Download file</span>
@@ -331,7 +327,8 @@ export function CodeSurface({
   useEffect(() => {
     if (pinnedLine == null) return
     const el = gutterRefs.current.get(pinnedLine)
-    el?.scrollIntoView({ block: 'center' })
+    // scrollIntoView is unavailable in some environments (jsdom).
+    el?.scrollIntoView?.({ block: 'center' })
   }, [pinnedLine])
 
   const visible: Array<{ n: number; text: string }> = []
@@ -527,7 +524,6 @@ export function BlameViewPage({
 
   const fileName = path.split('/').pop()!
   const lang = languageForFile(fileName)
-  const rangeBySha = new Map(data.ranges.map((r) => [r.start_line, r]))
 
   return (
     <section aria-label={`Blame for ${path}`} className="ls-rb">

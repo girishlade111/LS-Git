@@ -114,7 +114,6 @@ export function renderMarkdown(source: string): ReactNode {
 }
 
 function CodeFence({ code, lang }: { code: string; lang: string }) {
-  const language = lang || 'plain'
   return (
     <pre className="ls-md__code" aria-label="Code block">
       <code>

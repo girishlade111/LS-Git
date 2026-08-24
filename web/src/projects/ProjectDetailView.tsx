@@ -99,6 +99,12 @@ export function ProjectDetailView({ owner, path }: { owner: string; path: string
                 https://lsgit.local/{project.full_path}.git
               </code>
             </p>
+            <a
+              className="ls-btn ls-btn--sm ls-btn--primary"
+              href={`#/proj/${owner}/${path}/tree/${encodeURIComponent(project.default_branch)}`}
+            >
+              Browse code
+            </a>
           </div>
         </section>
       )}

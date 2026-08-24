@@ -58,9 +58,12 @@ export function useVirtualWindow(
     const el = containerRef.current
     const onScroll = () => setScrollTop(el.scrollTop)
     el.addEventListener('scroll', onScroll, { passive: true })
+    setViewport(el.clientHeight || 600)
+    // ResizeObserver is unavailable in some environments (jsdom); measurement
+    // then relies on the initial clientHeight read above.
+    if (typeof ResizeObserver === 'undefined') return () => el.removeEventListener('scroll', onScroll)
     const ro = new ResizeObserver(() => setViewport(el.clientHeight))
     ro.observe(el)
-    setViewport(el.clientHeight)
     return () => {
       el.removeEventListener('scroll', onScroll)
       ro.disconnect()
