@@ -165,9 +165,9 @@ describe('blob view', () => {
     expect(body.size).toBe(png.length)
 
     // Raw transfer still serves the exact bytes.
-    const rawRes = await getRaw(s, `/api/v1/projects/${s.project.id}/repository/raw/main/assets/logo.png)
+    const raw = await getRaw(s, `/api/v1/projects/${s.project.id}/repository/raw/main/assets/logo.png`)
     expect(raw.statusCode).toBe(200)
-    const pngBytes = (raw as unknown as { rawPayload: Buffer }).rawPayload
+    const pngBytes = raw.rawPayload
     expect(pngBytes.length).toBe(png.length)
     expect(pngBytes[0]).toBe(0x89)
   })
@@ -182,15 +182,9 @@ describe('blob view', () => {
     expect(body.too_large).toBe(true)
     expect(body.text).toBeNull()
 
-    const rawRes = await authed(
-      s.app, 'GET',
-      `/api/v1/projects/${s.project.id}/repository/raw/main/data/big.log`,
-      { session: s.session },
-    )
+    const rawRes = await getRaw(s, `/api/v1/projects/${s.project.id}/repository/raw/main/data/big.log`)
     expect(rawRes.statusCode).toBe(200)
-    const bytes = (rawRes as unknown as { rawPayload: Buffer }).rawPayload ?? Buffer.alloc(0)
-    expect(bytes.length).toBe(big.length)
-    void rawRes
+    expect(rawRes.rawPayload.length).toBe(big.length)
   })
 
   it('MISSING files produce a clean 404', async () => {
@@ -217,13 +211,14 @@ describe('blob view', () => {
       }
     }
 
-    // Route-level: encoded characters survive transport and are rejected.
-    const res = await authed(
+    // Route-level: spaces are LEGAL in git paths — encoded or not they are
+    // treated as a real (here missing) path rather than rejected.
+    const spaced = await authed(
       s.app, 'GET',
       `/api/v1/projects/${s.project.id}/repository/tree/main/has%20space`,
       { session: s.session },
     )
-    expect([400]).toContain(res.statusCode)
+    expect(spaced.statusCode).toBe(404)
   })
 })
 
@@ -414,34 +409,21 @@ describe('commit information and downloads', () => {
       { path: 'top.txt', content: 'top' },
     ])
 
-    const whole = await authed(
-      s.app, 'GET',
-      `/api/v1/projects/${s.project.id}/repository/download/main`,
-      { session: s.session },
-    )
+    const whole = await getRaw(s, `/api/v1/projects/${s.project.id}/repository/download/main`)
     expect(whole.statusCode).toBe(200)
-    expect(whole.headers['content-type']).toBe('application/gzip')
-    const wholeBytes = (whole as unknown as { rawPayload: Buffer }).rawPayload
-    const untarred = gunzipSync(wholeBytes).toString('latin1')
+    expect(whole.headers['content-type']).toContain('application/gzip')
+    const untarred = gunzipSync(whole.rawPayload).toString('latin1')
     expect(untarred).toContain('browser-repo-main/docs/deep/file.md')
     expect(untarred).toContain('archived!')
 
-    const subdir = await authed(
-      s.app, 'GET',
-      `/api/v1/projects/${s.project.id}/repository/download/main/docs/*`,
-      { session: s.session },
-    )
+    const subdir = await getRaw(s, `/api/v1/projects/${s.project.id}/repository/download/main/docs`)
     expect(subdir.statusCode).toBe(200)
-    const subBytes = gunzipSync((subdir as unknown as { rawPayload: Buffer }).rawPayload).toString('latin1')
+    const subBytes = gunzipSync(subdir.rawPayload).toString('latin1')
     expect(subBytes).toContain('docs-main/deep/file.md')
     expect(subBytes).not.toContain('top.txt')
 
     // Missing directory → 404.
-    const bad = await authed(
-      s.app, 'GET',
-      `/api/v1/projects/${s.project.id}/repository/download/main/no-such-dir/*`,
-      { session: s.session },
-    )
+    const bad = await getRaw(s, `/api/v1/projects/${s.project.id}/repository/download/main/no-such-dir`)
     expect(bad.statusCode).toBe(404)
   })
 
