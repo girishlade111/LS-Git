@@ -149,13 +149,21 @@ export function TreeView({
   )
 }
 
-function TipCommit({ commit, historyHref }: { commit: CommitView; historyHref: string }) {
+function TipCommit({
+  commit,
+  historyHref,
+  commitUrl,
+}: {
+  commit: CommitView
+  historyHref: string
+  commitUrl: (sha: string) => string
+}) {
   return (
     <div className="ls-rb__tip">
       <span className="ls-rb__tipmsg">{commit.title}</span>
       <a
         className="ls-rb__tipsha"
-        href={`#${historyHrefCommit(commit.sha)}`}
+        href={`#${commitUrl(commit.sha)}`}
         aria-label={`Commit ${commit.short_sha}`}
       >
         {commit.short_sha}
@@ -166,16 +174,12 @@ function TipCommit({ commit, historyHref }: { commit: CommitView; historyHref: s
   )
 }
 
-/** Commit URL built lazily — TipCommit receives the nav through closure. */
-let historyHrefCommit: (sha: string) => string = () => '#'
-export function registerCommitUrlBuilder(fn: (sha: string) => string): void {
-  historyHrefCommit = fn
-}
-
 function TreeSkeleton() {
   return (
     <div className="ls-rb__skeleton" aria-hidden="true">
-      {Array.from({ length: 8 }, (_, i) => <Skeleton key={i} variant="text" style={{ width: `${40 + ((i * 13) % 45)}%` }} />)}
+      {Array.from({ length: 8 }, (_, i) => (
+        <Skeleton key={i} shape="text" width={`${40 + ((i * 13) % 45)}%`} height={10} />
+      ))}
     </div>
   )
 }
