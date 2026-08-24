@@ -551,7 +551,6 @@ export class ResumableUploadService {
           continue
         }
         assembled.set(item.file_path, buffer)
-        void gitSha
         stagedShas.set(item.file_path, { mode: '100644', sha: gitSha })
         if (existing) replacedCount += 1
         totalBytes += buffer.length
