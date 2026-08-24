@@ -21,6 +21,7 @@ import {
 } from '../storage/repository.js'
 import type { LocalHashedStorage } from '../storage/local.js'
 import { validateRepoFilePath, sanitizeCommitMessage } from '../lib/pathsafe.js'
+import { matchLines } from '../lib/linediff.js'
 
 /**
  * Repository service — the authorization-gated face of the core Git engine.
@@ -545,6 +546,406 @@ export class RepositoriesService {
     }))
   }
 
+  // ------------------------------------------------------- browser reads --
+
+  /** Caps for inline (renderable) content vs raw transfer. */
+  static readonly RENDER_MAX_BYTES = 512 * 1024
+  static readonly RAW_MAX_BYTES = 100 * 1024 * 1024
+  private static readonly MAX_TREE_FILES = 50_000
+  private static readonly BLAME_MAX_LINES = 5_000
+  private static readonly BLAME_MAX_COMMITS = 200
+  private static readonly HISTORY_MAX_COMMITS = 400
+  private static readonly SEARCH_CONTENT_MAX_BLOB = 256 * 1024
+
+  /**
+   * Directory listing at `ref/path` — dirs-first sort (GitLab behavior),
+   * paginated for large directories, with breadcrumb trail and the tip commit
+   * summary. Permalinks: substitute a fixed SHA for `ref`.
+   */
+  tree(
+    actor: Actor | null,
+    projectId: number,
+    refRaw: string,
+    pathRaw: string,
+    opts: { page?: number; perPage?: number } = {},
+  ): {
+    ref: string
+    resolved_sha: string
+    resolved_via: string
+    path: string
+    breadcrumbs: Array<{ name: string; path: string }>
+    tip_commit: CommitView | null
+    entries: Array<{ name: string; path: string; type: 'tree' | 'blob'; mode: string; sha: string }>
+    pagination: { page: number; per_page: number; total: number; has_more: boolean }
+    empty_repository: boolean
+  } {
+    const { repo } = this.open(actor, projectId)
+    const path = normalizeTreePath(pathRaw)
+    const page = clampInt(opts.page, 1, Number.MAX_SAFE_INTEGER, 1)
+    const perPage = clampInt(opts.perPage, 1, 200, 100)
+
+    if (repo.isEmpty()) {
+      return {
+        ref: refRaw,
+        resolved_sha: '',
+        resolved_via: 'none',
+        path,
+        breadcrumbs: breadcrumbsFor(path),
+        tip_commit: null,
+        entries: [],
+        pagination: { page, per_page: perPage, total: 0, has_more: false },
+        empty_repository: true,
+      }
+    }
+
+    const resolved = this.requireResolved(repo, refRaw)
+    const commit = repo.readCommit(resolved.sha)
+
+    let treeSha = commit.tree
+    if (path) {
+      for (const seg of path.split('/')) {
+        const entry = repo.readTree(treeSha).find((e) => e.name === seg)
+        if (!entry) throw new AppError(404, `Path '${path}' not found in this repository`, 'path_not_found')
+        if (!entry.mode.startsWith('4')) {
+          throw new AppError(404, `'${path}' is a file, not a directory`, 'not_a_directory')
+        }
+        treeSha = entry.sha
+      }
+    }
+
+    // Dirs first, then files; each alphabetical (GitLab listing behavior).
+    const all = repo
+      .readTree(treeSha)
+      .map((e) => ({
+        name: e.name,
+        path: path ? `${path}/${e.name}` : e.name,
+        type: (e.mode.startsWith('4') ? 'tree' : 'blob') as 'tree' | 'blob',
+        mode: e.mode,
+        sha: e.sha,
+      }))
+      .sort((a, b) =>
+        a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'tree' ? -1 : 1,
+      )
+
+    return {
+      ref: refRaw,
+      resolved_sha: resolved.sha,
+      resolved_via: resolved.via,
+      path,
+      breadcrumbs: breadcrumbsFor(path),
+      tip_commit: this.commitView(commit),
+      entries: all.slice((page - 1) * perPage, page * perPage),
+      pagination: { page, per_page: perPage, total: all.length, has_more: page * perPage < all.length },
+      empty_repository: false,
+    }
+  }
+
+  /**
+   * File metadata + render payload at `ref/path`. Text files up to
+   * RENDER_MAX_BYTES come back inline; larger or binary files report flags so
+   * the UI offers raw/download instead.
+   */
+  blob(
+    actor: Actor | null,
+    projectId: number,
+    refRaw: string,
+    pathRaw: string,
+  ): BlobView {
+    const { repo } = this.open(actor, projectId)
+    const path = requireFilePath(pathRaw)
+    const resolved = this.requireResolved(repo, refRaw)
+    const commit = repo.readCommit(resolved.sha)
+    const entry = repo.findEntryAt(commit.tree, path)
+    if (!entry || entry.mode.startsWith('4')) {
+      throw new AppError(404, `File '${truncate(path, 128)}' not found in this repository`, 'file_not_found')
+    }
+    const content = repo.readBlob(entry.sha)
+    const binary = isBinary(content)
+    const renderable = !binary && content.length <= RepositoriesService.RENDER_MAX_BYTES
+    let text: string | null = null
+    let lineCount: number | null = null
+    if (renderable) {
+      text = content.toString('utf8')
+      lineCount = countLines(text)
+    }
+    const segments = path.split('/')
+    return {
+      ref: refRaw,
+      resolved_sha: resolved.sha,
+      resolved_via: resolved.via,
+      commit: this.commitView(commit),
+      path,
+      name: segments[segments.length - 1]!,
+      dir: segments.slice(0, -1).join('/'),
+      breadcrumbs: breadcrumbsFor(segments.slice(0, -1).join('/')),
+      mode: entry.mode === '100755' ? 'executable' : 'regular',
+      sha: entry.sha,
+      size: content.length,
+      is_binary: binary,
+      too_large: !binary && content.length > RepositoriesService.RENDER_MAX_BYTES,
+      text,
+      line_count: lineCount,
+    }
+  }
+
+  /** Raw bytes for transfer/download with a hard size ceiling. */
+  rawBlob(actor: Actor | null, projectId: number, refRaw: string, pathRaw: string): Buffer {
+    const { repo } = this.open(actor, projectId)
+    const path = requireFilePath(pathRaw)
+    const resolved = this.requireResolved(repo, refRaw)
+    const commit = repo.readCommit(resolved.sha)
+    const entry = repo.findEntryAt(commit.tree, path)
+    if (!entry || entry.mode.startsWith('4')) {
+      throw new AppError(404, `File '${truncate(path, 128)}' not found in this repository`, 'file_not_found')
+    }
+    const blobObj = repo.readBlob(entry.sha)
+    if (blobObj.length > RepositoriesService.RAW_MAX_BYTES) {
+      throw new AppError(413, 'File exceeds the raw download limit', 'too_large')
+    }
+    return blobObj
+  }
+
+  /**
+   * History of one path on `ref`'s first-parent chain, newest-first, with the
+   * per-commit change kind (added/modified/deleted). Deleted paths keep their
+   * history — the deletion appears as the last event.
+   */
+  fileHistory(
+    actor: Actor | null,
+    projectId: number,
+    refRaw: string,
+    pathRaw: string,
+    opts: { limit?: number } = {},
+  ): { ref: string; path: string; commits: Array<CommitView & { kind: 'added' | 'modified' | 'deleted' }> } {
+    const { repo } = this.open(actor, projectId)
+    const path = requireFilePath(pathRaw)
+    const resolved = this.requireResolved(repo, refRaw)
+    const limit = clampInt(opts.limit, 1, RepositoriesService.HISTORY_MAX_COMMITS, 50)
+
+    const chain = repo.history(resolved.sha, { limit: RepositoriesService.HISTORY_MAX_COMMITS, firstParent: true })
+    const out: Array<CommitView & { kind: 'added' | 'modified' | 'deleted' }> = []
+    for (const commit of chain) {
+      if (out.length >= limit) break
+      const current = repo.findEntryAt(commit.tree, path)
+      const parent = commit.parents[0]
+        ? repo.findEntryAt(repo.readCommit(commit.parents[0]).tree, path)
+        : null
+      let kind: 'added' | 'modified' | 'deleted' | null = null
+      if (current && !parent) kind = 'added'
+      else if (!current && parent) kind = 'deleted'
+      else if (current && parent && current.sha !== parent.sha) kind = 'modified'
+      if (!kind) continue
+      out.push({ ...this.commitView(commit), kind })
+    }
+    return { ref: refRaw, path, commits: out }
+  }
+
+  /**
+   * Blame foundation: per-line attribution ranges over the file's first-parent
+   * versions using LCS alignment (lib/linediff.ts). Bounded to keep latency
+   * deterministic; oversized inputs are refused rather than truncated silently.
+   */
+  blame(
+    actor: Actor | null,
+    projectId: number,
+    refRaw: string,
+    pathRaw: string,
+  ): {
+    ref: string
+    resolved_sha: string
+    path: string
+    ranges: Array<{ start_line: number; end_line: number; commit_sha: string }>
+    lines: Array<{ number: number; content: string; commit_sha: string }>
+  } {
+    const { repo } = this.open(actor, projectId)
+    const path = requireFilePath(pathRaw)
+    const resolved = this.requireResolved(repo, refRaw)
+
+    // First-parent chain newest → oldest, then processed oldest → newest.
+    const chain = repo.history(resolved.sha, { limit: RepositoriesService.BLAME_MAX_COMMITS, firstParent: true })
+    const versions: Array<{ sha: string; lines: string[] }> = []
+    for (const commit of chain) {
+      const entry = repo.findEntryAt(commit.tree, path)
+      const content = entry && !entry.mode.startsWith('4')
+        ? repo.readBlob(entry.sha)
+        : Buffer.alloc(0)
+      const text = isBinary(content) ? '' : content.toString('utf8')
+      versions.push({ sha: commit.sha, lines: splitLines(text) })
+      if (versions[versions.length - 1]!.lines.length > RepositoriesService.BLAME_MAX_LINES) {
+        throw new AppError(413, `Blame is limited to ${RepositoriesService.BLAME_MAX_LINES} lines`, 'too_large')
+      }
+    }
+    versions.reverse()
+
+    // Attribution walk.
+    let attr: string[] = []
+    let prevLines: string[] = []
+    for (const version of versions) {
+      const matched = matchLines(prevLines, version.lines)
+      const next: string[] = new Array(version.lines.length)
+      for (let j = 0; j < version.lines.length; j++) {
+        const from = matched.get(j)
+        next[j] = from !== undefined && attr[from] !== undefined ? attr[from]! : version.sha
+      }
+      attr = next
+      prevLines = version.lines
+    }
+
+    // Collapse consecutive identical shas into ranges.
+    const lines = versions[versions.length - 1] ?? { sha: resolved.sha, lines: [] }
+    const ranges: Array<{ start_line: number; end_line: number; commit_sha: string }> = []
+    lines.lines.forEach((content, idx) => {
+      const sha = attr[idx] ?? resolved.sha
+      const last = ranges[ranges.length - 1]
+      if (last && last.commit_sha === sha) last.end_line = idx + 1
+      else ranges.push({ start_line: idx + 1, end_line: idx + 1, commit_sha: sha })
+    })
+    return {
+      ref: refRaw,
+      resolved_sha: resolved.sha,
+      path,
+      ranges,
+      lines: lines.lines.map((content, idx) => ({ number: idx + 1, content, commit_sha: attr[idx] ?? resolved.sha })),
+    }
+  }
+
+  /**
+   * File search at a ref: filename substring by default; opt-in bounded
+   * content grep over text blobs ≤ 256 KB.
+   */
+  searchFiles(
+    actor: Actor | null,
+    projectId: number,
+    refRaw: string,
+    query: string,
+    opts: { content?: boolean; limit?: number } = {},
+  ): {
+    ref: string
+    query: string
+    matches: Array<{
+      path: string
+      type: 'blob'
+      sha: string
+      line_matches?: Array<{ line: number; text: string }>
+    }>
+    truncated: boolean
+  } {
+    const { repo } = this.open(actor, projectId)
+    const needle = String(query ?? '').trim()
+    if (!needle || needle.length > 200) throw new AppError(400, 'A search query of 1–200 characters is required', 'validation_failed')
+    const resolved = this.requireResolved(repo, refRaw)
+    const commit = repo.readCommit(resolved.sha)
+    const lowerNeedle = needle.toLowerCase()
+    const limit = clampInt(opts.limit, 1, 100, 50)
+
+    const flat = repo.flattenTree(commit.tree)
+    if (flat.size > RepositoriesService.MAX_TREE_FILES) {
+      throw new AppError(413, 'Repository exceeds the searchable file limit', 'too_large')
+    }
+
+    const matches: NonNullable<ReturnType<RepositoriesService['searchFiles']>>['matches'] = []
+    let truncated = false
+
+    if (opts.content !== true) {
+      for (const [p, entry] of flat) {
+        if (matches.length >= limit) { truncated = true; break }
+        if (p.toLowerCase().includes(lowerNeedle)) {
+          matches.push({ path: p, type: 'blob', sha: entry.sha })
+        }
+      }
+      return { ref: refRaw, query: needle, matches, truncated }
+    }
+
+    // Content mode: filename hits first, then bounded text grep.
+    for (const [p, entry] of flat) {
+      if (matches.length >= limit) { truncated = true; break }
+      if (p.toLowerCase().includes(lowerNeedle)) matches.push({ path: p, type: 'blob', sha: entry.sha })
+    }
+    for (const [p, entry] of flat) {
+      if (matches.length >= limit) { truncated = true; break }
+      if (p.toLowerCase().includes(lowerNeedle)) continue // already included
+      const content = repo.readBlob(entry.sha)
+      if (content.length > RepositoriesService.SEARCH_CONTENT_MAX_BLOB || isBinary(content)) continue
+      const lines = content.toString('utf8').split('\n')
+      const lineMatches: Array<{ line: number; text: string }> = []
+      for (let i = 0; i < lines.length && lineMatches.length < 3; i++) {
+        if (lines[i]!.toLowerCase().includes(lowerNeedle)) {
+          lineMatches.push({ line: i + 1, text: truncate(lines[i]!, 240) })
+        }
+      }
+      if (lineMatches.length > 0) matches.push({ path: p, type: 'blob', sha: entry.sha, line_matches: lineMatches })
+    }
+    return { ref: refRaw, query: needle, matches, truncated }
+  }
+
+  /**
+   * Single commit detail with its changed-file set versus the first parent
+   * (counts always exact; lists capped for very large changesets).
+   */
+  commitDetail(
+    actor: Actor | null,
+    projectId: number,
+    rev: string,
+  ): CommitView & {
+    changed_files: Array<{ path: string; kind: 'added' | 'modified' | 'deleted' }>
+    stats: { added: number; modified: number; deleted: number }
+    lists_truncated: boolean
+  } {
+    const { repo } = this.open(actor, projectId)
+    const resolved = this.requireResolved(repo, rev)
+    const commit = repo.readCommit(resolved.sha)
+    const base = commit.parents[0]
+      ? repo.flattenTree(repo.readCommit(commit.parents[0]).tree)
+      : new Map<string, { mode: FileMode; sha: string }>()
+    const next = repo.flattenTree(commit.tree)
+
+    const changedFiles: Array<{ path: string; kind: 'added' | 'modified' | 'deleted' }> = []
+    let added = 0
+    let modified = 0
+    let deleted = 0
+    const CAP = 200
+    let truncated = false
+    for (const [p, e] of next) {
+      const before = base.get(p)
+      if (!before) {
+        added++
+        if (changedFiles.length < CAP) changedFiles.push({ path: p, kind: 'added' })
+        else truncated = true
+      } else if (before.sha !== e.sha) {
+        modified++
+        if (changedFiles.length < CAP) changedFiles.push({ path: p, kind: 'modified' })
+        else truncated = true
+      }
+    }
+    for (const p of base.keys()) {
+      if (!next.has(p)) {
+        deleted++
+        if (changedFiles.length < CAP) changedFiles.push({ path: p, kind: 'deleted' })
+        else truncated = true
+      }
+    }
+    return {
+      ...this.commitView(commit),
+      changed_files: changedFiles,
+      stats: { added, modified, deleted },
+      lists_truncated: truncated,
+    }
+  }
+
+  /** Serializable commit view shared by all browser endpoints. */
+  private commitView(c: ParsedCommit): CommitView {
+    return {
+      sha: c.sha,
+      short_sha: c.sha.slice(0, 10),
+      message: c.message,
+      title: c.message.split('\n')[0] ?? c.message,
+      author_name: c.author.identity.name,
+      author_email: c.author.identity.email,
+      committed_at: new Date(c.committer.timestamp.time * 1000).toISOString(),
+      parents: c.parents,
+    }
+  }
+
   // ---------------------------------------------------------------- internals --
 
   private identityOf(actor: Actor | null): CommitIdentity {
@@ -667,4 +1068,96 @@ function readdirSafe(dir: string): string[] {
   } catch {
     return []
   }
+}
+
+// ---------------------------------------------------------------------------
+// Browser view types & helpers
+// ---------------------------------------------------------------------------
+
+export interface CommitView {
+  sha: string
+  short_sha: string
+  message: string
+  title: string
+  author_name: string
+  author_email: string
+  committed_at: string
+  parents: string[]
+}
+
+export interface BlobView {
+  ref: string
+  resolved_sha: string
+  resolved_via: string
+  commit: CommitView
+  path: string
+  name: string
+  dir: string
+  breadcrumbs: Array<{ name: string; path: string }>
+  mode: 'regular' | 'executable'
+  sha: string
+  size: number
+  is_binary: boolean
+  too_large: boolean
+  text: string | null
+  line_count: number | null
+}
+
+/** Normalizes a client-supplied tree path; rejects traversal outright. */
+function normalizeTreePath(raw: string): string {
+  if (raw === '' || raw === '/') return ''
+  const checked = validateRepoFilePath(raw)
+  if (!checked.ok) throw new AppError(400, checked.error, 'invalid_path')
+  return checked.path
+}
+
+/** Blob paths must be non-empty files. */
+function requireFilePath(raw: string): string {
+  const p = normalizeTreePath(raw)
+  if (!p) throw new AppError(400, 'A file path is required', 'invalid_path')
+  return p
+}
+
+/** Breadcrumb trail for a directory path (root excluded — it is implicit). */
+function breadcrumbsFor(path: string): Array<{ name: string; path: string }> {
+  if (!path) return []
+  const out: Array<{ name: string; path: string }> = []
+  let acc = ''
+  for (const seg of path.split('/')) {
+    acc = acc ? `${acc}/${seg}` : seg
+    out.push({ name: seg, path: acc })
+  }
+  return out
+}
+
+function clampInt(value: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(value ?? fallback)
+  if (!Number.isInteger(n)) return fallback
+  return Math.max(min, Math.min(max, n))
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? `${s.slice(0, max - 1)}…` : s
+}
+
+/**
+ * Binary sniff (git heuristic): NUL in the first 8 KB, or invalid UTF-8 when
+ * the buffer decodes lossily.
+ */
+export function isBinary(buf: Buffer): boolean {
+  const head = buf.subarray(0, 8192)
+  if (head.includes(0)) return true
+  const decoded = Buffer.from(head.toString('utf8'), 'utf8')
+  return !decoded.equals(head)
+}
+
+/** Splits into display lines, dropping the trailing empty line from "\n"-terminated files. */
+function splitLines(text: string): string[] {
+  const lines = text.split('\n')
+  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
+  return lines
+}
+
+function countLines(text: string): number {
+  return splitLines(text).length
 }
