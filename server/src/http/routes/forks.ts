@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { AppError } from '../../services/identity.js'
+import type { ProjectRow } from '../../db/store.js'
 
 /**
  * Fork system routes (GitLab fork-network parity).
@@ -31,7 +31,7 @@ export function registerForkRoutes(app: FastifyInstance): void {
     })
     reply.code(201)
     return {
-      project: projectLite(result.project),
+      project: serializeProject(result.project),
       source: result.source,
     }
   })
@@ -58,8 +58,17 @@ export function registerForkRoutes(app: FastifyInstance): void {
   })
 }
 
-function projectLite(p: NonNullable<ReturnType<InstanceType<typeof import('../../services/identity.js').IdentityService>['requireUser']>>) {
-  void p
-  throw new Error('replaced below')
+/** Fork-aware project serialization for route responses. */
+function serializeProject(p: ProjectRow): Record<string, unknown> {
+  return {
+    id: p.id,
+    name: p.name,
+    path: p.path,
+    visibility: p.visibility,
+    description: p.description,
+    default_branch: p.default_branch,
+    forked_from_project_id: p.forked_from_project_id,
+    fork_network_id: p.fork_network_id,
+    repository_empty: !p.initialized,
+  }
 }
-void AppError
