@@ -4,7 +4,7 @@ import {
   openSync, closeSync, writeSync, readFileSync, writeFileSync,
   mkdirSync, existsSync, rmSync, renameSync, readdirSync, statSync, unlinkSync,
 } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 /**
  * LSGit core Git repository engine (the in-process "git-core" analog).
@@ -631,7 +631,7 @@ export class GitRepository {
     validateSha(newSha)
     const finalPath = this.refFilePath(ref)
     const lockPath = this.lockPathFor(ref)
-    mkdirSync(join(finalPath, '..'), { recursive: true })
+    mkdirSync(dirname(finalPath), { recursive: true })
 
     this.breakStaleLock(lockPath)
 

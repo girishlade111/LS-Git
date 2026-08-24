@@ -1,14 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, renameSync } from 'node:fs'
+import { mkdirSync, existsSync, rmSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  buildTree,
-  commitTree,
-  loadFilesUnderTree,
-  readObject,
-  parseCommit,
-  type TreeEntryInput,
-} from './gitobjects.js'
+import { GitRepository, RepositoryNotFoundError } from './repository.js'
 
 /**
  * Repository storage abstraction (STORAGE.md §2–§3).
@@ -17,8 +10,9 @@ import {
  *     @hashed/h[0..1]/h[2..3]/<sha256(projectId)>.git
  *   Namespace/project renames and transfers therefore NEVER touch disk.
  * - Deletion is two-step (move to @trash/<uuid>, then purge) mirroring GitLab.
- * - The server hosts this implementation today; the interface is exactly what a
- *   future gRPC git-core service exposes, so extraction is mechanical.
+ * - All Git plumbing is delegated to the core engine (storage/repository.ts);
+ *   this class owns layout + lifecycle policy only. The interface is exactly
+ *   what a future gRPC git-core service exposes, so extraction is mechanical.
  */
 
 export interface InitialFile {
@@ -63,26 +57,27 @@ export class LocalHashedStorage implements RepositoryStorage {
     return resolved
   }
 
+  /**
+   * Opens the core Git engine bound to a hashed repository.
+   * Throws RepositoryNotFoundError when the repository does not exist yet.
+   */
+  repository(diskPath: string): GitRepository {
+    const abs = this.absolute(diskPath)
+    try {
+      return GitRepository.open(abs)
+    } catch (err) {
+      if (err instanceof RepositoryNotFoundError && !existsSync(abs)) throw err
+      throw err
+    }
+  }
+
   exists(diskPath: string): boolean {
-    return existsSync(this.absolute(diskPath))
+    return GitRepository.existsAt(this.absolute(diskPath))
   }
 
   createRepository(diskPath: string, defaultBranch: string): void {
     const abs = this.absolute(diskPath)
-    mkdirSync(join(abs, 'objects', 'info'), { recursive: true })
-    mkdirSync(join(abs, 'objects', 'pack'), { recursive: true })
-    mkdirSync(join(abs, 'refs', 'heads'), { recursive: true })
-    mkdirSync(join(abs, 'refs', 'tags'), { recursive: true })
-    writeFileSync(
-      join(abs, 'HEAD'),
-      `ref: refs/heads/${defaultBranch}\n`,
-      'utf8',
-    )
-    writeFileSync(
-      join(abs, 'config'),
-      '[core]\n\trepositoryformatversion = 0\n\tfilemode = false\n\tbare = true\n',
-      'utf8',
-    )
+    if (!existsSync(abs)) GitRepository.createBare(abs, defaultBranch)
   }
 
   initializeWithFiles(
@@ -92,30 +87,35 @@ export class LocalHashedStorage implements RepositoryStorage {
     author: { name: string; email: string },
     message: string,
   ): { commitSha: string } {
-    this.createRepository(diskPath, defaultBranch)
     const abs = this.absolute(diskPath)
-    const objectsDir = join(abs, 'objects')
-    const entries: Array<TreeEntryInput> = files.map((f) => ({
-      mode: f.mode ?? '100644',
-      name: f.path,
-      content: Buffer.isBuffer(f.content) ? f.content : Buffer.from(f.content, 'utf8'),
-    }))
-    const tree = buildTree(entries, objectsDir)
-    const commitSha = commitTree(objectsDir, tree.sha, message, author)
-    // The branch ref must exist for HEAD to resolve.
-    writeFileSync(join(abs, 'refs', 'heads', defaultBranch), `${commitSha}\n`, 'utf8')
-    return { commitSha }
+    const repo = existsSync(abs)
+      ? GitRepository.open(abs)
+      : GitRepository.createBare(abs, defaultBranch)
+    // Engine applyChangesToBranch handles tree building, the initial
+    // parentless commit and the CAS ref write atomically.
+    const result = repo.applyChangesToBranch({
+      baseBranch: defaultBranch,
+      targetBranch: defaultBranch,
+      message,
+      identity: author,
+      changes: files.map((f) => ({
+        path: f.path,
+        content: typeof f.content === 'string' ? f.content : f.content,
+        mode: f.mode ?? '100644',
+      })),
+    })
+    return { commitSha: result.commitSha }
   }
 
   readBranchFiles(diskPath: string, branch: string): Map<string, Buffer> {
-    const abs = this.absolute(diskPath)
-    const refFile = join(abs, 'refs', 'heads', branch)
-    if (!existsSync(refFile)) throw new Error(`branch not found: ${branch}`)
-    const headSha = readFileSync(refFile, 'utf8').trim()
-    const objectsDir = join(abs, 'objects')
-    // readObject strips the "commit <size>\0" header before parsing.
-    const { body } = readObject(objectsDir, headSha)
-    return loadFilesUnderTree(objectsDir, parseCommit(body).tree)
+    const repo = this.repository(diskPath)
+    const tip = repo.resolveBranch(branch)
+    if (!tip) throw new Error(`branch not found: ${branch}`)
+    const out = new Map<string, Buffer>()
+    for (const [path, entry] of repo.flattenTree(repo.readCommit(tip).tree)) {
+      out.set(path, repo.readBlob(entry.sha))
+    }
+    return out
   }
 
   deleteRepository(diskPath: string): void {
