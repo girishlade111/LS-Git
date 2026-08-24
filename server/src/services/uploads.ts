@@ -760,23 +760,6 @@ export class UploadService {
     return join(this.cfg.uploadsRoot, uploadId)
   }
 
-  private resolveRef(absRepo: string, branch: string): string | null {
-    const refFile = join(absRepo, 'refs', 'heads', branch)
-    if (!existsSync(refFile)) return null
-    return readFileSync(refFile, 'utf8').trim() || null
-  }
-
-  /** Writes refs/heads/<branch>, creating intermediate dirs for slashed branch names. */
-  private writeRef(absRepo: string, branch: string, sha: string): void {
-    const parts = branch.split('/')
-    const dir = join(absRepo, 'refs', 'heads', ...parts.slice(0, -1))
-    mkdirSync(dir, { recursive: true })
-    const finalPath = join(dir, parts[parts.length - 1]!)
-    const tmp = `${finalPath}.tmp-${randomUUID()}`
-    writeFileSync(tmp, `${sha}\n`, 'utf8')
-    renameSync(tmp, finalPath)
-  }
-
   private requireProject(id: number): ProjectRow {
     const p = this.s.projects.byId(id)
     if (!p) throw new AppError(404, 'Project not found')
