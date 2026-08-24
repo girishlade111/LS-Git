@@ -224,13 +224,29 @@ export class FolderUploadSession {
       return
     }
 
-    this.workers = []
-    const queue = this.items.filter((i) => i.status === 'queued')
-    await Promise.all(this.workers)
-
+    await this.runPool()
     if (this.cancelled) return
     this.phase = 'awaiting-commit'
     this.notify()
+  }
+
+  /** Worker pool over queued items; returns when the queue drains or cancel fires. */
+  private async runPool(): Promise<void> {
+    const queue = this.items.filter((i) => i.status === 'queued')
+    let cursor = 0
+    const worker = async (): Promise<void> => {
+      while (!this.cancelled) {
+        if (this.paused) {
+          await new Promise((r) => setTimeout(r, 150))
+          continue
+        }
+        const item = queue[cursor]
+        cursor += 1
+        if (!item) return
+        await this.processItem(item)
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(3, queue.length) }, worker))
   }
 
   pause(): void {
