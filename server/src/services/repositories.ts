@@ -98,11 +98,13 @@ export class RepositoriesService {
   }
 
   private failAuth(actor: Actor | null, detail?: Record<string, unknown>): never {
-    this.s.audit.record({
-      userId: actor?.userId ?? null,
-      name: actor ? 'repo_write_denied' : 'login_failed',
-      ...(detail ? { detail } : {}),
-    })
+    if (actor) {
+      this.s.audit.record({
+        userId: actor.userId,
+        name: 'repo_write_denied',
+        ...(detail ? { detail } : {}),
+      })
+    }
     throw new AppError(
       actor ? 403 : 401,
       actor ? 'You are not allowed to write to this repository' : 'Authentication required',
