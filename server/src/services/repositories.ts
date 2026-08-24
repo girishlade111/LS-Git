@@ -600,6 +600,13 @@ export class RepositoriesService {
     return null
   }
 
+  /** Resolves any ref expression to its commit; 404 with safe message otherwise. */
+  private requireResolved(repo: GitRepository, rev: string): { sha: string; via: 'branch' | 'tag' | 'sha' | 'sha_prefix'; source: string | null } {
+    const resolved = this.resolveRevision(repo, rev)
+    if (!resolved) throw new AppError(404, `Revision not found: ${truncate(rev, 64)}`, 'revision_not_found')
+    return resolved
+  }
+
   private recordCommitEvents(
     actor: Actor,
     project: ProjectRow,
