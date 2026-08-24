@@ -92,6 +92,11 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   app.credentials = new CredentialsService(services, cfg.patMaxTtlDays, cfg.patDefaultTtlDays)
   app.projects = new ProjectsService(services, cfg)
   app.uploads = new UploadService(services, cfg, app.projects.storage)
+  app.uploadSessions = new ResumableUploadService(
+    services,
+    cfg,
+    app.projects.storage,
+  )
   app.authRateLimiter = new RateLimiter(cfg.authRateLimit.max, cfg.authRateLimit.windowSeconds * 1000)
 
   // ---- authentication resolution ------------------------------------------
