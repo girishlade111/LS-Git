@@ -449,14 +449,14 @@ describe('finalize — idempotency, structured failures, no partial commits', ()
     // Operator choice: exclude the three failures and ship the other 497.
     const shipped = await finalize(app, bobSession, project.id, sid, {
       commit_message: 'ship 497 of 500',
-      exclude: [...failedItems],
+      exclude: items.filter((it) => failedIdx.has(Number(it.file_path.match(/f-(\d+)/)![1]))).map((it) => it.id),
     })
     expect(shipped.status).toBe(201)
     expect(shipped.body.committed_files).toBe(497)
     const files = app.projects.storage.readBranchFiles(project.disk_path, 'main')
-    expect(files.has('bulk/f-7.txt')).toBe(false)
-    expect(files.has('bulk/f-456.txt')).toBe(false)
-    expect(files.get('bulk/f-0.txt')!.toString()).toBe('c0')
+    expect(files.has(pathOf(7))).toBe(false)
+    expect(files.has(pathOf(456))).toBe(false)
+    expect(files.get(pathOf(0))!.toString()).toBe('0000')
   }, 120_000)
 
   it('verifies whole-file checksums at finalize and reports mismatches structurally', async () => {
