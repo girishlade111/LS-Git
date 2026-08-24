@@ -136,6 +136,42 @@ Web editor client (`web/src/repository/editor/`): CodeMirror 6 surface themed vi
 tokens only; local drafts in localStorage with restore/discard; multi-file session that
 commits all dirty buffers as one change set.
 
+### 3.6 Branches, tags & commit history (IMPLEMENTED)
+
+Branch names containing slashes are addressed by percent-encoding each segment.
+All mutations authorize through the central service before touching refs; every ref
+write is lockfile-atomic with CAS expectations (concurrent-safe).
+
+```
+GET    /api/v1/projects/:id/repository/branches(?search=&sort=name|recent&limit=)
+       enriched rows (tip commit title/author/time); sort=recent orders by commit time
+POST   /api/v1/projects/:id/repository/branches            {name, start_point?} → 201
+DELETE /api/v1/projects/:id/repository/branches/<name>(?expected_old=)
+                                                           protected + default branches refuse
+POST   /api/v1/projects/:id/repository/branches/rename     {name, new_name}
+PUT    /api/v1/projects/:id/repository/default_branch      {name} — HEAD + metadata tx,
+                                                           auto-protects the new default
+GET    /api/v1/projects/:id/repository/compare?from=&to=&with_patches=
+                                                           merge-base · ahead/behind commits ·
+                                                           changed files (+ unified patches)
+GET    /api/v1/projects/:id/repository/tags
+POST   /api/v1/projects/:id/repository/tags                {name, ref, message?} — annotated
+                                                           when message present; tag a commit by
+                                                           passing its SHA as ref
+DELETE /api/v1/projects/:id/repository/tags/<name>
+GET    /api/v1/projects/:id/repository/commit/:sha/diff    per-file unified diffs vs first parent
+GET/PUT/DELETE /api/v1/projects/:id/repository/protected_branches[/*]
+                                                           rules managed via the authz-gated service
+```
+
+Behavioral notes: rename = create-only CAS claim of the target name followed by a
+CAS delete of the source, with compensating rollback (protected and default branches
+are never renamed); stale deletes/rename races fail with `ref_conflict` instead of
+losing work; branch/tag history is read straight from real git objects — PostgreSQL
+stores only protection rules and the default-branch pointer. UI surfaces dense token-
+styled tables (`web/src/repository/branches.tsx`) with keyboard-accessible actions,
+parent-commit links and browse-at-commit navigation.
+
 Behavioral notes: directories list dirs-first with pagination (`per_page` ≤ 200);
 binary files are sniffed (NUL byte / invalid UTF-8) and never inlined; large files
 return `too_large` flags so the UI offers raw/download; deleted paths keep their

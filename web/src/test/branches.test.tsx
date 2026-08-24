@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BranchesView, CompareView, TagsView } from '../repository/branches'
 import type { BrowserNav } from '../repository/views'
@@ -108,8 +108,8 @@ describe('branches view', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
     const delCall = fetchMock.mock.calls[1]!
     expect((delCall[1] as RequestInit).method).toBe('DELETE')
-    expect(String(delCall[0])).toContain(`/branches/${'d'.repeat(40)}?expected_old=`.replace('/branches/', '/branches/') || '')
-    expect(String(delCall[0])).toContain('expected_old=')
+    expect(String(delCall[0])).toContain('/branches/tmp')
+    expect(String(delCall[0])).toContain(`expected_old=${'d'.repeat(40)}`)
 
     vi.unstubAllGlobals()
   })
