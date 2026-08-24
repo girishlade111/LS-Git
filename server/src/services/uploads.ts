@@ -624,11 +624,18 @@ export class UploadService {
     }
   }
 
-  // -- shared git plumbing ------------------------------------------------------
+  // -- shared git plumbing (delegates to the core engine; CAS-protected) --------
+
+  private identityOf(actor: Actor): { name: string; email: string } {
+    const user = this.s.users.byId(actor.userId)
+    return {
+      name: user?.name || user?.username || actor.username,
+      email: `${actor.username}@users.lsgit.local`,
+    }
+  }
 
   private applyCommit(
-    objectsDir: string,
-    absRepo: string,
+    repo: GitRepository,
     args: {
       actor: Actor
       baseBranch: string
@@ -638,8 +645,8 @@ export class UploadService {
       changes: Array<{ path: string; content: Buffer }>
     },
   ): { commitSha: string; replacedPaths: string[] } {
-    const baseHead = this.resolveRef(absRepo, args.baseBranch)
-    const targetHead = this.resolveRef(absRepo, args.targetBranch)
+    const baseHead = repo.resolveBranch(args.baseBranch)
+    const targetHead = repo.resolveBranch(args.targetBranch)
     if (args.targetBranch === args.baseBranch && !targetHead && !baseHead) {
       // empty repo
     } else if (!baseHead && args.targetBranch === args.baseBranch) {
@@ -647,7 +654,7 @@ export class UploadService {
     }
 
     const baseEntries = baseHead
-      ? loadTreeEntries(objectsDir, parseCommit(readObject(objectsDir, baseHead).body).tree)
+      ? repo.flattenTree(repo.readCommit(baseHead).tree)
       : new Map<string, { mode: '100644' | '100755'; sha: string }>()
 
     const changes: Array<{ path: string; mode: '100644' | '100755'; sha: string }> = []
@@ -664,7 +671,7 @@ export class UploadService {
       if (existing && !args.replace) {
         throw new AppError(409, 'A file with this name already exists', 'file_exists')
       }
-      writeObject(objectsDir, 'blob', change.content)
+      repo.writeBlob(change.content)
       changes.push({ path: change.path, mode: '100644', sha: gitSha })
       if (existing) replacedPaths.push(change.path)
     }
@@ -672,40 +679,44 @@ export class UploadService {
       throw new AppError(400, 'The file contents are identical — nothing to commit', 'empty_commit')
     }
 
-    const result = this.applyCommitFromShas(objectsDir, absRepo, baseEntries, changes, {
+    const result = this.applyCommitFromShas(repo, baseEntries, changes, {
       actor: args.actor,
       baseBranch: args.baseBranch,
       targetBranch: args.targetBranch,
       message: args.message,
+      expectedTargetTip: targetHead ?? null,
     })
     return { commitSha: result.commitSha, replacedPaths }
   }
 
   private applyCommitFromShas(
-    objectsDir: string,
-    absRepo: string,
+    repo: GitRepository,
     baseEntries: Map<string, { mode: '100644' | '100755'; sha: string }>,
     changes: Array<{ path: string; mode: '100644' | '100755'; sha: string }>,
-    args: { actor: Actor; baseBranch: string; targetBranch: string; message: string },
+    args: {
+      actor: Actor
+      baseBranch: string
+      targetBranch: string
+      message: string
+      /** Tip observed before the work began — the optimistic-concurrency anchor. */
+      expectedTargetTip: string | null
+    },
   ): { commitSha: string } {
     const merged = new Map(baseEntries)
     for (const c of changes) merged.set(c.path, { mode: c.mode, sha: c.sha })
-    const treeSha = buildNestedTreeFromShas(
-      objectsDir,
+    const treeSha = repo.writeTreeFromShas(
       [...merged.entries()].map(([path, e]) => ({ path, mode: e.mode, sha: e.sha })),
     )
 
-    const user = this.s.users.byId(args.actor.userId)!
-    const baseHead = this.resolveRef(absRepo, args.baseBranch)
-    const commitSha = commitTree(
-      objectsDir,
-      treeSha,
-      args.message,
-      { name: user.name ?? user.username, email: `${user.username}@users.lsgit.local` },
-      baseHead ? [baseHead] : [],
-    )
-    // Branch ref update (atomic-ish: temp+rename within refs dir).
-    this.writeRef(absRepo, args.targetBranch, commitSha)
+    const baseHead = repo.resolveBranch(args.baseBranch)
+    const commitSha = repo.writeCommit({
+      tree: treeSha,
+      parents: baseHead ? [baseHead] : [],
+      message: args.message,
+      author: this.identityOf(args.actor),
+    })
+    // Atomic + optimistic: refuses when the branch moved underneath this commit.
+    repo.updateRef(`refs/heads/${args.targetBranch}`, commitSha, args.expectedTargetTip ?? null)
     return { commitSha }
   }
 
