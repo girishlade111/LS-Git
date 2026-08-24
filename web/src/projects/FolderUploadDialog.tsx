@@ -45,11 +45,13 @@ export function FolderUploadDialog({
   onClose: () => void
   onCommitted: () => void
 }) {
-  const sessionRef = useRef<FolderUploadSession | null>(null)
-  const snapshot = useSyncExternalStore(
-    (cb) => sessionRef.current?.subscribe(cb) ?? (() => undefined),
-    () => sessionRef.current?.getSnapshot() ?? null,
+  const [session, setSession] = useState<FolderUploadSession | null>(null)
+  const subscribe = useCallback(
+    (cb: () => void) => session?.subscribe(cb) ?? (() => undefined),
+    [session],
   )
+  const getSnapshot = useCallback(() => session?.getSnapshot() ?? null, [session])
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot)
   const [limits, setLimits] = useState<BatchLimits | null>(null)
   const [stage, setStage] = useState<Stage>('select')
   const [dragActive, setDragActive] = useState(false)
@@ -87,7 +89,7 @@ export function FolderUploadDialog({
   const phase = snapshot?.phase ?? null
 
   function resetAll() {
-    sessionRef.current = null
+    setSession(null)
     setStage('select')
     setDragActive(false)
     setNotice(null)
