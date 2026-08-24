@@ -222,7 +222,11 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   // ---- error mapping -------------------------------------------------------
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof AppError) {
-      reply.code(err.status).send({ message: err.message, ...(err.extras ?? {}) })
+      reply.code(err.status).send({
+        message: err.message,
+        ...(err.code ? { code: err.code } : {}),
+        ...(err.extras ?? {}),
+      })
       return
     }
     const status = (err as { statusCode?: number }).statusCode
