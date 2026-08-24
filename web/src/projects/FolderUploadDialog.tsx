@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Button } from '../design-system/Button'
 import { Dialog } from '../design-system/Dialog'
 import { Icon } from '../design-system/Icon'
@@ -140,7 +140,6 @@ export function FolderUploadDialog({
   }
 
   async function doFinalize() {
-    const session = session
     if (!session) return
     setFinalizeError(null)
     try {
