@@ -16,6 +16,17 @@ import { Buffer } from 'node:buffer'
  *   POST   /api/v1/projects/:id/uploads/:uploadId/commit → blob→tree→commit→ref→event (single file)
  */
 export function registerUploadRoutes(app: FastifyInstance): void {
+  // Live upload limits so the UI pre-validates selections against real config.
+  app.get('/api/v1/projects/:id/uploads/limits', { preHandler: app.requireAuth('read_api') }, async (req) => {
+    const id = Number((req.params as { id: string }).id)
+    if (!Number.isInteger(id)) throw new AppError(400, 'Invalid project id')
+    return {
+      max_file_bytes: app.cfg.maxUploadBytes,
+      max_batch_files: app.cfg.maxBatchFiles,
+      max_batch_total_bytes: app.cfg.maxBatchTotalBytes,
+    }
+  })
+
   app.post('/api/v1/projects/:id/uploads/batches', { preHandler: app.requireAuth('write_api') }, async (req, reply) => {
     const id = Number((req.params as { id: string }).id)
     if (!Number.isInteger(id)) throw new AppError(400, 'Invalid project id')
