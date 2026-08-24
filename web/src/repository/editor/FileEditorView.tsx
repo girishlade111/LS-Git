@@ -54,9 +54,14 @@ export function FileEditorView({
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameTarget, setRenameTarget] = useState('')
   const [deleteOpen, setDeleteOpen] = useState(false)
+  /** New-file mode: the target path is editable until commit. */
+  const [newPath, setNewPath] = useState(path)
 
   const effectiveRef = refName || defaultBranch
   const isNew = mode === 'new'
+  useEffect(() => { if (isNew) setNewPath(path) }, [isNew, path])
+  // All buffer/draft operations address this path (route path in edit mode).
+  const activePath = isNew ? newPath : path
 
   // Load base content.
   useEffect(() => {
@@ -80,7 +85,7 @@ export function FileEditorView({
 
   // Existing draft?
   useEffect(() => {
-    setDraft(isNew || !blob ? loadDraft(projectId, path) : loadDraft(projectId, path))
+    setDraft(loadDraft(projectId, path))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, path])
 
@@ -88,7 +93,7 @@ export function FileEditorView({
   useEffect(() => {
     if (isNew) {
       editSession.open({
-        projectId, ref: effectiveRef, path,
+        projectId, ref: effectiveRef, path: activePath,
         baseContent: '', baseTip: null, isNew: true,
         ...(draft ? { draftContent: draft.content } : {}),
       })
@@ -104,17 +109,17 @@ export function FileEditorView({
       setContent(editSession.get(projectId, path)?.content ?? blob.text)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNew, blob?.sha, path])
+  }, [isNew, blob?.sha, path, activePath])
 
-  const buffer = editSession.get(projectId, path)
+  const buffer = editSession.get(projectId, activePath)
   const dirty = buffer ? editSession.isDirty(buffer) : false
 
   const onChangeContent = useCallback(
     (next: string) => {
       setContent(next)
-      editSession.update(projectId, path, next)
+      editSession.update(projectId, activePath, next)
     },
-    [projectId, path],
+    [projectId, activePath],
   )
 
   const segments = useMemo(() => path.split('/').filter(Boolean), [path])
@@ -323,8 +328,8 @@ export function FileEditorView({
           {isNew && (
             <Input
               label="File path"
-              value={path}
-              onChange={(e) => onNewPath(e.target.value)}
+              value={activePath} + '
+' +               onChange={(e) => setNewPath(e.target.value)}
               placeholder="docs/new-file.md"
               hint="Directories are created implicitly. Commit when ready."
             />
