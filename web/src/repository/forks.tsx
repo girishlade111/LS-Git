@@ -159,7 +159,7 @@ export function ForkStatusPanel({
 
   if (!project.upstream_full_path) return null
 
-  const stateBadge = report && (
+  const stateBadge = report?.state ? (
     <Tooltip content={
       report.state === 'diverged'
         ? `${report.ahead_count} local and ${report.behind_count} upstream commits have diverged`
@@ -175,7 +175,7 @@ export function ForkStatusPanel({
         </Badge>
       </span>
     </Tooltip>
-  )
+  ) : null
 
   return (
     <section className="ls-card ls-fk" aria-label="Fork relationship" style={{ padding: 14 }}>

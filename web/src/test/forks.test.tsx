@@ -40,7 +40,10 @@ function forkProject(over: Partial<Project> = {}): Project {
   }
 }
 
-beforeEach(() => vi.unstubAllGlobals())
+beforeEach(() => {
+  vi.unstubAllGlobals()
+  window.location.hash = ''
+})
 
 // ---------------------------------------------------------------------------
 // Fork dialog
