@@ -429,20 +429,43 @@ export class ResumableUploadService {
       return this.rejectAttempt(item, 'chunk_checksum_mismatch', `Checksum mismatch for chunk ${index}`)
     }
 
-    const result = await this.staging.putChunk(sid, itemId, index, body)
-    if (!result.duplicate) {
-      this.s.uploadSessionItems.recordChunk(item.id, body.length)
-    }
+    let duplicate = false
+
+    // Per-(item,index) serialization keeps duplicate detection deterministic
+    // under bounded client parallelism. Cross-process duplicates remain safe:
+    // the store is authoritative and DB counters are advisory.
+    await this.withLock(`${itemId}:${index}`, async () => {
+      const result = await this.staging.putChunk(sid, itemId, index, body)
+      if (!result.duplicate) {
+        this.s.uploadSessionItems.recordChunk(item.id, body.length)
+      }
+      duplicate = result.duplicate
+    })
     const fresh = this.s.uploadSessionItems.byId(item.id)!
     return {
       item_id: item.id,
       index,
-      duplicate: result.duplicate,
+      duplicate,
       received_chunks: fresh.received_chunks,
       received_bytes: fresh.received_bytes,
       chunk_count: fresh.chunk_count,
       item_state: fresh.state,
     }
+  }
+
+  private locks = new Map<string, Promise<void>>()
+
+  private withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.locks.get(key) ?? Promise.resolve()
+    const run = prev.then(fn, fn)
+    this.locks.set(
+      key,
+      run.then(
+        () => undefined,
+        () => undefined,
+      ),
+    )
+    return run
   }
 
   /** Checksum/size violations consume an attempt; past the cap the item dies. */
