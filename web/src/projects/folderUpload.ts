@@ -224,8 +224,7 @@ export function buildManifest(
   for (const { file, relativePath } of collected.files) {
     const first = items.get(relativePath)
     if (first) {
-      first.note = first.note ?? undefined
-      items.set(relativePath + `\u0000dup-${items.size}`, {
+      items.set(`${relativePath}\u0000dup-${items.size}`, {
         ...blankItem(file, relativePath),
         status: 'skipped',
         note: 'Duplicate path in this upload',
@@ -237,16 +236,20 @@ export function buildManifest(
 
   const ordered: ManifestItem[] = []
   const overflow: ManifestItem[] = []
+  let accepted = 0
   for (const item of items.values()) {
-    if (
-      item.status !== 'skipped' &&
-      ordered.filter((i) => i.status !== 'skipped').length >= limits.max_batch_files
-    ) {
+    if (item.status === 'skipped') {
+      overflow.push(item)
+      continue
+    }
+    if (accepted >= limits.max_batch_files) {
       item.status = 'skipped'
       item.note = `Batch limit reached (${limits.max_batch_files} files)`
+      overflow.push(item)
+      continue
     }
-    if (item.status === 'skipped') overflow.push(item)
-    else ordered.push(item)
+    accepted += 1
+    ordered.push(item)
   }
 
   const limitErrors: string[] = []
