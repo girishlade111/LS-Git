@@ -167,7 +167,7 @@ describe('staging rules inside a batch', () => {
     const batch = String((await createBatch(app, bobSession, project.id, 5, 50)).body.batchId)
 
     const foreign = await stageFile(app, charlieSession, project.id, batch, 'steal.txt', 'x')
-    expect(foreign.status).toBe(404)
+    expect(foreign.status).toBe(403) // push authz runs before batch existence is revealed
 
     // Cancel closes the batch…
     await authed(app, 'DELETE', `/api/v1/projects/${project.id}/uploads/batches/${batch}`, { session: bobSession })
@@ -190,6 +190,7 @@ describe('finalize — one commit for the whole set', () => {
     const before = headSha(app, project.disk_path, 'main')!
     const res = await finalize(app, bobSession, project.id, batch, {
       commit_message: 'Upload project folder',
+      replace: true, // README.md already exists on main
     })
     expect(res.status).toBe(201)
     expect(res.body.committed_files).toBe(4)
