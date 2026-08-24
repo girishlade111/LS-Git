@@ -4,6 +4,7 @@ import { Icon } from '../design-system/Icon'
 import { Input } from '../design-system/Input'
 import { projectsApi, type Project } from '../projects/api'
 import { repositoryApi, encodePath, type RefsResult } from './api'
+import { BranchesView, CompareView, TagsView } from './branches'
 import { FileEditorView } from './editor/FileEditorView'
 import {
   BlobViewPage,
@@ -135,18 +136,19 @@ export function RepositoryBrowser({
           />
         )}
         <div className="ls-rb__navlinks">
-          <a
-            className={`ls-rb__navlink${route.action === 'commits' ? ' ls-rb__navlink--current' : ''}`}
-            href={`#${nav.history(resolved.ref || project.default_branch)}`}
-          >
-            <Icon name="clock" size={13} /> Commits
-          </a>
-          <a
-            className={`ls-rb__navlink${route.action === 'search' ? ' ls-rb__navlink--current' : ''}`}
-            href={`#${nav.searchUrl(resolved.ref || project.default_branch)}`}
-          >
-            <Icon name="search" size={13} /> Find file
-          </a>
+          {(['tree', 'commits', 'branches', 'tags', 'compare'] as const).map((section) => (
+            <a
+              key={section}
+              className={`ls-rb__navlink${(route.action === section || (section === 'tree' && !['commits', 'branches', 'tags', 'compare', 'search', 'edit', 'new'].includes(route.action))) ? ' ls-rb__navlink--current' : ''}`}
+              href={`#${sectionUrl(section)}`}
+            >
+              {section === 'commits' && <Icon name="clock" size={13} />}
+              {section === 'branches' && <Icon name="branch" size={13} />}
+              {section === 'tags' && <Icon name="tag" size={13} />}
+              {section === 'compare' && <Icon name="merge" size={13} />}
+              {labelFor(section)}
+            </a>
+          ))}
         </div>
       </div>
 
