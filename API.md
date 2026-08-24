@@ -113,7 +113,28 @@ GET /api/v1/projects/:id/repository/commits/:ref(?path=&page=) path-scoped histo
 GET /api/v1/projects/:id/repository/commit/:sha                detail + changed-file kinds + stats
 GET /api/v1/projects/:id/repository/blame/:ref/*               line→commit ranges (LCS foundation)
 GET /api/v1/projects/:id/repository/search/:ref(?q=&content=)  filename search; opt-in bounded grep
+
+POST /api/v1/projects/:id/repository/commit                    web-editor commit (create/edit/
+                                                               delete/rename/multi-file in ONE
+                                                               atomic commit). Body: {changes:[{path,
+                                                               content|content_base64|sha, mode?,
+                                                               delete?}], commit_message, branch |
+                                                               new_branch+start_branch,
+                                                               expected_base_tip?, reject_overwrite?}.
+                                                               Optimistic concurrency: expected_base_tip
+                                                               (GitLab last_commit_id parity) is checked
+                                                               against the branch tip BEFORE the write and
+                                                               the engine's CAS ref update remains the
+                                                               backstop; mismatches return
+                                                               409 ref_update_conflict {expected, current}.
+                                                               Success returns 201 with commit_sha, branch,
+                                                               created_branch, replaced_paths, deleted_paths
+                                                               and an MR-ready hint for the future PR phase.
 ```
+
+Web editor client (`web/src/repository/editor/`): CodeMirror 6 surface themed via design
+tokens only; local drafts in localStorage with restore/discard; multi-file session that
+commits all dirty buffers as one change set.
 
 Behavioral notes: directories list dirs-first with pagination (`per_page` ≤ 200);
 binary files are sniffed (NUL byte / invalid UTF-8) and never inlined; large files

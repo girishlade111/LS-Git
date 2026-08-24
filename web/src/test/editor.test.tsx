@@ -244,7 +244,7 @@ describe('commit workflow', () => {
       />,
     )
     await user.click(screen.getByLabelText(/Create new branch/i))
-    await user.type(screen.getByLabelText('New branch name'), 'patch-1')
+    setInputValue(/New branch name/i, 'patch-1')
     setInputValue(/Commit message/i, 'branch commit')
     await user.click(screen.getByRole('button', { name: 'Commit' }))
 
@@ -381,7 +381,7 @@ describe('commit workflow', () => {
       />,
     )
     const region = screen.getByLabelText('Diff preview')
-    expect(region.textContent).toContain('-# old')
-    expect(region.textContent).toContain('+# new')
+    expect(region.querySelector('.ls-diff__row--del')!.textContent).toContain('# old')
+    expect(region.querySelector('.ls-diff__row--add')!.textContent).toContain('# new')
   })
 })
