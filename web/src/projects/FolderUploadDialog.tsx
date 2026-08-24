@@ -314,9 +314,7 @@ export function FolderUploadDialog({
                       type="file"
                       hidden
                       multiple
-                      // @ts-expect-error non-standard but universally supported directory picker
-                      webkitdirectory=""
-                      directory=""
+                      {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
                       onChange={(e) => {
                         if (e.target.files) void ingest(e.target.files)
                         e.target.value = ''
