@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, renameSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, existsSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { AppError } from './identity.js'
 import type { IdentityServices } from './identity.js'
