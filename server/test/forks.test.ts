@@ -280,10 +280,11 @@ describe('sync fork', () => {
 
   it('DIVERGED forks refuse sync — fork changes are NEVER overwritten', async () => {
     const fs2 = await forkedSetup()
-    const forkTipBefore = await repos(fs2).resolveBranch(fs2.bob, fs2.forkId, 'main')
 
     // Both sides advance independently.
     commitOn(fs2, fs2.bob, fs2.forkId, 'fork-side change', [{ path: 'shared.txt', content: 'fork version' }])
+    // The guard point: after the fork-side commit, BEFORE sync is attempted.
+    const forkTipBefore = await repos(fs2).resolveBranch(fs2.bob, fs2.forkId, 'main')
     commitOn(fs2, fs2.alice, fs2.sourceId, 'upstream change', [{ path: 'shared.txt', content: 'upstream version' }])
 
     const div = forksSvc(fs2).divergence(fs2.bob, fs2.forkId, {})
