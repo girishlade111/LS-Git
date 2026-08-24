@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdirSync, existsSync, rmSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
-import { GitRepository, RepositoryNotFoundError } from './repository.js'
+import { GitRepository } from './repository.js'
 
 /**
  * Repository storage abstraction (STORAGE.md §2–§3).
@@ -59,16 +59,10 @@ export class LocalHashedStorage implements RepositoryStorage {
 
   /**
    * Opens the core Git engine bound to a hashed repository.
-   * Throws RepositoryNotFoundError when the repository does not exist yet.
+   * Throws RepositoryNotFoundError when the repository does not exist.
    */
   repository(diskPath: string): GitRepository {
-    const abs = this.absolute(diskPath)
-    try {
-      return GitRepository.open(abs)
-    } catch (err) {
-      if (err instanceof RepositoryNotFoundError && !existsSync(abs)) throw err
-      throw err
-    }
+    return GitRepository.open(this.absolute(diskPath))
   }
 
   exists(diskPath: string): boolean {
@@ -100,7 +94,7 @@ export class LocalHashedStorage implements RepositoryStorage {
       identity: author,
       changes: files.map((f) => ({
         path: f.path,
-        content: typeof f.content === 'string' ? f.content : f.content,
+        content: f.content,
         mode: f.mode ?? '100644',
       })),
     })

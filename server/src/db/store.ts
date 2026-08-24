@@ -393,6 +393,14 @@ export type AuditEventName =
   | 'pat_revoked'
   | 'profile_updated'
   | 'avatar_updated'
+  // Repository operations (git-core writes; every write is auditable)
+  | 'repo_commit_created'
+  | 'repo_branch_created'
+  | 'repo_branch_deleted'
+  | 'repo_tag_created'
+  | 'repo_tag_deleted'
+  | 'repo_ref_updated'
+  | 'repo_write_denied'
 
 export class AuditRepo {
   constructor(private db: Database) {}
