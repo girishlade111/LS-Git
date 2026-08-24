@@ -867,21 +867,23 @@ export class GitRepository {
     )
     const commitSha = this.writeCommit({
       tree: treeSha,
-      parents: previousTip ? [previousTip] : [],
+      parents: parentTip ? [parentTip] : [],
       message: opts.message,
       author: opts.identity,
     })
 
-    // Creating a NEW branch: the target must not exist (create-only).
-    // Same branch: expect the exact tip we built upon (lost-update guard).
+    // Concurrency discipline:
+    //   same branch  → expect the exact tip we built upon (lost-update guard);
+    //   new branch   → expect whatever the target holds right now (null ⇒
+    //                  create-only). A racing creator/commiter conflicts.
     const creatingNewBranch = opts.targetBranch !== opts.baseBranch
-    this.updateRef(targetRef, commitSha, creatingNewBranch ? null : previousTip)
+    this.updateRef(targetRef, commitSha, expectedForCas)
     return {
       commitSha,
       treeSha,
       branch: opts.targetBranch,
       previousTip,
-      createdBranch: creatingNewBranch,
+      createdBranch: creatingNewBranch && previousTip !== parentTip ? true : creatingNewBranch,
       replacedPaths,
       deletedPaths,
     }
