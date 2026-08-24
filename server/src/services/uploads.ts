@@ -6,14 +6,7 @@ import type { IdentityServices } from './identity.js'
 import type { AppConfig } from '../config.js'
 import type { Actor } from '../authz.js'
 import type { ProjectRow, UploadBatchRow } from '../db/store.js'
-import {
-  buildNestedTreeFromShas,
-  commitTree,
-  writeObject,
-  loadTreeEntries,
-  parseCommit,
-  readObject,
-} from '../storage/gitobjects.js'
+import { GitRepository, RefConflictError, RefLockError } from '../storage/repository.js'
 import type { LocalHashedStorage } from '../storage/local.js'
 import { validateRepoFilePath, sanitizeCommitMessage } from '../lib/pathsafe.js'
 import { can } from '../authz.js'
