@@ -571,7 +571,6 @@ export class UploadService {
         replaced_count: replacedPaths.length,
         total_bytes: totalBytes,
         new_branch: opts.new_branch ? true : false,
-        create_merge_request: !!opts.replace && false, // MRs land with collaboration phase
         actor_user_id: actor!.userId,
       })
       this.s.projects.update(project.id, { last_activity_at: new Date().toISOString() })
