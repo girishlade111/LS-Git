@@ -11,7 +11,7 @@
  * Cancel aborts in-flight XHRs and destroys every server staging slot.
  */
 
-import type { BatchLimits, ManifestItem } from './folderUpload'
+import type { ManifestItem } from './folderUpload'
 import { formatBytes } from './folderUpload'
 
 export type SessionPhase =
