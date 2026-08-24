@@ -475,20 +475,25 @@ describe('finalize — idempotency, structured failures, no partial commits', ()
     const project = app.store.projects.byOwnerPath('bob', 'resumable')!
     const good = nextPath('good')
     const corrupt = nextPath('corrupt')
+    // Both items are 4 bytes; the second lies about its content checksum.
     const created = await createSession(app, bobSession, project.id, [
       { file_path: good, size: 4, sha256: sha256('ok--') },
-      { file_path: corrupt, size: 4, sha256: sha256('expected-bytes') }, // lie about content
+      { file_path: corrupt, size: 4, sha256: sha256('want') },
     ])
     const sid = String(created.body.session_id)
     const items = created.body.items as Array<{ id: string }>
     await putChunk(app, bobSession, project.id, sid, items[0]!.id, 0, Buffer.from('ok--'))
-    await putChunk(app, bobSession, project.id, sid, items[1]!.id, 0, Buffer.from('actual')) // 6 bytes? no—size must match
+    await putChunk(app, bobSession, project.id, sid, items[1]!.id, 0, Buffer.from('got!'))
 
     const blocked = await finalize(app, bobSession, project.id, sid, { commit_message: 'verify me' })
     expect(blocked.status).toBe(409)
+    expect(blocked.body.code ?? '').toBe('session_incomplete')
     const report = blocked.body.items as Array<Record<string, unknown>>
-    expect(report.some((r) => r.file_path === corrupt && r.failure_code === 'size_mismatch')).toBe(true)
-    void good
+    expect(report).toHaveLength(1)
+    expect(report[0]).toMatchObject({ file_path: corrupt, failure_code: 'sha256_mismatch' })
+    // The honest file did NOT sneak into the repository either — all-or-nothing.
+    const files = app.projects.storage.readBranchFiles(project.disk_path, 'main')
+    expect(files.has(good)).toBe(false)
   })
 
   it('honors protected branches and lets the same session re-route to a branch', async () => {
