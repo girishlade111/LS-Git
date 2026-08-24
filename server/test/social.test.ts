@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { makeApp, registerUser, loginRaw, extractSession, authed } from './helpers.js'
 import type { FastifyInstance } from 'fastify'
 import type { Actor } from '../src/authz.js'
