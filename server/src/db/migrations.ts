@@ -276,4 +276,19 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
         ON upload_sessions(committed_sha) WHERE committed_sha IS NOT NULL;
     `,
   },
+  {
+    version: 6,
+    sql: `
+      -- Fork relationships (GitLab fork-network parity).
+      -- forked_from_project_id: the DIRECT upstream of this fork.
+      -- fork_network_id: id of the network's ROOT project (the original that
+      --   itself has no upstream). Every member carries it, so the whole
+      --   network loads with ONE indexed query — no recursive traversal on
+      --   page load.
+      ALTER TABLE projects ADD COLUMN forked_from_project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;
+      ALTER TABLE projects ADD COLUMN fork_network_id INTEGER;
+      CREATE INDEX idx_projects_fork_network ON projects(fork_network_id);
+      CREATE INDEX idx_projects_forked_from ON projects(forked_from_project_id);
+    `,
+  },
 ]
