@@ -456,8 +456,19 @@ export function HistoryView({
   )
 }
 
-export function CommitDetailView({ projectId, sha, nav }: { projectId: number; sha: string; nav: BrowserNav }) {
+export function CommitDetailView({
+  projectId,
+  projectName,
+  sha,
+  nav,
+}: {
+  projectId: number
+  projectName: string
+  sha: string
+  nav: BrowserNav
+}) {
   const [detail, setDetail] = useState<CommitDetail | null>(null)
+  const [diffFiles, setDiffFiles] = useState<import('./api').CommitDiffFile[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -465,6 +476,9 @@ export function CommitDetailView({ projectId, sha, nav }: { projectId: number; s
     repositoryApi.commit(projectId, sha)
       .then((d) => { if (alive) setDetail(d) })
       .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load commit') })
+    repositoryApi.commitDiff(projectId, sha)
+      .then((d) => { if (alive) setDiffFiles(d.files) })
+      .catch(() => { if (alive) setDiffFiles([]) })
     return () => { alive = false }
   }, [projectId, sha])
 
@@ -476,6 +490,11 @@ export function CommitDetailView({ projectId, sha, nav }: { projectId: number; s
       <header className="ls-rb__head">
         <h2 className="ls-rb__viewtitle">{detail.title}</h2>
         <div className="ls-rb__actions">
+          <Tooltip content="Browse the repository as it was at this commit">
+            <Button size="sm" variant="secondary" onClick={() => { window.location.hash = nav.tree(detail.sha, '').replace(/^#/, '') }}>
+              Browse files
+            </Button>
+          </Tooltip>
           <CopyButton value={detail.sha} label="Copy full SHA" />
           <CopyButton value={`${detail.sha}\n\n${detail.message}`} label="Copy commit message" />
         </div>
@@ -484,27 +503,35 @@ export function CommitDetailView({ projectId, sha, nav }: { projectId: number; s
       <div className="ls-rb__filemeta">
         <span className="ls-rb__muted">{detail.author_name} committed {timeAgo(detail.committed_at)}</span>
         <Badge variant="neutral">{detail.short_sha}</Badge>
-        {detail.parents.map((p) => <Badge key={p} variant="neutral">parent {p.slice(0, 8)}</Badge>)}
+        {/* Parent commits — real git parents, navigable. */}
+        {detail.parents.map((p) => (
+          <a key={p} className="ls-rb__parentlink" href={`#${nav.commit(p)}`}>
+            parent {p.slice(0, 8)}
+          </a>
+        ))}
       </div>
       <div className="ls-rb__stats" aria-label="Change statistics">
         <span className="ls-rb__stat ls-rb__stat--add">{detail.stats.added} added</span>
         <span className="ls-rb__stat ls-rb__stat--mod">{detail.stats.modified} modified</span>
         <span className="ls-rb__stat ls-rb__stat--del">{detail.stats.deleted} deleted</span>
       </div>
-      <ul className="ls-rb__changed" aria-label="Changed files">
-        {detail.changed_files.map((f) => (
-          <li key={`${f.kind}-${f.path}`} className="ls-rb__changedrow">
-            <KindBadge kind={f.kind} />
-            <a
-              className="ls-rb__name"
-              href={f.kind === 'deleted' ? nav.tree(detail.sha, f.path.split('/').slice(0, -1).join('/')) : nav.blob(detail.sha, f.path)}
-            >
-              <Icon name="file" size={13} /> {f.path}
-            </a>
-          </li>
-        ))}
-      </ul>
-      {detail.lists_truncated && <p className="ls-rb__muted">Large changeset — list truncated.</p>}
+
+      {/* Per-file patches (server-generated unified diffs). */}
+      {diffFiles && diffFiles.length > 0 && (
+        <div className="ls-cmp__patches" aria-label="Commit patch">
+          {diffFiles.filter((f) => f.patch).map((f) => (
+            <div key={f.path}>
+              <a className="ls-rb__name" href={f.kind === 'deleted' ? '#' : `#${nav.blob(detail.sha, f.path)}`}>
+                <KindBadge kind={f.kind} /> {f.path}
+              </a>
+              <DiffViewer diff={f.patch} />
+            </div>
+          ))}
+          {diffFiles.length === 0 && (
+            <p className="ls-rb__muted">Patch withheld for large or binary changes in {projectName}.</p>
+          )}
+        </div>
+      )}
     </section>
   )
 }

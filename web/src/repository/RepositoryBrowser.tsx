@@ -239,7 +239,7 @@ function BrowserBody({
         />
       )
     case 'commit':
-      return <CommitDetailView projectId={project.id} sha={resolvedRef} nav={nav} />
+      return <CommitDetailView projectId={project.id} projectName={project.name} sha={resolvedRef} nav={nav} />
     case 'blame':
       if (!path) return <ErrorState message="A file path is required." />
       return (
