@@ -181,6 +181,14 @@ function csrfCookieSetup(): void {
   document.cookie = 'lsgit_csrf=testtoken; Path=/'
 }
 
+/** Deterministic controlled-input fill (userEvent typing is flaky in jsdom). */
+function setInputValue(label: RegExp, value: string): void {
+  const el = screen.getByLabelText(label) as HTMLInputElement
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  setter?.call(el, value)
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
 describe('commit workflow', () => {
   beforeEach(() => {
     localStorage.clear()
