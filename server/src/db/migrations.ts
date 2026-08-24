@@ -273,7 +273,7 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
       -- One finalize per session, ever: unique partial index makes duplicate
       -- finalization a database-level impossibility, not just an app check.
       CREATE UNIQUE INDEX idx_upload_sessions_commit
-        ON upload_sessions(commit_sha) WHERE commit_sha IS NOT NULL;
+        ON upload_sessions(committed_sha) WHERE committed_sha IS NOT NULL;
     `,
   },
 ]
