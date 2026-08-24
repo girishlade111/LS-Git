@@ -16,7 +16,9 @@ import {
   ProjectsRepo,
   TopicsRepo,
   RedirectsRepo,
+  UploadBatchesRepo,
   UploadsRepo,
+  ProtectedBranchesRepo,
   EventsRepo,
   PasswordResetsRepo,
   SessionsRepo,
@@ -56,6 +58,8 @@ export interface IdentityServices {
   topics: TopicsRepo
   redirects: RedirectsRepo
   uploads: UploadsRepo
+  uploadBatches: UploadBatchesRepo
+  protectedBranches: ProtectedBranchesRepo
   events: EventsRepo
 }
 
