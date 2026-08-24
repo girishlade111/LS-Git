@@ -985,6 +985,410 @@ export class RepositoriesService {
     }
   }
 
+  // ------------------------------------------------- branch & tag management --
+
+  static readonly RECENT_BRANCH_LIMIT = 10
+  private static readonly COMPARE_MAX_COMMITS = 500
+  private static readonly PATCH_MAX_FILE_BYTES = 200 * 1024
+  private static readonly PATCH_MAX_FILES = 20
+
+  /**
+   * Branch listing for the repository UI: enriched with tip-commit metadata.
+   * `sort: 'recent'` orders by commit time (GitLab's "recent" push ordering);
+   * `search` is a case-insensitive substring filter on the name.
+   */
+  listBranchesForBrowse(
+    actor: Actor | null,
+    projectId: number,
+    opts: { search?: string; sort?: 'name' | 'recent'; limit?: number } = {},
+  ): Array<{
+    name: string
+    sha: string
+    default: boolean
+    protected: boolean
+    title: string
+    author_name: string
+    committed_at: string
+    committed_at_unix: number
+  }> {
+    const { project, repo } = this.open(actor, projectId)
+    const def = repo.defaultBranch()
+    const needle = (opts.search ?? '').trim().toLowerCase()
+    const limit = clampInt(opts.limit, 1, 200, 100)
+
+    const rows = repo
+      .listBranches()
+      .filter((b) => !needle || b.name.toLowerCase().includes(needle))
+      .map((b) => {
+        const c = repo.readCommit(b.sha)
+        return {
+          name: b.name,
+          sha: b.sha,
+          default: b.name === def,
+          protected: !!this.s.protectedBranches.byName(project.id, b.name),
+          title: c.message.split('\n')[0] ?? '',
+          author_name: c.committer.identity.name,
+          committed_at: new Date(c.committer.timestamp.time * 1000).toISOString(),
+          committed_at_unix: c.committer.timestamp.time,
+        }
+      })
+    if (opts.sort === 'recent') {
+      rows.sort((a, b) => b.committed_at_unix - a.committed_at_unix)
+    } else {
+      // Default branch first, then alphabetical (GitLab list behavior).
+      rows.sort((a, b) =>
+        a.default === b.default ? a.name.localeCompare(b.name) : a.default ? -1 : 1,
+      )
+    }
+    return rows.slice(0, limit)
+  }
+
+  /**
+   * Renames a branch with concurrency safety:
+   *   create new ref (create-only CAS) → delete old ref (CAS on its tip) →
+   *   compensating rollback if the second step races. Protected branches and
+   *   the default branch are never renamed (GitLab parity).
+   */
+  renameBranch(actor: Actor | null, projectId: number, oldNameRaw: string, newNameRaw: string): { from: string; to: string; sha: string } {
+    const project = this.requireProject(projectId)
+    this.authorizePush(actor, project, 'rename_branch')
+
+    const oldName = String(oldNameRaw ?? '').trim()
+    const newName = String(newNameRaw ?? '').trim()
+    if (!oldName || !newName) throw new AppError(400, 'Both source and target branch names are required', 'validation_failed')
+    if (oldName === newName) throw new AppError(400, 'New name must differ from the current one', 'validation_failed')
+
+    const repo = this.openEngine(project)
+    if (newName === repo.defaultBranch()) {
+      throw new AppError(409, `'${newName}' collides with the default branch`, 'branch_exists')
+    }
+    if (this.s.protectedBranches.byName(project.id, oldName)) {
+      this.s.audit.record({
+        userId: actor!.userId,
+        name: 'repo_write_denied',
+        detail: { kind: 'rename_protected_branch', project_id: project.id, branch: oldName },
+      })
+      throw new AppError(403, `Branch '${oldName}' is protected and cannot be renamed`, 'protected_branch')
+    }
+
+    const sha = repo.resolveBranch(oldName)
+    if (!sha) throw new AppError(404, `Branch '${oldName}' does not exist`, 'branch_missing')
+
+    try {
+      // Step 1 — claim the target name atomically (fails when it already exists).
+      repo.updateRef(`refs/heads/${newName}`, sha, null)
+      // Step 2 — retire the old ref only while it still points at `sha`.
+      try {
+        repo.deleteRef(`refs/heads/${oldName}`, sha)
+      } catch (err) {
+        // Compensate: never leave two branches pointing at one line of work.
+        try { repo.deleteRef(`refs/heads/${newName}`, sha) } catch { /* best effort */ }
+        throw err
+      }
+    } catch (err) {
+      throw this.mapEngineError(err)
+    }
+
+    this.emitRepoEvent(project.id, 'repo.push', {
+      ref: `refs/heads/${oldName}`, before: sha, after: null, action: 'branch_renamed',
+      new_ref: `refs/heads/${newName}`, actor_user_id: actor!.userId,
+    })
+    this.audit(actor!.userId, 'repo_branch_renamed', {
+      project_id: project.id, from: oldName, to: newName, sha,
+    })
+    return { from: oldName, to: newName, sha }
+  }
+
+  /**
+   * Sets the repository's default branch: DB row + symbolic HEAD change in one
+   * logical step. The branch must exist unless the repository is still empty.
+   * The new default is auto-protected at maintainer level (PERMISSIONS.md §5).
+   */
+  setDefaultBranch(actor: Actor | null, projectId: number, nameRaw: string): { project: ProjectRow; previous: string } {
+    const project = this.requireProject(projectId)
+    // Central authorization: repository settings are maintainer-level →
+    // project:update (owner or instance admin today).
+    const ok = can(actor, 'project:update', this.projectCtx(project))
+    if (!ok) {
+      this.failAuth(actor, { kind: 'default_branch_denied', project_id: project.id })
+    }
+
+    const name = String(nameRaw ?? '').trim()
+    const repo = this.openEngine(project)
+    const previous = repo.defaultBranch()
+
+    if (!repo.isEmpty()) {
+      const sha = repo.resolveBranch(name)
+      if (!sha) throw new AppError(404, `Branch '${name}' does not exist`, 'branch_missing')
+    }
+
+    // Metadata first (transactional), then the symbolic HEAD flip.
+    this.s.db.transaction(() => {
+      this.s.projects.update(project.id, { default_branch: name })
+      this.s.protectedBranches.ensure(project.id, name, 'maintainer')
+    })
+    repo.setHeadTo(name)
+
+    this.emitRepoEvent(project.id, 'repo.push', {
+      ref: 'HEAD', before: `refs/heads/${previous}`, after: `refs/heads/${name}`,
+      action: 'default_branch_changed', actor_user_id: actor!.userId,
+    })
+    this.audit(actor!.userId, 'repo_default_branch_changed', {
+      project_id: project.id, from: previous, to: name,
+    })
+    return { project: this.requireProject(project.id), previous }
+  }
+
+  /** Protection rule management — centralized through the authz service. */
+  setProtection(
+    actor: Actor | null,
+    projectId: number,
+    input: { name: string; level: 'no_one' | 'maintainer' },
+  ): Array<{ name: string; push_access_level: string }> {
+    const project = this.requireProject(projectId)
+    const ok = can(actor, 'project:update', this.projectCtx(project))
+    if (!ok) this.failAuth(actor, { kind: 'protection_change_denied', project_id: project.id })
+    this.s.protectedBranches.set(project.id, String(input.name).trim(), input.level)
+    this.emitRepoEvent(project.id, 'repo.push', {
+      ref: `refs/heads/${input.name}`, action: 'branch_protection_changed',
+      level: input.level, actor_user_id: actor?.userId ?? null,
+    })
+    return this.s.protectedBranches.listForProject(project.id)
+  }
+
+  removeProtection(actor: Actor | null, projectId: number, name: string): Array<{ name: string; push_access_level: string }> {
+    const project = this.requireProject(projectId)
+    const ok = can(actor, 'project:update', this.projectCtx(project))
+    if (!ok) this.failAuth(actor, { kind: 'protection_change_denied', project_id: project.id })
+    this.s.db.run('DELETE FROM protected_branches WHERE project_id = ? AND name = ?', project.id, String(name).trim())
+    return this.s.protectedBranches.listForProject(project.id)
+  }
+
+  // ---------------------------------------------------------------- compare --
+
+  /**
+   * Branch/ref comparison: merge-base, ahead/behind commit lists (bounded),
+   * changed files with kinds and per-file unified patches for small files.
+   */
+  compareRefs(
+    actor: Actor | null,
+    projectId: number,
+    fromRaw: string,
+    toRaw: string,
+    opts: { with_patches?: boolean } = {},
+  ): {
+    from: { ref: string; sha: string }
+    to: { ref: string; sha: string }
+    merge_base: string | null
+    ahead: Array<CommitView>
+    behind: Array<CommitView>
+    commits_ahead_count: number
+    commits_behind_count: number
+    files: Array<{
+      path: string
+      kind: 'added' | 'modified' | 'deleted'
+      patch?: string
+      stats?: { added: number; removed: number }
+    }>
+  } {
+    const { repo } = this.open(actor, projectId)
+    const from = this.requireResolved(repo, fromRaw)
+    const to = this.requireResolved(repo, toRaw)
+
+    const baseSha = this.mergeBase(repo, from.sha, to.sha)
+
+    const aheadSet = this.reachableSet(repo, to.sha, baseSha)
+    const behindSet = this.reachableSet(repo, from.sha, baseSha)
+    const aheadCommits = [...aheadSet]
+      .map((s) => repo.readCommit(s))
+      .sort((a, b) => b.committer.timestamp.time - a.committer.timestamp.time)
+      .slice(0, RepositoriesService.COMPARE_MAX_COMMITS)
+      .map((c) => this.toCommitView(c))
+    const behindCommits = [...behindSet]
+      .map((s) => repo.readCommit(s))
+      .sort((a, b) => b.committer.timestamp.time - a.committer.timestamp.time)
+      .slice(0, RepositoriesService.COMPARE_MAX_COMMITS)
+      .map((c) => this.toCommitView(c))
+
+    // Changed files between the two TREES.
+    const fromTree = repo.flattenTree(repo.readCommit(from.sha).tree)
+    const toTree = repo.flattenTree(repo.readCommit(to.sha).tree)
+    const files: ReturnType<RepositoriesService['compareRefs']>['files'] = []
+    let patched = 0
+
+    const emitFile = (
+      path: string,
+      kind: 'added' | 'modified' | 'deleted',
+      oldSha: string | null,
+      newSha: string | null,
+    ): void => {
+      const entry: { path: string; kind: 'added' | 'modified' | 'deleted'; patch?: string; stats?: { added: number; removed: number } } = { path, kind }
+      if (
+        opts.with_patches === true &&
+        patched < RepositoriesService.PATCH_MAX_FILES &&
+        ((oldSha && repo.objectType(oldSha) === 'blob') || (newSha && repo.objectType(newSha) === 'blob'))
+      ) {
+        const oldText = oldSha ? this.safeText(repo, oldSha) : ''
+        const newText = newSha ? this.safeText(repo, newSha) : ''
+        if (oldText !== null && newText !== null) {
+          const p = unifiedPatch(oldText, newText)
+          entry.patch = `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n${p.text}`
+          entry.stats = p.stats
+          patched++
+        }
+      }
+      files.push(entry)
+    }
+
+    for (const [p, e] of toTree) {
+      const before = fromTree.get(p)
+      if (!before) emitFile(p, 'added', null, e.sha)
+      else if (before.sha !== e.sha) emitFile(p, 'modified', before.sha, e.sha)
+    }
+    for (const p of fromTree.keys()) {
+      if (!toTree.has(p)) emitFile(p, 'deleted', fromTree.get(p)!.sha, null)
+    }
+
+    return {
+      from: { ref: fromRaw, sha: from.sha },
+      to: { ref: toRaw, sha: to.sha },
+      merge_base: baseSha,
+      ahead: aheadCommits,
+      behind: behindCommits,
+      commits_ahead_count: aheadSet.size,
+      commits_behind_count: behindSet.size,
+      files,
+    }
+  }
+
+  /** Per-file unified diff for a single commit versus its first parent. */
+  commitDiff(
+    actor: Actor | null,
+    projectId: number,
+    rev: string,
+  ): {
+    commit_sha: string
+    parent_sha: string | null
+    files: Array<{
+      path: string
+      kind: 'added' | 'modified' | 'deleted'
+      patch: string
+      stats: { added: number; removed: number }
+    }>
+  } {
+    const { repo } = this.open(actor, projectId)
+    const resolved = this.requireResolved(repo, rev)
+    const commit = repo.readCommit(resolved.sha)
+    const parentSha = commit.parents[0] ?? null
+    const baseTree = parentSha ? repo.flattenTree(repo.readCommit(parentSha).tree) : new Map<string, { mode: FileMode; sha: string }>()
+    const nextTree = repo.flattenTree(commit.tree)
+
+    const files: ReturnType<RepositoriesService['commitDiff']>['files'] = []
+    let patched = 0
+
+    for (const [p, e] of nextTree) {
+      const before = baseTree.get(p)
+      const kind = !before ? ('added' as const) : before.sha !== e.sha ? ('modified' as const) : null
+      if (!kind) continue
+      if (patched < RepositoriesService.PATCH_MAX_FILES) {
+        const oldText = before ? this.safeText(repo, before.sha) : ''
+        const newText = this.safeText(repo, e.sha)
+        if (oldText !== null && newText !== null) {
+          const patch = unifiedPatch(oldText, newText)
+          files.push({
+            path: p,
+            kind,
+            patch: patch.text
+              ? `diff --git a/${p} b/${p}\n--- ${before ? `a/${p}` : '/dev/null'}\n+++ b/${p}\n${patch.text}`
+              : '',
+            stats: patch.stats,
+          })
+          patched++
+          continue
+        }
+      }
+      files.push({ path: p, kind, patch: '', stats: { added: 0, removed: 0 } })
+    }
+    for (const p of baseTree.keys()) {
+      if (nextTree.has(p)) continue
+      const oldText = this.safeText(repo, baseTree.get(p)!.sha)
+      if (patched < RepositoriesService.PATCH_MAX_FILES && oldText !== null) {
+        const patch = unifiedPatch(oldText, '')
+        files.push({
+          path: p,
+          kind: 'deleted',
+          patch: patch.text
+            ? `diff --git a/${p} b/${p}\n--- a/${p}\n+++ /dev/null\n${patch.text}`
+            : '',
+          stats: patch.stats,
+        })
+        patched++
+        continue
+      }
+      files.push({ path: p, kind: 'deleted', patch: '', stats: { added: 0, removed: 0 } })
+    }
+    return { commit_sha: resolved.sha, parent_sha: parentSha, files }
+  }
+
+  /** Decodes a blob for patching; returns null when binary or oversized. */
+  private safeText(repo: GitRepository, sha: string): string | null {
+    const blob = repo.readBlob(sha)
+    if (blob.length > RepositoriesService.PATCH_MAX_FILE_BYTES || isBinary(blob)) return null
+    return blob.toString('utf8')
+  }
+
+  /** Best common ancestor approximation: newest commit reachable from both tips. */
+  private mergeBase(repo: GitRepository, a: string, b: string): string | null {
+    const ancestorsA = new Set<string>()
+    const frontierA: string[] = [a]
+    let guard = 0
+    while (frontierA.length > 0 && guard++ < 5_000) {
+      const sha = frontierA.shift()!
+      if (ancestorsA.has(sha)) continue
+      ancestorsA.add(sha)
+      frontierA.push(...repo.readCommit(sha).parents)
+    }
+    // Walk B newest-first; the first commit inside A's ancestor set wins.
+    const seenB = new Set<string>()
+    const frontierB: Array<{ sha: string; time: number }> = [{ sha: b, time: repo.readCommit(b).committer.timestamp.time }]
+    while (frontierB.length > 0 && guard++ < 10_000) {
+      frontierB.sort((x, y) => y.time - x.time)
+      const { sha } = frontierB.shift()!
+      if (seenB.has(sha)) continue
+      seenB.add(sha)
+      if (ancestorsA.has(sha)) return sha
+      for (const p of repo.readCommit(sha).parents) {
+        if (!seenB.has(p)) frontierB.push({ sha: p, time: repo.readCommit(p).committer.timestamp.time })
+      }
+    }
+    return null
+  }
+
+  /** Commits reachable from `tip` but NOT from `exclude` (bounded). */
+  private reachableSet(repo: GitRepository, tip: string, exclude: string | null): Set<string> {
+    const excluded = new Set<string>()
+    if (exclude) {
+      const f: string[] = [exclude]
+      let g = 0
+      while (f.length > 0 && g++ < 5_000) {
+        const s = f.shift()!
+        if (excluded.has(s)) continue
+        excluded.add(s)
+        f.push(...repo.readCommit(s).parents)
+      }
+    }
+    const out = new Set<string>()
+    const f: string[] = [tip]
+    let g = 0
+    while (f.length > 0 && g++ < 5_000) {
+      const s = f.shift()!
+      if (out.has(s) || excluded.has(s)) continue
+      out.add(s)
+      f.push(...repo.readCommit(s).parents)
+    }
+    return out
+  }
+
   // ---------------------------------------------------------------- internals --
 
   private identityOf(actor: Actor | null): CommitIdentity {

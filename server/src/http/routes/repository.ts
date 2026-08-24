@@ -195,7 +195,136 @@ export function registerRepositoryRoutes(app: FastifyInstance): void {
     })
   })
 
+  // -- branches -----------------------------------------------------------------
+  // Branch names may contain slashes; wildcard routes capture them whole and
+  // the client percent-encodes each segment.
+
+  app.get('/api/v1/projects/:id/repository/branches', async (req) => {
+    const q = req.query as { search?: string; sort?: string; limit?: string }
+    return {
+      branches: repos.listBranchesForBrowse(req.actor, projectId(req), {
+        search: q.search?.slice(0, 100),
+        sort: q.sort === 'recent' ? 'recent' : 'name',
+        limit: Number(q.limit ?? 100),
+      }),
+    }
+  })
+
+  app.post('/api/v1/projects/:id/repository/branches', { preHandler: auth }, async (req, reply) => {
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const result = repos.createBranch(req.actor, projectId(req), {
+      name: String(body.name ?? ''),
+      start_point: typeof body.start_point === 'string' ? body.start_point : null,
+    })
+    reply.code(201)
+    return result
+  })
+
+  app.delete('/api/v1/projects/:id/repository/branches/*', { preHandler: auth }, async (req) => {
+    const name = decodeWildcard((req.params as Record<string, string>)['*'] ?? '')
+    const q = req.query as { expected_old?: string }
+    repos.deleteBranch(req.actor, projectId(req), name, typeof q.expected_old === 'string' ? q.expected_old : undefined)
+    return { ok: true, branch: name }
+  })
+
+  app.post('/api/v1/projects/:id/repository/branches/*/rename', { preHandler: auth }, async (req) => {
+    const oldName = decodeWildcard((req.params as Record<string, string>)['*'] ?? '')
+    const body = (req.body ?? {}) as Record<string, unknown>
+    return repos.renameBranch(req.actor, projectId(req), oldName, String(body.new_name ?? ''))
+  })
+
+  // -- default branch ---------------------------------------------------------------
+
+  app.put('/api/v1/projects/:id/repository/default_branch', { preHandler: auth }, async (req) => {
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const res = repos.setDefaultBranch(req.actor, projectId(req), String(body.name ?? ''))
+    return { default_branch: res.project.default_branch, previous: res.previous }
+  })
+
+  // -- compare --------------------------------------------------------------------------
+
+  app.get('/api/v1/projects/:id/repository/compare', async (req) => {
+    const q = req.query as { from?: string; to?: string; with_patches?: string }
+    return repos.compareRefs(
+      req.actor, projectId(req),
+      String(q.from ?? ''), String(q.to ?? ''),
+      { with_patches: q.with_patches === '1' || q.with_patches === 'true' },
+    )
+  })
+
+  // -- commit diff ----------------------------------------------------------------------------
+
+  app.get('/api/v1/projects/:id/repository/commit/:sha/diff', async (req) => {
+    const { sha } = req.params as { sha: string }
+    return repos.commitDiff(req.actor, projectId(req), sha)
+  })
+
+  // -- tags (list/create/delete; "tag a commit" = create with ref=<sha>) ---------------
+
+  app.get('/api/v1/projects/:id/repository/tags', async (req) => {
+    return { tags: repos.listTags(req.actor, projectId(req)) }
+  })
+
+  app.post('/api/v1/projects/:id/repository/tags', { preHandler: auth }, async (req, reply) => {
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const result = repos.createTag(req.actor, projectId(req), {
+      name: String(body.name ?? ''),
+      ref: String(body.ref ?? body.target ?? ''),
+      message: typeof body.message === 'string' ? body.message : null,
+    })
+    reply.code(201)
+    return result
+  })
+
+  app.delete('/api/v1/projects/:id/repository/tags/*', { preHandler: auth }, async (req) => {
+    const name = decodeWildcard((req.params as Record<string, string>)['*'] ?? '')
+    repos.deleteTag(req.actor, projectId(req), name)
+    return { ok: true, tag: name }
+  })
+
+  // -- protected-branch rules (management centralized in the service) ---------------------
+
+  app.get('/api/v1/projects/:id/protected_branches2', async (req) => {
+    void req
+    throw new AppError(404, 'Not found')
+  })
+
+  app.put('/api/v1/projects/:id/repository/protected_branches', { preHandler: auth }, async (req) => {
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const level = String(body.push_access_level ?? 'maintainer')
+    if (!['no_one', 'maintainer'].includes(level)) {
+      throw new AppError(400, "push_access_level must be 'no_one' or 'maintainer'")
+    }
+    const rules = repos.setProtection(req.actor, projectId(req), {
+      name: String(body.name ?? ''),
+      level: level as 'no_one' | 'maintainer',
+    })
+    return rules
+  })
+
+  app.get('/api/v1/projects/:id/repository/protected_branches', async (req) => {
+    const id = projectId(req)
+    repos.open(req.actor, id) // read-gate
+    return app.store.protectedBranches.listForProject(id)
+  })
+
+  app.delete('/api/v1/projects/:id/repository/protected_branches/*', { preHandler: auth }, async (req) => {
+    const name = decodeWildcard((req.params as Record<string, string>)['*'] ?? '')
+    const rules = repos.removeProtection(req.actor, projectId(req), name)
+    return rules
+  })
+
   // -- helpers ---------------------------------------------------------------------------------------------
+
+  function decodeWildcard(raw: string): string {
+    // Wildcard params arrive with slashes intact; segments were individually
+    // encoded by the client. Decode the whole tail once.
+    try {
+      return decodeURIComponent(raw)
+    } catch {
+      return raw
+    }
+  }
 
   async function streamArchive(req: FastifyRequest, reply: import('fastify').FastifyReply, rawPath: string): Promise<void> {
     const { ref } = req.params as { ref: string }
