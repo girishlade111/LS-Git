@@ -255,6 +255,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   registerAccountRoutes(app)
   registerProjectRoutes(app)
   registerRepositoryRoutes(app)
+  registerForkRoutes(app)
   registerUploadRoutes(app)
   registerUploadSessionRoutes(app)
 
