@@ -290,6 +290,9 @@ describe('permission denial and protected branches', () => {
 
   it('enforces PROTECTED BRANCH rules on web edits while side branches stay open', async () => {
     const s = await setup()
+    // Demote alice to a plain owner (no instance-admin bypass) so the
+    // no_one rule applies to her too.
+    s.app.store.db.run('UPDATE users SET admin = 0 WHERE id = ?', s.owner.userId)
     s.app.store.protectedBranches.set(s.projectId, 'main', 'no_one')
 
     const blocked = await postCommit(s, { changes: [{ path: 'blocked.md', content: 'x' }], branch: 'main' })
