@@ -21,6 +21,8 @@
   --ls-accent: #e07856;
   --ls-success: #3ecf5e;
   --ls-danger: #e5484d;
+  --ls-success-muted: #2f7d44;  /* calm progress fills, dense success lists */
+  --ls-danger-muted: #a8434a;   /* danger accents in dense lists */
 
   /* Alpha derivatives of palette colors (hover/active/tint fills) */
   --ls-hover: rgba(232, 232, 232, 0.05);
