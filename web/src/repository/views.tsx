@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Badge } from '../design-system/Badge'
 import { Button } from '../design-system/Button'
+import { DiffViewer } from '../design-system/DiffViewer'
 import { EmptyState } from '../design-system/EmptyState'
 import { Icon } from '../design-system/Icon'
 import { IconButton } from '../design-system/IconButton'
