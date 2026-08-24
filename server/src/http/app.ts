@@ -10,6 +10,7 @@ import { parsePersonalAccessToken, tokenDigest } from '../lib/crypto.js'
 import type { AppConfig } from '../config.js'
 import { ProjectsService } from '../services/projects.js'
 import { RepositoriesService } from '../services/repositories.js'
+import { ForksService } from '../services/forks.js'
 import { UploadService } from '../services/uploads.js'
 import { ResumableUploadService } from '../services/resumable.js'
 
@@ -25,6 +26,7 @@ declare module 'fastify' {
     credentials: CredentialsService
     projects: ProjectsService
     repositories: RepositoriesService
+    forks: ForksService
     uploads: UploadService
     uploadSessions: ResumableUploadService
     authRateLimiter: RateLimiter
@@ -94,6 +96,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   app.credentials = new CredentialsService(services, cfg.patMaxTtlDays, cfg.patDefaultTtlDays)
   app.projects = new ProjectsService(services, cfg)
   app.repositories = new RepositoriesService(services, cfg, app.projects.storage)
+  app.forks = new ForksService(services, cfg, app.projects.storage)
   app.uploads = new UploadService(services, cfg, app.projects.storage)
   app.uploadSessions = new ResumableUploadService(
     services,
