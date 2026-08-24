@@ -497,29 +497,24 @@ describe('finalize — idempotency, structured failures, no partial commits', ()
   })
 
   it('honors protected branches and lets the same session re-route to a branch', async () => {
-    const { app, aliceSession, bobSession } = await setup()
+    const { app, bobSession } = await setup()
     const project = app.store.projects.byOwnerPath('bob', 'resumable')!
     await authed(app, 'PUT', `/api/v1/projects/${project.id}/protected_branches`, {
       session: bobSession,
       payload: { name: 'main', push_access_level: 'no_one' },
     })
-    const mainBefore = readFileSyncSafe(project.disk_path, 'main')
+    const mainRef = join(app.cfg.repositoriesRoot, project.disk_path, 'refs', 'heads', 'main')
+    const mainBefore = existsSync(mainRef) ? (await import('node:fs')).readFileSync(mainRef, 'utf8').trim() : null
 
-    function readFileSyncSafe(diskPath: string, branch: string): string | null {
-      const ref = join(app.cfg.repositoriesRoot, diskPath, 'refs', 'heads', ...branch.split('/'))
-      return existsSync(ref) ? require('node:fs').readFileSync(ref, 'utf8').trim() : null
-    }
+    const { sid } = await readySession(app, bobSession, 1)
 
-    const { sid } = await readySession.call(null, appProxy(app), bobSession, 1)
     const blocked = await finalize(app, bobSession, project.id, sid, { commit_message: 'to main' })
-    expect(blocked.status).toBe(409)
-    // Structured code surfaces through extras.
-    expect((blocked.body.items ?? undefined) === undefined).toBe(true)
-    const errCode = (blocked.body as { code?: string }).code ?? ''
-    expect(errCode === '' || errCode === 'protected_branch' || errCode === 'session_incomplete').toBe(true)
-    expect(join(app.cfg.repositoriesRoot, project.disk_path, 'refs', 'heads', 'main')).toBeTruthy()
-    expect(readFileSyncSafe(project.disk_path, 'main')).toBe(mainBefore)
+    expect(blocked.status).toBe(403)
+    expect(blocked.body.code ?? '').toBe('protected_branch')
+    // Ref untouched — the denial happened before any git mutation.
+    expect(existsSync(mainRef) ? (await import('node:fs')).readFileSync(mainRef, 'utf8').trim() : null).toBe(mainBefore)
 
+    // Same staged session reroutes onto an unprotected branch without restaging.
     const rerouted = await finalize(app, bobSession, project.id, sid, {
       new_branch: 'feature/import',
       start_branch: 'main',
@@ -527,7 +522,6 @@ describe('finalize — idempotency, structured failures, no partial commits', ()
     })
     expect(rerouted.status).toBe(201)
     expect(rerouted.body.branch).toBe('feature/import')
-    void aliceSession
   })
 
   it('rejects empty results (all-identical replace)', async () => {
