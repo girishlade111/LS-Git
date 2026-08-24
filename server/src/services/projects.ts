@@ -297,6 +297,7 @@ export class ProjectsService {
     const newPath = this.storage.diskPathFor(project.id)
     this.db.transaction(() => {
       this.db.run('UPDATE projects SET disk_path = ?, initialized = 1 WHERE id = ?', newPath, project.id)
+      this.s.protectedBranches.ensure(project.id, spec.default_branch ?? template.default_branch, 'maintainer')
       const topics = this.s.topics.listForProject(template.id)
       if (topics.length > 0) this.s.topics.setForProject(project.id, topics.slice(0, this.cfg.maxTopicsPerProject))
       if (spec.topics?.length) this.s.topics.setForProject(project.id, spec.topics)
