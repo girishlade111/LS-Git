@@ -787,19 +787,3 @@ function expiredError(): AppError {
 function closedError(state: string): AppError {
   return new AppError(409, `Upload session is ${state} and no longer accepts transfers`, 'session_closed')
 }
-
-function resolveRef(absRepo: string, branch: string): string | null {
-  const refFile = join(absRepo, 'refs', 'heads', branch)
-  if (!existsSync(refFile)) return null
-  return readFileSync(refFile, 'utf8').trim() || null
-}
-
-function writeRef(absRepo: string, branch: string, sha: string): void {
-  const parts = branch.split('/')
-  const dir = join(absRepo, 'refs', 'heads', ...parts.slice(0, -1))
-  mkdirSync(dir, { recursive: true })
-  const finalPath = join(dir, parts[parts.length - 1]!)
-  const tmp = `${finalPath}.tmp-${randomUUID()}`
-  writeFileSync(tmp, `${sha}\n`, 'utf8')
-  renameSync(tmp, finalPath)
-}
