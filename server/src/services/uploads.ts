@@ -83,6 +83,7 @@ export interface FinalizeResult {
   commit_sha: string
   committed_files: number
   identical_skipped: number
+  replaced_count: number
   total_bytes: number
   merge_request: { created: false; reason: string }
 }
@@ -592,6 +593,7 @@ export class UploadService {
       commit_sha: result.commitSha,
       committed_files: changes.length,
       identical_skipped: identicalSkipped,
+      replaced_count: replacedPaths.length,
       total_bytes: totalBytes,
       merge_request: {
         created: false,
