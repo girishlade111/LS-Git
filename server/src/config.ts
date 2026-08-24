@@ -47,6 +47,18 @@ export interface AppConfig {
   maxBatchTotalBytes: number
   /** Open upload batches/uploads untouched for longer than this are GC'd (browser-refresh orphans). */
   staleUploadTtlMinutes: number
+
+  // -- Resumable upload sessions (/upload_sessions) -----------------------------
+  /** Hard wall-clock lifetime of an upload session, open or idle. */
+  uploadSessionTtlMinutes: number
+  maxSessionFiles: number
+  maxSessionTotalBytes: number
+  /** Per-user cap on declared bytes across ALL open sessions (storage exhaustion guard). */
+  maxUserStagingBytes: number
+  defaultChunkSize: number
+  minChunkSize: number
+  /** Checksum/size violations tolerated per item before it is terminal-failed. */
+  maxAttemptsPerItem: number
 }
 
 export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
@@ -87,6 +99,13 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     maxBatchFiles: Number(process.env.LSGIT_MAX_BATCH_FILES ?? 5000),
     maxBatchTotalBytes: Number(process.env.LSGIT_MAX_BATCH_BYTES ?? 256 * 1024 * 1024),
     staleUploadTtlMinutes: Number(process.env.LSGIT_STALE_UPLOAD_TTL_MINUTES ?? 24 * 60),
+    uploadSessionTtlMinutes: Number(process.env.LSGIT_UPLOAD_SESSION_TTL_MINUTES ?? 24 * 60),
+    maxSessionFiles: Number(process.env.LSGIT_MAX_SESSION_FILES ?? 5000),
+    maxSessionTotalBytes: Number(process.env.LSGIT_MAX_SESSION_BYTES ?? 256 * 1024 * 1024),
+    maxUserStagingBytes: Number(process.env.LSGIT_MAX_USER_STAGING_BYTES ?? 512 * 1024 * 1024),
+    defaultChunkSize: Number(process.env.LSGIT_DEFAULT_CHUNK_SIZE ?? 8 * 1024 * 1024),
+    minChunkSize: Number(process.env.LSGIT_MIN_CHUNK_SIZE ?? 256 * 1024),
+    maxAttemptsPerItem: Number(process.env.LSGIT_MAX_ATTEMPTS_PER_ITEM ?? 20),
     ...overrides,
   }
   return base
