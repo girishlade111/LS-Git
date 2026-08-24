@@ -171,7 +171,7 @@ export function ForkStatusPanel({
     }>
       <span>
         <Badge variant={report.state === 'up_to_date' ? 'success' : report.state === 'diverged' ? 'danger' : 'neutral'}>
-          {report.state.replace('_', ' ')}
+          {report.state.replace(/_/g, ' ')}
         </Badge>
       </span>
     </Tooltip>
