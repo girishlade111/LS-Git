@@ -225,7 +225,7 @@ export class RepositoriesService {
     if (!message) throw new AppError(400, 'A commit message is required', 'validation_failed')
 
     const repo = this.openEngine(project)
-    const defaultBranch = repo.isEmpty() ? project.default_branch : repo.defaultBranch()
+    const defaultBranch = repo.defaultBranch()
     const targetBranch = String(input.new_branch ?? input.branch ?? defaultBranch)
     const baseBranch = input.new_branch ? String(input.start_branch ?? defaultBranch) : targetBranch
 
@@ -243,10 +243,13 @@ export class RepositoriesService {
       }
     }
 
-    const baseTip =
-      input.new_branch || input.start_branch ? repo.resolveBranch(baseBranch) : undefined
-    if ((input.new_branch || input.start_branch) && !baseTip && baseBranch !== targetBranch) {
-      throw new AppError(400, `Source branch does not exist: ${baseBranch}`, 'branch_missing')
+    // An explicitly named base must exist unless we are simply committing to
+    // the (still empty) default branch — that is the initial-commit flow.
+    if (input.new_branch || input.start_branch) {
+      const hasBase = !!repo.resolveBranch(baseBranch)
+      if (!hasBase && baseBranch !== targetBranch) {
+        throw new AppError(400, `Source branch does not exist: ${baseBranch}`, 'branch_missing')
+      }
     }
 
     let result
