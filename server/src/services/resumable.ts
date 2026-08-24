@@ -612,7 +612,7 @@ export class ResumableUploadService {
       tree: treeSha,
       parents: baseHead ? [baseHead] : [],
       message,
-      identity: { name: user.name ?? user.username, email: `${user.username}@users.lsgit.local` },
+      author: { name: user.name ?? user.username, email: `${user.username}@users.lsgit.local` },
     })
     try {
       repo.updateRef(`refs/heads/${targetBranch}`, commitSha, targetHead ?? null)
