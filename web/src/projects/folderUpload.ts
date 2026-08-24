@@ -237,6 +237,7 @@ export function buildManifest(
   const ordered: ManifestItem[] = []
   const overflow: ManifestItem[] = []
   let accepted = 0
+  let eligibleBytes = 0
   for (const item of items.values()) {
     if (item.status === 'skipped') {
       overflow.push(item)
@@ -248,35 +249,32 @@ export function buildManifest(
       overflow.push(item)
       continue
     }
-    accepted += 1
-    ordered.push(item)
-  }
-
-  const limitErrors: string[] = []
-  for (const item of ordered) {
     if (item.size > limits.max_file_bytes) {
       item.status = 'skipped'
       item.note = `Exceeds ${formatBytes(limits.max_file_bytes)} per-file limit`
       overflow.push(item)
       continue
     }
+    accepted += 1
     eligibleBytes += item.size
+    ordered.push(item)
   }
 
-  const eligibleFiles = ordered.length
+  const limitErrors: string[] = []
+  const emptyDirs = [...collected.emptyDirs]
   if (eligibleBytes > limits.max_batch_total_bytes) {
     limitErrors.push(
       `Selection is ${formatBytes(eligibleBytes)} — above the ${formatBytes(limits.max_batch_total_bytes)} per-upload limit`,
     )
   }
-  if (emptyDirs.length > 0 && collected.files.length > 0 && ordered.length === 0) {
+  if (collected.files.length > 0 && accepted === 0 && collected.emptyDirs.length === 0) {
     limitErrors.push('No uploadable files were found')
   }
 
   return {
     items: [...ordered, ...overflow],
     emptyDirs,
-    eligibleFiles,
+    eligibleFiles: accepted,
     eligibleBytes,
     withinLimits: limitErrors.length === 0,
     limitErrors,
