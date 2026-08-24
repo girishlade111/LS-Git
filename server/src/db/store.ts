@@ -900,16 +900,23 @@ export class ProtectedBranchesRepo {
 }
 
 export class EventsRepo {
-  constructor(private db: Database) {}
+  constructor(private db: Database, private onEmit?: (row: EventRow) => void) {}
 
   emit(projectId: number | null, type: string, payload: Record<string, unknown>): void {
-    this.db.run(
+    const res = this.db.run(
       'INSERT INTO events (project_id, type, payload, created_at) VALUES (?, ?, ?, ?)',
       projectId,
       type,
       JSON.stringify(payload),
       nowIso(),
     )
+    if (this.onEmit) {
+      try {
+        this.onEmit({ id: Number(res.lastInsertRowid), project_id: projectId, type, payload })
+      } catch {
+        // Notification fanout must never break the emitting operation.
+      }
+    }
   }
 
   listForProject(projectId: number, limit = 50): Array<Row> {
@@ -918,6 +925,243 @@ export class EventsRepo {
       projectId,
       limit,
     )
+  }
+}
+
+export interface EventRow {
+  id: number
+  project_id: number | null
+  type: string
+  payload: Record<string, unknown>
+}
+
+// ---------------------------------------------------------------------------
+// Social discovery: stars, watches, notification preferences, inbox.
+// ---------------------------------------------------------------------------
+
+export class StarsRepo {
+  constructor(private db: Database) {}
+
+  /** Idempotent; returns true only when THIS call created the star. */
+  star(userId: number, projectId: number): boolean {
+    const res = this.db.run(
+      `INSERT OR IGNORE INTO stars (user_id, project_id, created_at) VALUES (?, ?, ?)`,
+      userId,
+      projectId,
+      nowIso(),
+    )
+    return res.changes > 0
+  }
+
+  unstar(userId: number, projectId: number): boolean {
+    return this.db.run('DELETE FROM stars WHERE user_id = ? AND project_id = ?', userId, projectId).changes > 0
+  }
+
+  has(userId: number, projectId: number): boolean {
+    return !!this.db.get('SELECT 1 FROM stars WHERE user_id = ? AND project_id = ?', userId, projectId)
+  }
+
+  count(projectId: number): number {
+    return Number((this.db.get('SELECT COUNT(*) AS c FROM stars WHERE project_id = ?', projectId) as Row).c)
+  }
+
+  listByUser(userId: number): Array<ProjectRow> {
+    return this.db.all(
+      `SELECT p.* FROM projects p JOIN stars s ON s.project_id = p.id
+        WHERE s.user_id = ? ORDER BY s.created_at DESC`,
+      userId,
+    ) as unknown as Array<ProjectRow>
+  }
+}
+
+export type WatchLevel = 'disabled' | 'participating' | 'mention' | 'watch'
+
+export class WatchSubscriptionsRepo {
+  constructor(private db: Database) {}
+
+  set(userId: number, projectId: number, level: WatchLevel): void {
+    const now = nowIso()
+    this.db.run(
+      `INSERT INTO watch_subscriptions (user_id, project_id, level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, project_id) DO UPDATE SET level = excluded.level, updated_at = excluded.updated_at`,
+      userId,
+      projectId,
+      level,
+      now,
+      now,
+    )
+  }
+
+  /** Removing the row returns the user to their global default. */
+  unset(userId: number, projectId: number): void {
+    this.db.run('DELETE FROM watch_subscriptions WHERE user_id = ? AND project_id = ?', userId, projectId)
+  }
+
+  get(userId: number, projectId: number): WatchLevel | null {
+    const row = this.db.get(
+      'SELECT level FROM watch_subscriptions WHERE user_id = ? AND project_id = ?',
+      userId,
+      projectId,
+    ) as Row | undefined
+    return row ? (row.level as WatchLevel) : null
+  }
+
+  listForProject(projectId: number, level?: WatchLevel): Array<{ user_id: number; level: WatchLevel }> {
+    const rows = level
+      ? this.db.all('SELECT user_id, level FROM watch_subscriptions WHERE project_id = ? AND level = ?', projectId, level)
+      : this.db.all('SELECT user_id, level FROM watch_subscriptions WHERE project_id = ?', projectId)
+    return rows as unknown as Array<{ user_id: number; level: WatchLevel }>
+  }
+}
+
+/** Reserved project_id sentinel meaning "the user's global default". */
+export const GLOBAL_PREF_PROJECT_ID = 0
+
+export class NotificationPreferencesRepo {
+  constructor(private db: Database) {}
+
+  set(
+    userId: number,
+    projectId: number | null,
+    level: WatchLevel,
+    mutedEvents: string[] = [],
+  ): void {
+    const pid = projectId ?? GLOBAL_PREF_PROJECT_ID
+    this.db.run(
+      `INSERT INTO notification_preferences (user_id, project_id, level, muted_events, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, project_id) DO UPDATE SET
+         level = excluded.level, muted_events = excluded.muted_events, updated_at = excluded.updated_at`,
+      userId,
+      pid,
+      level,
+      JSON.stringify(mutedEvents),
+      nowIso(),
+    )
+  }
+
+  getForProject(userId: number, projectId: number): { level: WatchLevel; muted_events: string[] } | null {
+    const row = this.db.get(
+      'SELECT level, muted_events FROM notification_preferences WHERE user_id = ? AND project_id = ?',
+      userId,
+      projectId,
+    ) as Row | undefined
+    if (!row) return null
+    return { level: row.level as WatchLevel, muted_events: JSON.parse(String(row.muted_events)) as string[] }
+  }
+
+  getGlobal(userId: number): { level: WatchLevel; muted_events: string[] } | null {
+    return this.getForProject(userId, GLOBAL_PREF_PROJECT_ID)
+  }
+
+  /**
+   * Resolution chain: explicit repository preference → global preference →
+   * built-in default ('participating', GitLab parity). Global mutes apply on
+   * top of any resolution.
+   */
+  resolve(userId: number, projectId: number): { level: WatchLevel; muted_events: string[] } {
+    const global = this.getGlobal(userId)
+    const specific = this.getForProject(userId, projectId)
+    const level = specific?.level ?? global?.level ?? 'participating'
+    const muted = [...new Set([...(global?.muted_events ?? []), ...(specific?.muted_events ?? [])])]
+    return { level, muted_events: muted }
+  }
+}
+
+export type NotificationType =
+  | 'push'
+  | 'issue'
+  | 'merge_request'
+  | 'discussion'
+  | 'mention'
+  | 'review_request'
+  | 'release'
+  | 'deployment'
+  | 'workflow'
+  | 'security_alert'
+  | 'fork'
+
+export interface NotificationRow {
+  id: number
+  user_id: number
+  project_id: number | null
+  type: NotificationType
+  title: string
+  body: string | null
+  url: string | null
+  actor_user_id: number | null
+  dedupe_key: string
+  read_at: string | null
+  created_at: string
+}
+
+export class NotificationsRepo {
+  constructor(private db: Database) {}
+
+  /** Deduped insert; returns true only when THIS call created the row. */
+  insert(n: Omit<NotificationRow, 'id' | 'read_at' | 'created_at'> & { created_at?: string }): boolean {
+    const res = this.db.run(
+      `INSERT OR IGNORE INTO notifications
+         (user_id, project_id, type, title, body, url, actor_user_id, dedupe_key, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      n.user_id,
+      n.project_id,
+      n.type,
+      n.title,
+      n.body,
+      n.url,
+      n.actor_user_id,
+      n.dedupe_key,
+      n.created_at ?? nowIso(),
+    )
+    return res.changes > 0
+  }
+
+  listForUser(
+    userId: number,
+    opts: { unreadOnly?: boolean; type?: string; projectId?: number; limit?: number } = {},
+  ): Array<NotificationRow> {
+    const clauses: string[] = ['user_id = ?']
+    const params: SqlParam[] = [userId]
+    if (opts.unreadOnly) clauses.push('read_at IS NULL')
+    if (opts.type) clauses.push('type = ?')
+    if (opts.projectId !== undefined) clauses.push('project_id = ?')
+    params.push(opts.limit ?? 50)
+    return this.db.all(
+      `SELECT * FROM notifications WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC, id DESC LIMIT ?`,
+      ...params,
+    ) as unknown as Array<NotificationRow>
+  }
+
+  unreadCount(userId: number, projectId?: number): number {
+    const row = projectId !== undefined
+      ? (this.db.get('SELECT COUNT(*) AS c FROM notifications WHERE user_id = ? AND project_id = ? AND read_at IS NULL', userId, projectId) as Row)
+      : (this.db.get('SELECT COUNT(*) AS c FROM notifications WHERE user_id = ? AND read_at IS NULL', userId) as Row)
+    return Number(row.c)
+  }
+
+  markRead(userId: number, id: number): boolean {
+    return this.db.run(
+      'UPDATE notifications SET read_at = ? WHERE user_id = ? AND id = ? AND read_at IS NULL',
+      nowIso(),
+      userId,
+      id,
+    ).changes > 0
+  }
+
+  markUnread(userId: number, id: number): boolean {
+    return this.db.run(
+      'UPDATE notifications SET read_at = NULL WHERE user_id = ? AND id = ? AND read_at IS NOT NULL',
+      userId,
+      id,
+    ).changes > 0
+  }
+
+  markAllRead(userId: number, projectId?: number): number {
+    return projectId !== undefined
+      ? this.db.run('UPDATE notifications SET read_at = ? WHERE user_id = ? AND project_id = ? AND read_at IS NULL', nowIso(), userId, projectId).changes
+      : this.db.run('UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL', nowIso(), userId).changes
   }
 }
 

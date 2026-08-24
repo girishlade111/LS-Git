@@ -291,4 +291,58 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
       CREATE INDEX idx_projects_forked_from ON projects(forked_from_project_id);
     `,
   },
+  {
+    version: 7,
+    sql: `
+      -- Social discovery primitives: stars, watches, notification prefs, inbox.
+
+      CREATE TABLE stars (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, project_id)
+      );
+      CREATE INDEX idx_stars_project ON stars(project_id);
+
+      -- Per-user watch level for a repository. Absent row = the user's global
+      -- default (itself absent = 'participating', GitLab parity).
+      CREATE TABLE watch_subscriptions (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        level TEXT NOT NULL CHECK (level IN ('disabled','participating','mention','watch')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, project_id)
+      );
+      CREATE INDEX idx_watch_project ON watch_subscriptions(project_id);
+
+      -- Repository-level notification preferences. project_id = 0 is the
+      -- reserved GLOBAL row (SQLite PKs allow no NULLs); resolution order:
+      -- project row → global row → built-in default 'participating'.
+      CREATE TABLE notification_preferences (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        project_id INTEGER NOT NULL DEFAULT 0,
+        level TEXT NOT NULL CHECK (level IN ('disabled','participating','mention','watch')),
+        muted_events TEXT NOT NULL DEFAULT '[]',
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, project_id)
+      );
+
+      CREATE TABLE notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT,
+        url TEXT,
+        actor_user_id INTEGER,
+        dedupe_key TEXT NOT NULL UNIQUE,
+        read_at TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_notifications_inbox ON notifications(user_id, created_at DESC);
+      CREATE INDEX idx_notifications_user_unread ON notifications(user_id) WHERE read_at IS NULL;
+    `,
+  },
 ]
