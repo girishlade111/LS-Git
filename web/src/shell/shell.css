@@ -40,6 +40,18 @@
   font-size: 11px;
   font-weight: 700;
 }
+.ls-sidebar__brand-mark {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--ls-radius-sm);
+  background: var(--ls-accent);
+  color: var(--ls-bg);
+  font-size: 11px;
+  font-weight: 700;
+}
 .ls-sidebar__section { padding: 12px 8px; }
 .ls-sidebar__label {
   padding: 4px 10px;
