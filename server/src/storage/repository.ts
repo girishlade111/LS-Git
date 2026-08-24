@@ -597,20 +597,13 @@ export class GitRepository {
 
   /**
    * Resolves a ref: loose file wins over packed-refs (git semantics).
-   * Symbolic refs (HEAD) resolve through their target chain (bounded).
+   * Returns null when the ref does not exist.
    */
   readRef(refRaw: string): string | null {
-    let ref = validateRefName(refRaw)
-    for (let hops = 0; hops < 5; hops++) {
-      const loose = this.readLoose(ref)
-      if (loose) return loose
-      const packed = this.parsePackedRefs().get(ref)
-      if (packed) return packed
-      // Symbolic? Only meaningful outside refs/* (HEAD); refs/* are direct.
-      break
-    }
-    void ref
-    return null
+    const ref = validateRefName(refRaw)
+    const loose = this.readLoose(ref)
+    if (loose) return loose
+    return this.parsePackedRefs().get(ref) ?? null
   }
 
   /**

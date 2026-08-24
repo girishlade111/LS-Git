@@ -8,7 +8,9 @@ import { join } from 'node:path'
  * commits without shelling out to the `git` binary. Produces standard,
  * clonable repositories (format per gitrepository-layout(7)).
  *
- * Owned by the storage abstraction; feature code must not use this directly.
+ * SUPERSEDED in production code by storage/repository.ts (the full engine);
+ * retained because tests use its readers for byte-level verification of
+ * engine output.
  */
 
 export type ObjectType = 'blob' | 'tree' | 'commit'
