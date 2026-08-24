@@ -62,10 +62,12 @@ describe('normalizeRelativePath — cross-platform browser paths', () => {
 
 describe('collectFromFileList — webkitdirectory input parity', () => {
   it('uses webkitRelativePath when present and falls back to the file name', () => {
-    const { files, emptyDirs } = collectFromFileList([
-      { name: 'main.ts', rel: 'proj/src/main.ts' },
-      { name: 'loose.txt' },
-    ] as Array<{ name: string; rel?: string }>)
+    const { files, emptyDirs } = collectFromFileList(
+      fakeList([
+        { name: 'main.ts', rel: 'proj/src/main.ts' },
+        { name: 'loose.txt' },
+      ]),
+    )
     expect(emptyDirs).toEqual([])
     expect(files.map((f) => f.relativePath)).toEqual(['proj/src/main.ts', 'loose.txt'])
   })

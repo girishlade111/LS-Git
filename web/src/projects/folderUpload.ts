@@ -218,8 +218,6 @@ export function buildManifest(
   limits: BatchLimits,
 ): BuiltManifest {
   const items = new Map<string, ManifestItem>()
-  const emptyDirs = [...collected.emptyDirs]
-  let eligibleBytes = 0
 
   for (const { file, relativePath } of collected.files) {
     const first = items.get(relativePath)
