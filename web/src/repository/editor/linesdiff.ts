@@ -156,10 +156,11 @@ export function unifiedDiff(
   for (const group of groups) {
     const first = nums[group[0]!]!
     const last = nums[group[group.length - 1]!]!
-    const oldStart = first.oldNo ?? Math.max(1, (last.oldNo ?? 1))
-    const newStart = first.newNo ?? Math.max(1, (last.newNo ?? 1))
     const oldCount = group.filter((i) => ops[i]!.type !== 'insert').length
     const newCount = group.filter((i) => ops[i]!.type !== 'delete').length
+    // Unified-diff convention: an empty side starts at 0 (e.g. @@ -0,0 +1,5 @@).
+    const oldStart = oldCount === 0 ? 0 : (first.oldNo ?? last.oldNo ?? 1)
+    const newStart = newCount === 0 ? 0 : (first.newNo ?? last.newNo ?? 1)
     out += `@@ -${oldStart},${oldCount} +${newStart},${newCount} @@\n`
     for (const i of group) {
       const op = ops[i]!
