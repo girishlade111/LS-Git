@@ -576,7 +576,7 @@ export class ResumableUploadService {
     }
 
     // ---- git mutation: blobs (already buffered by verification) → tree → commit → ref.
-    for (const [path, content] of assembled) {
+    for (const content of assembled.values()) {
       writeObject(objectsDir, 'blob', content)
     }
     const merged = new Map(baseEntries)
