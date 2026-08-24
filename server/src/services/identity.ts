@@ -61,6 +61,8 @@ export interface IdentityServices {
   redirects: RedirectsRepo
   uploads: UploadsRepo
   uploadBatches: UploadBatchesRepo
+  uploadSessions: UploadSessionsRepo
+  uploadSessionItems: UploadSessionItemsRepo
   protectedBranches: ProtectedBranchesRepo
   events: EventsRepo
 }
