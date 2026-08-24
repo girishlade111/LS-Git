@@ -96,6 +96,31 @@ Phase 4–5 — ecosystem (endpoints defined when phase starts):
 Packages registries (npm/maven/pypi/generic first), Pages settings,
 security scanning reports ingestion, gists, AI assist endpoints.
 
+### 3.5 Repository code browser (IMPLEMENTED)
+
+LSGit's own stable URL scheme (not GitLab's `/-/blob/...` shape). `:ref` accepts
+branch names, tag names and full SHAs — a SHA in the ref position IS the permalink
+form. Line permalinks append `#L<n>` on the UI blob page. All reads authorize via
+the central authz service before touching disk.
+
+```
+GET /api/v1/projects/:id/repository/refs                       branches+tags (selectors)
+GET /api/v1/projects/:id/repository/tree/:ref(?path=&page=&per_page=)
+GET /api/v1/projects/:id/repository/blob/:ref/*                metadata + inline text (≤512 KB)
+GET /api/v1/projects/:id/repository/raw/:ref/*                 raw bytes (≤100 MB, nosniff+CSP)
+GET /api/v1/projects/:id/repository/download/:ref(/dir)        tar.gz of ref or subdirectory
+GET /api/v1/projects/:id/repository/commits/:ref(?path=&page=) path-scoped history keeps deletions
+GET /api/v1/projects/:id/repository/commit/:sha                detail + changed-file kinds + stats
+GET /api/v1/projects/:id/repository/blame/:ref/*               line→commit ranges (LCS foundation)
+GET /api/v1/projects/:id/repository/search/:ref(?q=&content=)  filename search; opt-in bounded grep
+```
+
+Behavioral notes: directories list dirs-first with pagination (`per_page` ≤ 200);
+binary files are sniffed (NUL byte / invalid UTF-8) and never inlined; large files
+return `too_large` flags so the UI offers raw/download; deleted paths keep their
+history with a terminal `deleted` event. The web client lives in
+`web/src/repository/` and renders through design tokens only.
+
 ## 4. GraphQL principles
 
 - Schema-first, generated SDL committed to repo; deprecation via `@deprecated`.
