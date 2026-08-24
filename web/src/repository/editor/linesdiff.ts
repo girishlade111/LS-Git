@@ -88,6 +88,11 @@ function hashOps(a: string[], b: string[]): Array<Op> {
 
 const CONTEXT_LINES = 3
 
+export interface DiffStats {
+  added: number
+  removed: number
+}
+
 /**
  * Builds a unified-diff text between two file versions.
  * Empty `oldText` produces new-file output; empty `newText` a deletion.
