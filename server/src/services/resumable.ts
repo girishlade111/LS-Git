@@ -520,10 +520,12 @@ export class ResumableUploadService {
         if (baseEntries.has(item.file_path)) conflicts.push(item.file_path)
       }
       if (conflicts.length > 0) {
-        throw Object.assign(
-          new AppError(409, conflicts.length === 1 ? `'${conflicts[0]}' already exists` : `${conflicts.length} files already exist in this branch`, 'file_exists'),
-          { code: 'file_exists', conflict_paths: conflicts.slice(0, 50), extras: { conflict_paths: conflicts.slice(0, 50) } },
-        ) as AppError & { conflict_paths: string[] }
+        throw new AppError(
+          409,
+          conflicts.length === 1 ? `'${conflicts[0]}' already exists` : `${conflicts.length} files already exist in this branch`,
+          'file_exists',
+          { code: 'file_exists', conflict_paths: conflicts.slice(0, 50), conflict_count: conflicts.length },
+        )
       }
     }
 
