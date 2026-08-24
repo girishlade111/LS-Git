@@ -494,12 +494,13 @@ export class UploadService {
 
     this.authorizeRefPush(actor!, project, targetBranch)
 
-    const abs = join(this.cfg.repositoriesRoot, project.disk_path)
-    const objectsDir = join(abs, 'objects')
+    const repo = GitRepository.open(join(this.cfg.repositoriesRoot, project.disk_path))
 
-    // Resolve refs.
-    const baseHead = this.resolveRef(abs, baseBranch)
-    const targetHead = this.resolveRef(abs, targetBranch)
+    // Resolve refs. The observed tips double as CAS expectations for the final
+    // ref write — a concurrent writer between here and the update produces a
+    // 409 instead of a lost update.
+    const baseHead = repo.resolveBranch(baseBranch)
+    const targetHead = repo.resolveBranch(targetBranch)
     if (targetBranch === baseBranch && !targetHead && !baseHead) {
       // Empty repository committing straight to the default branch is fine.
     } else if (!baseHead && targetBranch === baseBranch) {
@@ -508,7 +509,7 @@ export class UploadService {
 
     // Base tip contents as path → blob sha (no byte loading).
     const baseEntries = baseHead
-      ? loadTreeEntries(objectsDir, parseCommit(readObject(objectsDir, baseHead).body).tree)
+      ? repo.flattenTree(repo.readCommit(baseHead).tree)
       : new Map<string, { mode: '100644' | '100755'; sha: string }>()
 
     // Replace-conflict resolution BEFORE any mutation.
