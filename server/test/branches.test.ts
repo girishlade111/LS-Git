@@ -140,11 +140,6 @@ describe('rename', () => {
     await s.repos.createBranch(s.owner, s.projectId, { name: 'old-name' })
     const sha = await s.repos.resolveBranch(s.owner, s.projectId, 'old-name')
 
-    const res = await authed(s.app, 'POST', `${base(s)}/branches/old-name/rename`.replace(/old-name$/, encodeURIComponent('old-name')) + '/rename'.replace(/^\/rename/, '/rename'), {
-      session: s.session, payload: { new_name: 'renamed-branch' },
-    }).catch(() => null)
-    void res
-    // Use service directly for deterministic assertion (route covered below).
     const renamed = s.repos.renameBranch(s.owner, s.projectId, 'old-name', 'renamed-branch')
     expect(renamed.sha).toBe(sha)
 
