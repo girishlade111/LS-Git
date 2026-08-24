@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { readdirSync } from 'node:fs'
 import { AppError } from './identity.js'
 import type { IdentityServices } from './identity.js'
 import type { AppConfig } from '../config.js'
@@ -650,14 +651,8 @@ export class RepositoriesService {
 
 function readdirSafe(dir: string): string[] {
   try {
-    // Lazy import avoidance: readdirSync is cheap enough here.
-    return readdirSyncImpl(dir)
+    return readdirSync(dir)
   } catch {
     return []
   }
-}
-
-import { readdirSync } from 'node:fs'
-function readdirSyncImpl(dir: string): string[] {
-  return readdirSync(dir)
 }
