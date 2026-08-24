@@ -135,9 +135,11 @@ describe('session creation — manifest reception + authorization', () => {
     expect(res.status).toBe(201)
     const items = res.body.items as Array<Record<string, unknown>>
     expect(items).toHaveLength(3)
-    // Boundaries: ceil(20/8)=3 chunks [8,8,4]; zero-byte file is still one chunk.
-    expect(items[0]).toMatchObject({ file_path: 'docs/a.md', chunk_size: 8, chunk_count: 3 })
-    expect(items[2]).toMatchObject({ file_path: 'empty.bin', chunk_count: 1 })
+    const byPath = Object.fromEntries(items.map((i) => [String(i.file_path), i]))
+    // Boundaries: ceil(20/8)=3 chunks [8,8,4]; zero-byte file is one chunk.
+    expect(byPath['docs/a.md']).toMatchObject({ chunk_size: 8, chunk_count: 3 })
+    expect(byPath['deep/nested/b.txt']).toMatchObject({ chunk_size: 8, chunk_count: 1 })
+    expect(byPath['empty.bin']).toMatchObject({ chunk_count: 1 })
     expect(res.body.state).toBe('open')
     expect(typeof res.body.expires_at).toBe('string')
   })
@@ -148,7 +150,8 @@ describe('session creation — manifest reception + authorization', () => {
     for (const bad of ['../evil.txt', '/abs.txt', 'C:\\x.txt', '.git/config', 'a/../../b']) {
       const res = await createSession(app, bobSession, project.id, [{ file_path: bad, size: 1 }])
       expect(res.status, bad).toBe(400)
-      expect(existsSync(stagingDir(app, String(res.body.session_id ?? '')))).toBe(false)
+      // Nothing was created — no session id is ever returned for a rejected manifest.
+      expect(res.body.session_id).toBeUndefined()
     }
     const dup = await createSession(app, bobSession, project.id, [
       { file_path: 'same.txt', size: 1 },
