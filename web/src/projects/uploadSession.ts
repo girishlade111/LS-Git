@@ -224,22 +224,8 @@ export class FolderUploadSession {
       return
     }
 
+    this.workers = []
     const queue = this.items.filter((i) => i.status === 'queued')
-    const CONCURRENCY = 3
-    let cursor = 0
-    const runWorker = async (): Promise<void> => {
-      while (!this.cancelled) {
-        if (this.paused) {
-          await new Promise((r) => setTimeout(r, 150))
-          continue
-        }
-        const item = queue[cursor]
-        cursor += 1
-        if (!item) return
-        await this.processItem(item)
-      }
-    }
-    this.workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, runWorker)
     await Promise.all(this.workers)
 
     if (this.cancelled) return
