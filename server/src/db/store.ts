@@ -906,3 +906,253 @@ export class EventsRepo {
     )
   }
 }
+
+// ---------------------------------------------------------------------------
+// Resumable upload sessions (UPLOADS.md) — chunked, resumable, idempotent.
+// Chunk bytes live in the staging store; rows here are bookkeeping only.
+// ---------------------------------------------------------------------------
+
+export type UploadSessionState = 'open' | 'committed' | 'failed' | 'cancelled' | 'expired'
+export type UploadItemState =
+  | 'pending'
+  | 'transferring'
+  | 'transferred'
+  | 'verified'
+  | 'failed'
+  | 'skipped'
+
+export interface UploadSessionRow {
+  id: string
+  project_id: number
+  user_id: number
+  state: UploadSessionState
+  declared_files: number
+  declared_bytes: number
+  received_bytes: number
+  received_chunks: number
+  committed_branch: string | null
+  committed_sha: string | null
+  committed_files: number | null
+  finalized_at: string | null
+  expires_at: string
+  created_at: string
+  updated_at: string
+}
+
+export interface UploadSessionItemRow {
+  id: string
+  session_id: string
+  file_path: string
+  size: number
+  mime: string
+  last_modified: number | null
+  sha256: string | null
+  chunk_size: number
+  chunk_count: number
+  received_chunks: number
+  received_bytes: number
+  state: UploadItemState
+  attempts: number
+  failure_code: string | null
+  failure_message: string | null
+  created_at: string
+  updated_at: string
+}
+
+export class UploadSessionsRepo {
+  constructor(private db: Database) {}
+
+  create(data: {
+    id: string
+    projectId: number
+    userId: number
+    declaredFiles: number
+    declaredBytes: number
+    expiresAt: string
+  }): UploadSessionRow {
+    const now = nowIso()
+    this.db.run(
+      `INSERT INTO upload_sessions (id, project_id, user_id, declared_files, declared_bytes, expires_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      data.id,
+      data.projectId,
+      data.userId,
+      data.declaredFiles,
+      data.declaredBytes,
+      data.expiresAt,
+      now,
+      now,
+    )
+    return this.byId(data.id)!
+  }
+
+  byId(id: string): UploadSessionRow | undefined {
+    return this.db.get('SELECT * FROM upload_sessions WHERE id = ?', id) as
+      | UploadSessionRow
+      | undefined
+  }
+
+  setState(id: string, state: UploadSessionState): void {
+    this.db.run(
+      'UPDATE upload_sessions SET state = ?, updated_at = ? WHERE id = ?',
+      state,
+      nowIso(),
+      id,
+    )
+  }
+
+  markCommitted(id: string, result: { branch: string; sha: string; files: number }): void {
+    this.db.run(
+      `UPDATE upload_sessions SET state = 'committed', committed_branch = ?, committed_sha = ?,
+         committed_files = ?, finalized_at = ?, updated_at = ? WHERE id = ?`,
+      result.branch,
+      result.sha,
+      result.files,
+      nowIso(),
+      nowIso(),
+      id,
+    )
+  }
+
+  /** Declared bytes across a user's OPEN sessions — the staging quota input. */
+  openDeclaredBytesForUser(userId: number): number {
+    const row = this.db.get(
+      "SELECT COALESCE(SUM(declared_bytes), 0) AS total FROM upload_sessions WHERE user_id = ? AND state = 'open'",
+      userId,
+    ) as Row
+    return Number(row.total)
+  }
+
+  /** Open sessions whose hard TTL has passed (abandonment sweep input). */
+  openExpiredBefore(cutoffIso: string): Array<UploadSessionRow> {
+    return this.db.all(
+      "SELECT * FROM upload_sessions WHERE state = 'open' AND expires_at <= ?",
+      cutoffIso,
+    ) as unknown as Array<UploadSessionRow>
+  }
+}
+
+export class UploadSessionItemsRepo {
+  constructor(private db: Database) {}
+
+  createBatch(
+    sessionId: string,
+    items: Array<{
+      id: string
+      filePath: string
+      size: number
+      mime: string
+      lastModified?: number | null
+      sha256?: string | null
+      chunkSize: number
+      chunkCount: number
+    }>,
+  ): void {
+    const now = nowIso()
+    for (const it of items) {
+      this.db.run(
+        `INSERT INTO upload_session_items
+           (id, session_id, file_path, size, mime, last_modified, sha256, chunk_size, chunk_count, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        it.id,
+        sessionId,
+        it.filePath,
+        it.size,
+        it.mime,
+        it.lastModified ?? null,
+        it.sha256 ?? null,
+        it.chunkSize,
+        it.chunkCount,
+        now,
+        now,
+      )
+    }
+  }
+
+  byId(id: string): UploadSessionItemRow | undefined {
+    return this.db.get('SELECT * FROM upload_session_items WHERE id = ?', id) as
+      | UploadSessionItemRow
+      | undefined
+  }
+
+  listForSession(sessionId: string): Array<UploadSessionItemRow> {
+    return this.db.all(
+      'SELECT * FROM upload_session_items WHERE session_id = ? ORDER BY file_path',
+      sessionId,
+    ) as unknown as Array<UploadSessionItemRow>
+  }
+
+  /**
+   * Advisory progress counters. The staging store is authoritative for which
+   * chunks exist; these numbers exist for cheap status rendering.
+   */
+  recordChunk(id: string, byteDelta: number): void {
+    this.db.transaction(() => {
+      this.db.run(
+        `UPDATE upload_session_items SET
+           received_chunks = received_chunks + 1,
+           received_bytes = received_bytes + ?,
+           state = CASE WHEN received_chunks + 1 >= chunk_count THEN 'transferred' ELSE 'transferring' END,
+           updated_at = ?
+         WHERE id = ?`,
+        byteDelta,
+        nowIso(),
+        id,
+      )
+      this.db.run(
+        `UPDATE upload_sessions SET
+           received_chunks = received_chunks + 1,
+           received_bytes = received_bytes + ?,
+           updated_at = ?
+         WHERE id = (SELECT session_id FROM upload_session_items WHERE id = ?)`,
+        byteDelta,
+        nowIso(),
+        id,
+      )
+    })
+  }
+
+  markVerified(ids: Array<string>): void {
+    const now = nowIso()
+    for (const id of ids) {
+      this.db.run(
+        "UPDATE upload_session_items SET state = 'verified', updated_at = ? WHERE id = ?",
+        now,
+        id,
+      )
+    }
+  }
+
+  markSkipped(ids: Array<string>): void {
+    const now = nowIso()
+    for (const id of ids) {
+      this.db.run(
+        "UPDATE upload_session_items SET state = 'skipped', failure_code = 'excluded', updated_at = ? WHERE id = ?",
+        now,
+        id,
+      )
+    }
+  }
+
+  failItem(id: string, code: string, message: string): void {
+    this.db.run(
+      `UPDATE upload_session_items SET state = 'failed', attempts = attempts + 1,
+         failure_code = ?, failure_message = ?, updated_at = ? WHERE id = ?`,
+      code,
+      message,
+      nowIso(),
+      id,
+    )
+  }
+
+  bumpAttempts(id: string, code: string, message: string): void {
+    this.db.run(
+      `UPDATE upload_session_items SET attempts = attempts + 1,
+         failure_code = ?, failure_message = ?, updated_at = ? WHERE id = ?`,
+      code,
+      message,
+      nowIso(),
+      id,
+    )
+  }
+}
