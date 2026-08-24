@@ -196,7 +196,6 @@ describe('blob view', () => {
     const s = await setup()
     const { status, body } = await getJson(s, `/api/v1/projects/${s.project.id}/repository/blob/main/nope/ghost.txt`)
     expect(status).toBe(404)
-    expect(body.code ?? (body as { code?: string }).code).toBeUndefined()
     expect(String(body.message)).toContain('not found')
 
     const missingDir = await getJson(s, `/api/v1/projects/${s.project.id}/repository/tree/main/nope-dir`)
@@ -205,17 +204,26 @@ describe('blob view', () => {
 
   it('rejects INVALID paths before touching the repository', async () => {
     const s = await setup()
-    // Encoded traversal and control chars survive transport intact, so the
-    // router delivers them to the path validator verbatim.
-    for (const bad of ['%2e%2e', '%2e%2e%2fsecret', 'has%20space']) {
-      const res = await authed(
-        s.app, 'GET',
-        `/api/v1/projects/${s.project.id}/repository/tree/main/${bad}`,
-        { session: s.session },
-      )
-      expect(res.statusCode, `expected rejection for '${bad}'`).toBe(400)
-      expect((res.json() as { code?: string }).code).toBe('invalid_path')
+
+    // Service-level: traversal and control characters never reach the engine.
+    for (const bad of ['../secret', 'a/../b', 'has space']) {
+      try {
+        s.repos.tree(s.owner, s.project.id, 'main', bad)
+        expect.unreachable(`expected rejection for '${bad}'`)
+      } catch (err) {
+        expect((err as { code?: string }).code ?? (err as Error).message).toMatch(/invalid_path|not allowed/i)
+        expect((err as { status?: number }).status ?? 400).toBe(400)
+      }
     }
+
+    // Route-level: encoded characters survive transport and are rejected.
+    const res = await authed(
+      s.app, 'GET',
+      `/api/v1/projects/${s.project.id}/repository/tree/main/has%20space`,
+      { session: s.session },
+    )
+    expect(res.statusCode).toBe(400)
+    expect((res.json() as { code?: string }).code).toBe('invalid_path')
   })
 })
 

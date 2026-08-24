@@ -1,4 +1,3 @@
-import { createReadStream, statSync, rmSync } from 'node:fs'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { AppError } from '../../services/identity.js'
 import { buildArchive, type ArchiveEntry } from '../../storage/archive.js'
@@ -183,16 +182,12 @@ export function registerRepositoryRoutes(app: FastifyInstance): void {
       rootPrefix: `${sanitizeArchiveLabel(project.path)}-${scope}${refLabel}/`,
       fileName: `${project.path}-${scope}${refLabel}.tar.gz`,
       commitTime: new Date(resolved.commit.committer.timestamp.time * 1000),
-      tempDir: app.cfg.uploadsRoot,
     })
 
     reply.header('content-type', 'application/gzip')
     reply.header('content-disposition', `attachment; filename="${result.fileName}"`)
-    void statSync(result.file).size // materialize before streaming
-    const stream = createReadStream(result.file)
-    reply.send(stream)
-    // Cleanup after transfer completes.
-    stream.once('close', () => rmSync(result.file, { force: true }))
+    reply.header('content-length', result.bytes.length)
+    reply.send(result.bytes)
   }
 
   function projectId(req: FastifyRequest): number {

@@ -1,7 +1,4 @@
 import { gzipSync } from 'node:zlib'
-import { writeFileSync, mkdirSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
-import { randomUUID } from 'node:crypto'
 
 /**
  * Archive builder — packs a flattened tree (path → {mode, sha}) into a
@@ -9,8 +6,8 @@ import { randomUUID } from 'node:crypto'
  * for a ref. Reads blob bytes through the caller-supplied accessor so this
  * module stays storage-agnostic and testable.
  *
- * Output goes to a temp file (never buffered in the HTTP response path) that
- * the route streams and then unlinks.
+ * Returns an in-memory Buffer: repository archives are bounded upstream by the
+ * browser layer's searchable-file caps, which keeps peak memory predictable.
  */
 
 export interface ArchiveEntry {
@@ -61,16 +58,16 @@ function pad512(n: number): Buffer {
 }
 
 export interface ArchiveResult {
-  /** Absolute temp file path containing the gzipped tar. Caller must unlink. */
-  file: string
+  /** Gzipped tar bytes ready to serve as the response body. */
+  bytes: Buffer
   fileName: string
   fileCount: number
   uncompressedBytes: number
 }
 
 /**
- * Packs entries into `<fileName>` tar.gz at a server-chosen temp location.
- * Deterministic mtimes (commit time) keep archives reproducible per ref.
+ * Packs entries into `<fileName>` tar.gz. Deterministic mtimes (commit time)
+ * keep archives reproducible per ref.
  */
 export function buildArchive(
   opts: {
@@ -79,7 +76,6 @@ export function buildArchive(
     rootPrefix: string
     fileName: string
     commitTime: Date
-    tempDir: string
   },
 ): ArchiveResult {
   if (opts.entries.length > MAX_ARCHIVE_FILES) {
@@ -104,13 +100,10 @@ export function buildArchive(
     total += content.length
   }
   chunks.push(Buffer.alloc(1024)) // two zero blocks terminate the tar
-  mkdirSync(opts.tempDir, { recursive: true })
-  const file = join(opts.tempDir, `archive-${randomUUID()}.tar.gz`)
-  try {
-    writeFileSync(file, gzipSync(Buffer.concat(chunks)))
-  } catch (err) {
-    rmSync(file, { force: true })
-    throw err
+  return {
+    bytes: gzipSync(Buffer.concat(chunks)),
+    fileName: opts.fileName,
+    fileCount: opts.entries.length,
+    uncompressedBytes: total,
   }
-  return { file, fileName: opts.fileName, fileCount: opts.entries.length, uncompressedBytes: total }
 }
