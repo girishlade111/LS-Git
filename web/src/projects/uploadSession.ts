@@ -103,7 +103,6 @@ export class FolderUploadSession {
   private items: ManifestItem[]
   private fileMap = new Map<string, File>()
   private batchId: string | null = null
-  private limits: BatchLimits
   private phase: SessionPhase = 'ready'
   private paused = false
   private cancelled = false
@@ -113,11 +112,10 @@ export class FolderUploadSession {
   private snapshotCache: SessionSnapshot | null = null
   readonly projectId: number
 
-  constructor(projectId: number, entries: Array<{ item: ManifestItem; file: File }>, limits: BatchLimits) {
+  constructor(projectId: number, entries: Array<{ item: ManifestItem; file: File }>, _limits?: BatchLimits) {
     this.projectId = projectId
     this.items = entries.map((e) => e.item)
     for (const e of entries) this.fileMap.set(e.item.id, e.file)
-    this.limits = limits
   }
 
   get batch(): string | null {
@@ -420,14 +418,14 @@ export class FolderUploadSession {
     } catch (err) {
       const e = err as Error & { status?: number; cancelled?: boolean }
       if (e.cancelled || this.cancelled) {
-        item.status = item.status === 'completed' ? item.status : 'skipped'
+        item.status = 'skipped'
         item.note = item.note ?? 'Cancelled'
         this.notify()
         return
       }
       this.setItem(item.id, {
         status: 'failed',
-        note: e.message === 'size_mismatch' ? 'Transfer interrupted — retry' : e.message,
+        note: e.message,
       })
     }
   }
