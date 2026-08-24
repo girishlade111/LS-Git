@@ -393,17 +393,28 @@ export class UploadService {
 
     this.authorizeRefPush(actor!, project, targetBranch)
 
-    const abs = join(this.cfg.repositoriesRoot, project.disk_path)
-    const objectsDir = join(abs, 'objects')
+    const repo = GitRepository.open(join(this.cfg.repositoriesRoot, project.disk_path))
 
-    const result = this.applyCommit(objectsDir, abs, {
-      actor: actor!,
-      baseBranch,
-      targetBranch,
-      message,
-      replace: !!opts.replace,
-      changes: [{ path: row.file_path, content }],
-    })
+    let result
+    try {
+      result = this.applyCommit(repo, {
+        actor: actor!,
+        baseBranch,
+        targetBranch,
+        message,
+        replace: !!opts.replace,
+        changes: [{ path: row.file_path, content }],
+      })
+    } catch (err) {
+      if (err instanceof RefConflictError || err instanceof RefLockError) {
+        throw new AppError(
+          409,
+          'The branch changed while the commit was being prepared — retry the upload commit',
+          'ref_update_conflict',
+        )
+      }
+      throw err
+    }
 
     this.db.transaction(() => {
       this.s.events.emit(project.id, 'repository.file_committed', {
