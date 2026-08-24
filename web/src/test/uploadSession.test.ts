@@ -97,6 +97,8 @@ async function flush(times = 12): Promise<void> {
 }
 
 beforeEach(() => {
+  // jsdom exposes no session cookie; the CSRF reader just needs the value present.
+  document.cookie = 'lsgit_csrf=test-csrf-token'
   vi.stubGlobal('crypto', { subtle: undefined }) // skip hashing path deterministically
 })
 afterEach(() => {
