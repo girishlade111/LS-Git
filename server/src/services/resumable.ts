@@ -731,8 +731,6 @@ export class ResumableUploadService {
 
 // -- module-scope helpers ------------------------------------------------------
 
-const stagedShas = new Map<string, { mode: '100644' | '100755'; sha: string }>()
-
 function failureView(
   item: UploadSessionItemRow,
   code: string,
