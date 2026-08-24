@@ -566,13 +566,8 @@ export function BlameViewPage({
           </div>
         ))}
       </div>
-      {voidRangeHelper(rangeBySha)}
     </section>
   )
-}
-function voidRangeHelper(m: Map<number, unknown>): null {
-  void m
-  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -628,5 +623,3 @@ export function ErrorState({ message }: { message: string }) {
   )
 }
 
-// Re-export Input so feature CSS consumers stay on primitives only.
-export { Input as _Input }
