@@ -112,7 +112,7 @@ export class FolderUploadSession {
   private snapshotCache: SessionSnapshot | null = null
   readonly projectId: number
 
-  constructor(projectId: number, entries: Array<{ item: ManifestItem; file: File }>, _limits?: BatchLimits) {
+  constructor(projectId: number, entries: Array<{ item: ManifestItem; file: File }>) {
     this.projectId = projectId
     this.items = entries.map((e) => e.item)
     for (const e of entries) this.fileMap.set(e.item.id, e.file)
