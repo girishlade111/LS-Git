@@ -123,9 +123,11 @@ export function FolderUploadDialog({
       return
     }
     const manifest = buildManifest(collected, effective)
-    sessionRef.current = new FolderUploadSession(
-      project.id,
-      manifest.items.map((item) => ({ item, file: fileFor(collected.files, item) })),
+    setSession(
+      new FolderUploadSession(
+        project.id,
+        manifest.items.map((item) => ({ item, file: fileFor(collected.files, item) })),
+      ),
     )
     setStage('select')
     if (manifest.emptyDirs.length > 0) {
