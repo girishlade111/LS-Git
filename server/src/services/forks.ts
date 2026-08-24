@@ -127,8 +127,23 @@ export class ForksService {
     const source = this.requireProject(sourceProjectId)
 
     // 1) Reading the source is the gate for forking it (private-repo rule),
-    //    plus the generic create permission on the platform.
-    this.authorizeOrThrow(actor, 'project:read', source)
+    //    plus the generic create permission on the platform. Denials are
+    //    audited against the acting user when authenticated.
+    const canRead = can(actor, 'project:read', this.projectCtx(source))
+    if (!canRead) {
+      if (actor) {
+        this.s.audit.record({
+          userId: actor.userId,
+          name: 'repo_write_denied',
+          detail: { kind: 'fork_denied', reason: 'source_not_readable', project_id: source.id },
+        })
+      }
+      throw new AppError(
+        actor ? 403 : 401,
+        actor ? 'You are not allowed to fork this project' : 'Authentication required',
+        actor ? 'forbidden' : 'unauthenticated',
+      )
+    }
     this.authorizeOrThrow(actor, 'project:create')
 
     const user = this.s.users.byId(actor!.userId)
@@ -273,13 +288,20 @@ export class ForksService {
 
     const branch = String(opts.branch ?? project.default_branch)
     const forkTip = forkRepo.resolveBranch(branch)
-    const upstreamTip = upstreamRepo.resolveBranch(branch) ?? upstreamRepo.resolveBranch(upstream.default_branch)
-    if (!forkTip && !upstreamTip) {
-      throw new AppError(404, `Branch '${branch}' does not exist in the fork or upstream`, 'branch_missing')
+    // Sync targets the SAME-NAMED branch upstream — no silent fallback.
+    const upstreamTip = upstreamRepo.resolveBranch(branch)
+    if (!forkTip || !upstreamTip) {
+      throw new AppError(404, `Branch '${branch}' must exist in both the fork and the upstream`, 'branch_missing')
     }
 
-    const behindSet = this.reachableExcluding(upstreamRepo, upstreamTip, forkTip)
-    const aheadSet = this.reachableExcluding(forkRepo, forkTip, upstreamTip)
+    // Ancestor sets are computed PER REPOSITORY (each side may hold commits
+    // the other lacks); shared history carries identical SHAs, so set
+    // difference across the two sets is exact.
+    const upstreamAncestors = this.ancestorsOf(upstreamRepo, upstreamTip)
+    const forkAncestors = this.ancestorsOf(forkRepo, forkTip)
+
+    const behindSet = new Set([...upstreamAncestors].filter((s) => !forkAncestors.has(s)))
+    const aheadSet = new Set([...forkAncestors].filter((s) => !upstreamAncestors.has(s)))
 
     let state: ForkDivergenceState
     if (behindSet.size === 0) state = aheadSet.size === 0 ? 'up_to_date' : 'ahead'
@@ -294,6 +316,20 @@ export class ForksService {
       behind_count: behindSet.size,
       ahead_count: aheadSet.size,
     }
+  }
+
+  /** All commits reachable from `tip` (inclusive), walked in `repo` itself. */
+  private ancestorsOf(repo: GitRepository, tip: string): Set<string> {
+    const out = new Set<string>()
+    const f: string[] = [tip]
+    let g = 0
+    while (f.length > 0 && g++ < SYNC_MAX_COMMITS * 2) {
+      const s = f.shift()!
+      if (out.has(s)) continue
+      out.add(s)
+      f.push(...repo.readCommit(s).parents)
+    }
+    return out
   }
 
   // -------------------------------------------------------------------- sync --
@@ -368,36 +404,6 @@ export class ForksService {
   private authorizePush(actor: Actor | null, project: ProjectRow): void {
     const ok = can(actor, 'project:push_code', this.projectCtx(project))
     if (!ok) this.failAuth(actor, { kind: 'push_denied', action: 'fork_sync', project_id: project.id })
-  }
-
-  /** Commits reachable from `tip` but NOT from `exclude` (bounded walks). */
-  private reachableExcluding(
-    repo: GitRepository,
-    tip: string | null,
-    exclude: string | null,
-  ): Set<string> {
-    const out = new Set<string>()
-    if (!tip) return out
-    const excluded = new Set<string>()
-    if (exclude) {
-      const f: string[] = [exclude]
-      let g = 0
-      while (f.length > 0 && g++ < SYNC_MAX_COMMITS * 2) {
-        const s = f.shift()!
-        if (excluded.has(s)) continue
-        excluded.add(s)
-        f.push(...repo.readCommit(s).parents)
-      }
-    }
-    const f: string[] = [tip]
-    let g = 0
-    while (f.length > 0 && g++ < SYNC_MAX_COMMITS * 2) {
-      const s = f.shift()!
-      if (out.has(s) || excluded.has(s)) continue
-      out.add(s)
-      f.push(...repo.readCommit(s).parents)
-    }
-    return out
   }
 
   // ------------------------------------------------------------------ detach --
