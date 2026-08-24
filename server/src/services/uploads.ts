@@ -550,7 +550,7 @@ export class UploadService {
           identicalSkipped++
           continue
         }
-        writeObject(objectsDir, 'blob', content)
+        repo.writeBlob(content)
         changes.push({ path: row.file_path, mode: '100644', sha: gitSha })
         if (existing) replacedPaths.push(row.file_path)
       }
@@ -563,12 +563,24 @@ export class UploadService {
       throw new AppError(400, 'Uploaded files are identical to the current branch — nothing to commit', 'empty_commit')
     }
 
-    const result = this.applyCommitFromShas(objectsDir, abs, baseEntries, changes, {
-      actor: actor!,
-      baseBranch,
-      targetBranch,
-      message,
-    })
+    let result
+    try {
+      result = this.applyCommitFromShas(repo, baseEntries, changes, {
+        baseBranch,
+        targetBranch,
+        message,
+        expectedTargetTip: targetHead ?? null,
+      })
+    } catch (err) {
+      if (err instanceof RefConflictError || err instanceof RefLockError) {
+        throw new AppError(
+          409,
+          'The branch changed while the batch was finalizing — retry the finalize',
+          'ref_update_conflict',
+        )
+      }
+      throw err
+    }
 
     // ONE transaction: event outbox + activity + terminal state transitions.
     this.db.transaction(() => {
