@@ -218,4 +218,62 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
       );
     `,
   },
+  {
+    version: 5,
+    sql: `
+      -- Resumable upload sessions (UPLOADS.md). Headless infrastructure: the
+      -- browser (or any API client) stages chunks, resumes after interruption,
+      -- and finalizes into exactly one commit. Chunk bytes NEVER enter
+      -- PostgreSQL — only bookkeeping. The staging store is authoritative for
+      -- which chunks exist; DB counters are advisory progress state.
+      CREATE TABLE upload_sessions (
+        id TEXT PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        state TEXT NOT NULL DEFAULT 'open'
+          CHECK (state IN ('open', 'committed', 'failed', 'cancelled', 'expired')),
+        declared_files INTEGER NOT NULL,
+        declared_bytes INTEGER NOT NULL,
+        received_bytes INTEGER NOT NULL DEFAULT 0,
+        received_chunks INTEGER NOT NULL DEFAULT 0,
+        committed_branch TEXT,
+        committed_sha TEXT,
+        committed_files INTEGER,
+        finalized_at TEXT,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_upload_sessions_project ON upload_sessions(project_id, state);
+      CREATE INDEX idx_upload_sessions_user ON upload_sessions(user_id, state);
+      CREATE INDEX idx_upload_sessions_expiry ON upload_sessions(state, expires_at);
+
+      CREATE TABLE upload_session_items (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL REFERENCES upload_sessions(id) ON DELETE CASCADE,
+        file_path TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        mime TEXT NOT NULL,
+        last_modified INTEGER,
+        sha256 TEXT,
+        chunk_size INTEGER NOT NULL,
+        chunk_count INTEGER NOT NULL,
+        received_chunks INTEGER NOT NULL DEFAULT 0,
+        received_bytes INTEGER NOT NULL DEFAULT 0,
+        state TEXT NOT NULL DEFAULT 'pending'
+          CHECK (state IN ('pending', 'transferring', 'transferred', 'verified', 'failed', 'skipped')),
+        attempts INTEGER NOT NULL DEFAULT 0,
+        failure_code TEXT,
+        failure_message TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_upload_items_session ON upload_session_items(session_id, state);
+
+      -- One finalize per session, ever: unique partial index makes duplicate
+      -- finalization a database-level impossibility, not just an app check.
+      CREATE UNIQUE INDEX idx_upload_sessions_commit
+        ON upload_sessions(commit_sha) WHERE commit_sha IS NOT NULL;
+    `,
+  },
 ]
