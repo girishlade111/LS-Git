@@ -565,14 +565,12 @@ export class ResumableUploadService {
 
     if (failures.length > 0) {
       // STRUCTURED failure: never pretend a partially-verified session succeeded.
-      throw Object.assign(
-        new AppError(
-          409,
-          `${failures.length} of ${included.length} item(s) are not ready — nothing was committed`,
-          'session_incomplete',
-        ),
-        { code: 'session_incomplete', items: failures, extras: { code: 'session_incomplete', items: failures } },
-      ) as AppError & { items: ItemFailureView[] }
+      throw new AppError(
+        409,
+        `${failures.length} of ${included.length} item(s) are not ready — nothing was committed`,
+        'session_incomplete',
+        { code: 'session_incomplete', items: failures },
+      )
     }
     if (assembled.size === 0) {
       throw new AppError(400, 'All uploaded files are identical to the branch — nothing to commit', 'empty_commit')
