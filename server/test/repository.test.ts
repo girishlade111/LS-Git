@@ -519,7 +519,6 @@ async function svcSetup(opts: { initialize?: boolean } = {}): Promise<SvcSetup> 
   await registerUser(app) // alice → first user → admin
   await registerUser(app, { username: 'bob', email: 'bob@example.com' })
   const aliceSession = extractSession((await loginRaw(app, 'alice')).cookies)
-  const bobSession = extractSession((await loginRaw(app, 'bob')).cookies)
 
   const res = await authed(app, 'POST', '/api/v1/projects', {
     session: aliceSession,
@@ -535,6 +534,28 @@ async function svcSetup(opts: { initialize?: boolean } = {}): Promise<SvcSetup> 
     app,
     ownerActor: { userId: project.owner_id, username: 'alice', admin: true, state: 'active', via: { kind: 'session' } },
     strangerActor: { userId: app.store.users.byUsername('bob')!.id, username: 'bob', admin: false, state: 'active', via: { kind: 'session' } },
+    projectId: project.id,
+  }
+}
+
+/** Setup where the project owner is a NON-admin user (protection-rule tests). */
+async function nonAdminOwnerSetup(): Promise<{ app: FastifyInstance; ownerActor: Actor; projectId: number }> {
+  const app = makeApp()
+  await registerUser(app) // alice → admin (not involved in ownership)
+  await registerUser(app, { username: 'carol', email: 'carol@example.com' })
+  const carolSession = extractSession((await loginRaw(app, 'carol')).cookies)
+  const res = await authed(app, 'POST', '/api/v1/projects', {
+    session: carolSession,
+    payload: {
+      name: 'Carol Repo', path: 'carol-repo', visibility: 'private', description: '',
+      website_url: '', default_branch: 'main', topics: [],
+    },
+  })
+  expect(res.statusCode).toBe(201)
+  const project = app.store.projects.byOwnerPath('carol', 'carol-repo')!
+  return {
+    app,
+    ownerActor: { userId: project.owner_id, username: 'carol', admin: false, state: 'active', via: { kind: 'session' } },
     projectId: project.id,
   }
 }
@@ -574,15 +595,15 @@ describe('repository service security', () => {
     expect(audits.length).toBeGreaterThanOrEqual(3)
   })
 
-  it('protected branches refuse writes even from the owner; unprotected branches allow them', async () => {
-    const { app, ownerActor, projectId } = await svcSetup()
+  it('protected branches refuse writes from the non-admin owner; admins override no_one', async () => {
+    const { app, ownerActor, projectId } = await nonAdminOwnerSetup()
     const repos = app.repositories
     repos.commitChanges(ownerActor, projectId, {
       message: 'Initial commit', changes: [{ path: 'seed.txt', content: 'seed' }],
     })
 
     // PERMISSIONS.md §5 parity: default branch ships protected at maintainer level;
-    // tighten to no_one → nobody may push, including the owner.
+    // tighten to no_one → the (non-admin) owner is refused too.
     app.store.protectedBranches.set(projectId, 'main', 'no_one')
 
     expect(() => repos.commitChanges(ownerActor, projectId, {
@@ -592,9 +613,18 @@ describe('repository service security', () => {
     // The denial was audited with the branch named.
     const denials = app.store.audit.listForUser(ownerActor.userId, 50)
       .filter((r) => String(r.event) === 'repo_write_denied')
-    expect(denials.some((r) => String(r.detail ?? '').includes('protected_branch') || JSON.stringify(r.detail ?? {}).includes('protected_branch'))).toBe(true)
+    expect(denials.some((r) => JSON.stringify(r.detail ?? {}).includes('protected_branch'))).toBe(true)
 
-    // Relax to maintainer level → owner (and admins) may push again.
+    // Instance admins retain emergency access to no_one branches (store contract).
+    const adminActor: Actor = {
+      userId: app.store.users.byUsername('alice')!.id,
+      username: 'alice', admin: true, state: 'active', via: { kind: 'session' },
+    }
+    expect(() => repos.commitChanges(adminActor, projectId, {
+      message: 'admin override', changes: [{ path: 'hotfix.txt', content: 'x' }],
+    })).not.toThrow()
+
+    // Relax to maintainer level → owner may push again.
     app.store.protectedBranches.set(projectId, 'main', 'maintainer')
     const ok = repos.commitChanges(ownerActor, projectId, {
       message: 'allowed again', changes: [{ path: 'new.txt', content: 'x' }],
