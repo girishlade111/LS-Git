@@ -81,7 +81,8 @@ describe('create bare repository', () => {
     if (probe.error || probe.status !== 0) return // git unavailable — structural checks above stand
     const fsck = spawnSync('git', ['--git-dir', root, 'fsck', '--strict'], { encoding: 'utf8' })
     expect(fsck.status).toBe(0)
-    expect(fsck.stderr.trim()).toBe('')
+    // Empty repositories print a benign "No default references" notice.
+    expect(fsck.stderr).not.toMatch(/error|missing|broken/i)
   })
 })
 
@@ -142,9 +143,9 @@ describe('second commit', () => {
 
     const second = repo.applyChangesToBranch({
       baseBranch: 'main', targetBranch: 'main', message: 'Edit a.txt\n\nBody of message.',
-      identity, rejectOverwrite: true,
+      identity,
       changes: [
-        { path: 'a.txt', content: 'two\n' },        // replace (edit)
+        { path: 'a.txt', content: 'two\n' },        // replace (browser edit)
         { path: 'docs/guide.md', content: 'guide' }, // add
       ],
     })

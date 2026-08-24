@@ -243,10 +243,10 @@ export function validateSha(raw: string): string {
   return raw
 }
 
-/** Short rev input → full sha when well-formed hex; otherwise null. */
+/** Hex revision input → lowercase candidate; full shas and short prefixes (≥7). */
 export function normalizeRevCandidate(rev: string): string | null {
   const lower = rev.trim().toLowerCase()
-  return SHA_RE.test(lower) ? lower : null
+  return /^[0-9a-f]{7,40}$/.test(lower) ? lower : null
 }
 
 // ---------------------------------------------------------------------------
