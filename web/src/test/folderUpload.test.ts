@@ -83,9 +83,9 @@ describe('collectFromFileList — webkitdirectory input parity', () => {
 })
 
 describe('buildManifest — detection pass', () => {
-  function collect(pairs: Array<[string, number]>) {
+  function collect(pairs: Array<[string, number?]>) {
     return {
-      files: pairs.map(([p, size]) => ({ file: fileOf(p.split('/').pop()!, size), relativePath: p })),
+      files: pairs.map(([p, size]) => ({ file: fileOf(p.split('/').pop()!, size ?? 10), relativePath: p })),
       emptyDirs: [] as string[],
     }
   }
