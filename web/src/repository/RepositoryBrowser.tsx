@@ -4,6 +4,7 @@ import { Icon } from '../design-system/Icon'
 import { Input } from '../design-system/Input'
 import { projectsApi, type Project } from '../projects/api'
 import { repositoryApi, encodePath, type RefsResult } from './api'
+import { FileEditorView } from './editor/FileEditorView'
 import {
   BlobViewPage,
   BlameViewPage,
