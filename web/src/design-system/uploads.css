@@ -1,0 +1,122 @@
+/* LSGit folder/project upload — the primary differentiated surface.
+   Every value comes from tokens.css. #161616 panel, #2a2a2a border,
+   terracotta only for active interaction, muted green progress, muted red danger. */
+
+/* ---------- Dropzone ---------- */
+.ls-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 220px;
+  padding: 32px 24px;
+  background: var(--ls-panel);
+  border: 1px dashed var(--ls-border);
+  border-radius: var(--ls-radius);
+  color: var(--ls-text-secondary);
+  text-align: center;
+  outline: none;
+  transition: border-color var(--ls-dur-fast), background-color var(--ls-dur-fast);
+}
+.ls-dropzone:hover { background: var(--ls-hover); }
+/* Terracotta marks ACTIVE drag interaction only — never decoration. */
+.ls-dropzone[data-dragging="true"] {
+  border-color: var(--ls-accent);
+  background: var(--ls-tint-accent);
+  color: var(--ls-text);
+}
+.ls-dropzone:focus-visible {
+  box-shadow: var(--ls-focus-ring);
+}
+.ls-dropzone__icon { display: inline-flex; color: var(--ls-text-disabled); }
+.ls-dropzone[data-dragging="true"] .ls-dropzone__icon { color: var(--ls-accent); }
+.ls-dropzone__title { font-size: var(--ls-fs-row); font-weight: 500; color: var(--ls-text); }
+.ls-dropzone__hint { font-size: var(--ls-fs-desc); max-width: 340px; }
+.ls-dropzone__actions { display: flex; gap: 8px; margin-top: 4px; }
+
+/* ---------- Manifest list ---------- */
+.ls-uplist {
+  border: 1px solid var(--ls-border);
+  border-radius: var(--ls-radius);
+  background: var(--ls-bg);
+  overflow: hidden;
+}
+.ls-uplist__scroll { max-height: 260px; overflow-y: auto; }
+.ls-uplist__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 3px 12px;
+  border-bottom: 1px solid var(--ls-border);
+  font-family: var(--ls-font-mono);
+  font-size: var(--ls-fs-table);
+  color: var(--ls-text-secondary);
+}
+.ls-uplist__row:last-child { border-bottom: none; }
+.ls-uplist__path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+}
+.ls-uplist__size { flex: none; font-size: var(--ls-fs-label); color: var(--ls-text-disabled); }
+.ls-uplist__state {
+  flex: none;
+  width: 84px;
+  font-family: var(--ls-font-ui);
+  font-size: var(--ls-fs-label);
+  font-weight: 500;
+  text-align: right;
+  white-space: nowrap;
+}
+.ls-uplist__remove { flex: none; width: 22px; height: 22px; }
+
+/* Status colors: muted green done, muted red trouble, neutral queue, accent active */
+.ls-uplist__row--completed .ls-uplist__state { color: var(--ls-success-muted); }
+.ls-uplist__row--failed .ls-uplist__state,
+.ls-uplist__row--skipped .ls-uplist__state { color: var(--ls-danger-muted); }
+.ls-uplist__row--uploading .ls-uplist__state { color: var(--ls-accent); }
+
+/* ---------- Progress summary ---------- */
+.ls-upstats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+}
+.ls-upstats > div { min-width: 0; }
+.ls-upstats dt {
+  font-size: var(--ls-fs-label);
+  color: var(--ls-text-secondary);
+  margin-bottom: 2px;
+}
+.ls-upstats dd {
+  margin: 0;
+  font-size: var(--ls-fs-body);
+  color: var(--ls-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ls-progress--success .ls-progress__fill { background: var(--ls-success-muted); }
+
+/* ---------- Notices ---------- */
+.ls-upnote {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border: 1px solid var(--ls-border);
+  border-radius: var(--ls-radius-sm);
+  font-size: var(--ls-fs-desc);
+  color: var(--ls-text-secondary);
+  background: var(--ls-surface-1);
+}
+.ls-upnote svg { flex: none; margin-top: 1px; }
+.ls-upnote--danger { color: var(--ls-danger-muted); }
+.ls-upnote--success { color: var(--ls-success-muted); }
