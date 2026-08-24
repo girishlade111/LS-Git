@@ -33,8 +33,7 @@ export function timeAgo(iso: string): string {
 /**
  * Fixed-row-height windowing for very long lists (large directories, blame).
  * Renders only the visible band plus overscan — the DOM stays small regardless
- * of list length. Keyboard/screen-reader users still get the full semantic
- * list through the aria-hidden measurement spacer pattern.
+ * of list length.
  */
 export function useVirtualWindow(
   rowCount: number,
@@ -61,6 +60,7 @@ export function useVirtualWindow(
     el.addEventListener('scroll', onScroll, { passive: true })
     const ro = new ResizeObserver(() => setViewport(el.clientHeight))
     ro.observe(el)
+    setViewport(el.clientHeight)
     return () => {
       el.removeEventListener('scroll', onScroll)
       ro.disconnect()
@@ -84,7 +84,7 @@ export function useVirtualWindow(
   return { containerRef, ...computed }
 }
 
-/** Copy-to-clipboard button with transient confirmation (design-token icon). */
+/** Copy-to-clipboard button with transient confirmation (design-token icons). */
 export function CopyButton({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false)
 
@@ -116,78 +116,46 @@ export function CopyButton({ value, label }: { value: string; label: string }) {
   )
 }
 
-export interface Crumb {
+export interface CrumbItem {
   name: string
-  path: string
+  href: string | null
 }
 
 /**
- * Path breadcrumbs: project root first, then each segment; the final segment
- * is plain emphasis (current location), earlier ones are links.
+ * Path breadcrumbs: segments joined with '/', the FINAL segment rendered as
+ * the current location (not a link).
  */
-export function Breadcrumbs({
-  projectName,
-  projectHref,
-  crumbs,
-}: {
-  projectName: string
-  projectHref: string
-  crumbs: Array<Crumb>
-}) {
+export function CrumbTrail({ trail }: { trail: CrumbItem[] }) {
   return (
     <nav className="ls-rb__crumbs" aria-label="Repository path">
-      <a className="ls-rb__crumb" href={projectHref}>{projectName}</a>
-      {crumbs.map((c, idx) =>
-        idx === crumbs.length - 1 ? (
-          <span key={c.path} className="ls-rb__crumb ls-rb__crumb--current" aria-current="location">{c.name}</span>
-        ) : (
-          <>
-            <span className="ls-rb__crumbsep" aria-hidden="true">/</span>
-            <a key={c.path} className="ls-rb__crumb" href={hrefFor(c)}>{c.name}</a>
-          </>
-        ),
-      )}
+      {trail.map((t, idx) => {
+        const last = idx === trail.length - 1
+        return (
+          <span key={`${t.name}-${idx}`} className="ls-rb__crumbwrap">
+            {idx > 0 && <span className="ls-rb__crumbsep" aria-hidden="true">/</span>}
+            {!last && t.href !== null ? (
+              <a className="ls-rb__crumb" href={t.href}>{t.name}</a>
+            ) : (
+              <span className="ls-rb__crumb ls-rb__crumb--current" aria-current={last ? 'location' : undefined}>
+                {t.name}
+              </span>
+            )}
+          </span>
+        )
+      })}
     </nav>
   )
 }
 
-function hrefFor(_c: Crumb): string {
-  // Replaced by the caller-supplied href factory through closure injection;
-  // kept simple here because Breadcrumbs receives pre-built hrefs instead.
-  return _c.path
-}
-
-/**
- * Link-aware breadcrumbs variant used by views: crumbs carry their target
- * hrefs so this component stays dumb.
- */
-export function CrumbTrail({ trail }: { trail: Array<{ name: string; href: string | null }> }) {
+/** Change-kind chip for history/commit file lists — subtle tint states only. */
+export function KindBadge({ kind }: { kind: 'added' | 'modified' | 'deleted' }) {
   return (
-    <nav className="ls-rb__crumbs" aria-label="Repository path">
-      {trail.map((t, idx) => (
-        <FragmentedCrumb key={`${t.name}-${idx}`} name={t.name} href={t.href} current={idx === trail.length - 1} />
-      ))}
-    </nav>
+    <span className={`ls-rb__kind ls-rb__kind--${kind}`}>
+      {kind === 'added' ? 'A' : kind === 'modified' ? 'M' : 'D'}
+      <span className="ls-visually-hidden"> {kind}</span>
+    </span>
   )
 }
-
-function FragmentedCrumb({ name, href, current }: { name: string; href: string | null; current: boolean }) {
-  return (
-    <>
-      {idx0(current) && <span className="ls-rb__crumbsep" aria-hidden="true">/</span>}
-      {href !== null && !current ? (
-        <a className="ls-rb__crumb" href={href}>{name}</a>
-      ) : (
-        <span className="ls-rb__crumb ls-rb__crumb--current" aria-current={current ? 'location' : undefined}>{name}</span>
-      )}
-    </>
-  )
-}
-function idx0(current: boolean): boolean {
-  void current
-  return separatorCount.value++ > 0
-}
-const separatorCount = { value: 0 }
 
 /** Branch/tag selector built on the ARIA combobox primitive. */
 export function RefSelector({
