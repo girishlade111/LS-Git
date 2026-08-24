@@ -18,6 +18,8 @@ import {
   RedirectsRepo,
   UploadBatchesRepo,
   UploadsRepo,
+  UploadSessionsRepo,
+  UploadSessionItemsRepo,
   ProtectedBranchesRepo,
   EventsRepo,
   PasswordResetsRepo,
