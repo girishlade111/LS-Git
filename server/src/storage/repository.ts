@@ -451,7 +451,15 @@ export class GitRepository {
   }
 
   readFileAt(treeSha: string, path: string): Buffer | null {
-    const segments = path.split('/')
+    const leaf = this.findEntryAt(treeSha, path)
+    if (!leaf || leaf.mode.startsWith('4')) return null
+    return this.readBlob(leaf.sha)
+  }
+
+  /** Resolves a path inside a tree to its entry WITHOUT reading any blob bytes. */
+  findEntryAt(treeSha: string, path: string): { mode: string; sha: string } | null {
+    const segments = path.split('/').filter((s) => s.length > 0)
+    if (segments.length === 0) return null
     let current: string = validateSha(treeSha)
     for (let i = 0; i < segments.length - 1; i++) {
       const entry = this.readTree(current).find((e) => e.name === segments[i])
@@ -459,8 +467,7 @@ export class GitRepository {
       current = entry.sha
     }
     const leaf = this.readTree(current).find((e) => e.name === segments[segments.length - 1])
-    if (!leaf || leaf.mode.startsWith('4')) return null
-    return this.readBlob(leaf.sha)
+    return leaf ? { mode: leaf.mode, sha: leaf.sha } : null
   }
 
   // -- commits ---------------------------------------------------------------
