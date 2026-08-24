@@ -44,6 +44,8 @@ export interface ChangeInput {
   /** Alternatively reference a pre-written blob SHA. */
   sha?: string
   mode?: FileMode
+  /** Removes an existing path instead of writing content (browser delete). */
+  delete?: boolean
 }
 
 export interface CommitInput {
@@ -69,6 +71,7 @@ export interface CommitOutcome {
   created_branch: boolean
   previous_tip: string | null
   replaced_paths: string[]
+  deleted_paths: string[]
 }
 
 const MIN_SHORT_SHA = 7
@@ -241,7 +244,7 @@ export class RepositoriesService {
     for (const change of input.changes) {
       const checked = validateRepoFilePath(change.path)
       if (!checked.ok) throw new AppError(400, checked.error, 'invalid_path')
-      if (!change.sha && change.content === undefined) {
+      if (!change.delete && !change.sha && change.content === undefined) {
         throw new AppError(400, `'${change.path}' needs content or a blob sha`, 'validation_failed')
       }
     }
@@ -268,6 +271,7 @@ export class RepositoriesService {
           content: c.content,
           sha: c.sha,
           mode: c.mode ?? '100644',
+          delete: c.delete,
         })),
       })
     } catch (err) {
@@ -282,6 +286,7 @@ export class RepositoriesService {
       created_branch: result.createdBranch,
       previous_tip: result.previousTip,
       replaced_paths: result.replacedPaths,
+      deleted_paths: result.deletedPaths,
     }
   }
 
@@ -633,7 +638,7 @@ export class RepositoriesService {
       resolved_via: resolved.via,
       path,
       breadcrumbs: breadcrumbsFor(path),
-      tip_commit: this.commitView(commit),
+      tip_commit: this.toCommitView(commit),
       entries: all.slice((page - 1) * perPage, page * perPage),
       pagination: { page, per_page: perPage, total: all.length, has_more: page * perPage < all.length },
       empty_repository: false,
@@ -673,7 +678,7 @@ export class RepositoriesService {
       ref: refRaw,
       resolved_sha: resolved.sha,
       resolved_via: resolved.via,
-      commit: this.commitView(commit),
+      commit: this.toCommitView(commit),
       path,
       name: segments[segments.length - 1]!,
       dir: segments.slice(0, -1).join('/'),
@@ -735,7 +740,7 @@ export class RepositoriesService {
       else if (!current && parent) kind = 'deleted'
       else if (current && parent && current.sha !== parent.sha) kind = 'modified'
       if (!kind) continue
-      out.push({ ...this.commitView(commit), kind })
+      out.push({ ...this.toCommitView(commit), kind })
     }
     return { ref: refRaw, path, commits: out }
   }
@@ -794,7 +799,7 @@ export class RepositoriesService {
     // Collapse consecutive identical shas into ranges.
     const lines = versions[versions.length - 1] ?? { sha: resolved.sha, lines: [] }
     const ranges: Array<{ start_line: number; end_line: number; commit_sha: string }> = []
-    lines.lines.forEach((content, idx) => {
+    lines.lines.forEach((_content, idx) => {
       const sha = attr[idx] ?? resolved.sha
       const last = ranges[ranges.length - 1]
       if (last && last.commit_sha === sha) last.end_line = idx + 1
@@ -925,7 +930,7 @@ export class RepositoriesService {
       }
     }
     return {
-      ...this.commitView(commit),
+      ...this.toCommitView(commit),
       changed_files: changedFiles,
       stats: { added, modified, deleted },
       lists_truncated: truncated,
@@ -933,7 +938,7 @@ export class RepositoriesService {
   }
 
   /** Serializable commit view shared by all browser endpoints. */
-  private commitView(c: ParsedCommit): CommitView {
+  toCommitView(c: ParsedCommit): CommitView {
     return {
       sha: c.sha,
       short_sha: c.sha.slice(0, 10),
@@ -1054,6 +1059,9 @@ export class RepositoriesService {
     }
     if (err instanceof RepositoryError && err.code === 'path_exists') {
       throw new AppError(409, err.message, 'file_exists')
+    }
+    if (err instanceof RepositoryError && err.code === 'path_not_found') {
+      throw new AppError(404, err.message, 'file_not_found')
     }
     if (err instanceof RepositoryError && err.code === 'empty_commit') {
       throw new AppError(400, err.message, 'empty_commit')

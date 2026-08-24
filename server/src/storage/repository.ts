@@ -172,7 +172,14 @@ export interface ApplyChangesOptions {
   targetBranch: string
   message: string
   identity: CommitIdentity
-  changes: Array<{ path: string; content?: Buffer | string; sha?: string; mode?: FileMode }>
+  /** File upserts; `delete: true` removes an existing path instead. */
+  changes: Array<{
+    path: string
+    content?: Buffer | string
+    sha?: string
+    mode?: FileMode
+    delete?: boolean
+  }>
   /**
    * Fail when any change would overwrite an existing path (default false).
    * Callers wanting replace semantics leave this off.
@@ -187,6 +194,7 @@ export interface ApplyChangesResult {
   previousTip: string | null
   createdBranch: boolean
   replacedPaths: string[]
+  deletedPaths: string[]
 }
 
 const SHA_RE = /^[0-9a-f]{40}$/
@@ -828,8 +836,18 @@ export class GitRepository {
 
     const merged = new Map(baseEntries)
     const replacedPaths: string[] = []
+    const deletedPaths: string[] = []
     let changed = false
     for (const change of opts.changes) {
+      if (change.delete === true) {
+        if (!baseEntries.has(change.path)) {
+          throw new RepositoryError(`'${change.path}' does not exist on '${opts.targetBranch}'`, 'path_not_found')
+        }
+        merged.delete(change.path)
+        deletedPaths.push(change.path)
+        changed = true
+        continue
+      }
       const existing = baseEntries.get(change.path)
       const sha = change.sha ?? this.writeBlob(change.content ?? '')
       if (existing && existing.sha === sha && existing.mode === (change.mode ?? '100644')) continue // identical → no-op
@@ -865,6 +883,7 @@ export class GitRepository {
       previousTip,
       createdBranch: creatingNewBranch,
       replacedPaths,
+      deletedPaths,
     }
   }
 }
