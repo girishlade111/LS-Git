@@ -214,7 +214,6 @@ describe('finalize — one commit for the whole set', () => {
     expect(events.length).toBe(1)
     const payload = JSON.parse(String(events[0]!.payload))
     expect(payload).toMatchObject({ branch: 'main', file_count: 4, replaced_count: 1 })
-
     // Staged temp bytes are gone after success.
     for (const row of app.store.uploads.listByBatch(batch)) {
       expect(existsSync(join(app.cfg.uploadsRoot, row.id))).toBe(false)
