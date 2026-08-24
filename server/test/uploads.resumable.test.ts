@@ -136,8 +136,9 @@ describe('session creation — manifest reception + authorization', () => {
     const items = res.body.items as Array<Record<string, unknown>>
     expect(items).toHaveLength(3)
     const byPath = Object.fromEntries(items.map((i) => [String(i.file_path), i]))
-    // Boundaries: ceil(20/8)=3 chunks [8,8,4]; zero-byte file is one chunk.
-    expect(byPath['docs/a.md']).toMatchObject({ chunk_size: 8, chunk_count: 3 })
+    // Requested chunk_size floors at min_chunk_size (default 256 KB); files
+    // smaller than the floor collapse to ONE whole-file chunk.
+    expect(byPath['docs/a.md']).toMatchObject({ chunk_size: 20, chunk_count: 1 })
     expect(byPath['deep/nested/b.txt']).toMatchObject({ chunk_size: 8, chunk_count: 1 })
     expect(byPath['empty.bin']).toMatchObject({ chunk_count: 1 })
     expect(res.body.state).toBe('open')
@@ -215,7 +216,7 @@ describe('chunk protocol — boundaries, checksums, idempotency, attempt caps', 
   }
 
   it('accepts chunks in any order with checksum verification; replays are duplicates', async () => {
-    const { app, bobSession } = await setup()
+    const { app, bobSession } = await setup({ minChunkSize: 8 })
     const project = app.store.projects.byOwnerPath('bob', 'resumable')!
     const { sid, itemId, chunkCount } = await oneFileSession(app, bobSession, project.id, 30, 8)
     expect(chunkCount).toBe(4)
