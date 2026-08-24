@@ -214,10 +214,11 @@ export const repositoryApi = {
       ? `${repoBase(projectId)}/download/${encodeURIComponent(ref)}/${encodePath(dirPath)}`
       : `${repoBase(projectId)}/download/${encodeURIComponent(ref)}`,
   // -- branch/tag management ------------------------------------------------
-  branches: (projectId: number, opts: { search?: string; sort?: 'name' | 'recent' } = {}) => {
+  branches: (projectId: number, opts: { search?: string; sort?: 'name' | 'recent'; limit?: number } = {}) => {
     const q = new URLSearchParams()
     if (opts.search) q.set('search', opts.search)
     if (opts.sort && opts.sort !== 'name') q.set('sort', opts.sort)
+    if (opts.limit) q.set('limit', String(opts.limit))
     const qs = q.toString()
     return request<{ branches: BranchBrowseInfo[] }>(`${repoBase(projectId)}/branches${qs ? `?${qs}` : ''}`)
   },
