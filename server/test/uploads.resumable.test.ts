@@ -113,7 +113,16 @@ async function finalize(
   return { status: res.statusCode, body: res.json() }
 }
 
-async function getChunkMap(
+function stagingDir(app: ReturnType<typeof makeApp>, sid: string): string {
+  return join(app.cfg.uploadsRoot, 'resumable', sid)
+}
+
+let counter = 0
+const nextPath = (prefix: string) => `${prefix}-${(counter += 1)}.txt`
+
+// ---------------------------------------------------------------------------
+
+describe('session creation — manifest reception + authorization', () => {
   it('creates a session with per-item chunk plans and echoes limits', async () => {
     const { app, bobSession } = await setup()
     const project = app.store.projects.byOwnerPath('bob', 'resumable')!
