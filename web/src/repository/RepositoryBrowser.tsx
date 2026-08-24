@@ -124,6 +124,26 @@ export function RepositoryBrowser({
     window.location.hash = nav.tree(next, '').replace(/^#/, '')
   }
 
+  function sectionUrl(section: 'tree' | 'commits' | 'branches' | 'tags' | 'compare'): string {
+    switch (section) {
+      case 'tree': return nav.tree(resolved.ref || project.default_branch, '')
+      case 'commits': return nav.history(resolved.ref || project.default_branch)
+      case 'branches': return `/proj/${encodeURIComponent(owner)}/${encodeURIComponent(projectPath)}/branches`
+      case 'tags': return `/proj/${encodeURIComponent(owner)}/${encodeURIComponent(projectPath)}/tags`
+      case 'compare': return `/proj/${encodeURIComponent(owner)}/${encodeURIComponent(projectPath)}/compare`
+    }
+  }
+
+  function labelFor(section: string): string {
+    switch (section) {
+      case 'commits': return 'Commits'
+      case 'branches': return 'Branches'
+      case 'tags': return 'Tags'
+      case 'compare': return 'Compare'
+      default: return 'Code'
+    }
+  }
+
   return (
     <div className="ls-rb__shell">
       <div className="ls-rb__toolbar">
@@ -241,6 +261,35 @@ function BrowserBody({
         />
       )
     }
+    case 'branches':
+      return (
+        <BranchesView
+          projectId={project.id}
+          defaultBranch={project.default_branch}
+          nav={nav}
+          navigate={(h) => { window.location.hash = h.replace(/^#/, '') }}
+        />
+      )
+    case 'tags':
+      return (
+        <TagsView
+          projectId={project.id}
+          defaultBranch={project.default_branch}
+          nav={nav}
+          navigate={(h) => { window.location.hash = h.replace(/^#/, '') }}
+        />
+      )
+    case 'compare':
+      return (
+        <CompareView
+          projectId={project.id}
+          defaultBranch={resolved.ref || project.default_branch}
+          initialFrom={route.query.get('from') ?? project.default_branch}
+          initialTo={route.query.get('to') ?? resolved.ref || project.default_branch}
+          nav={nav}
+          navigate={(h) => { window.location.hash = h.replace(/^#/, '') }}
+        />
+      )
     case 'edit':
     case 'new':
       if (route.action === 'edit' && !path) {
