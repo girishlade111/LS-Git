@@ -48,9 +48,7 @@ export function Sidebar({ current, onNavigate, open }: SidebarProps) {
   return (
     <aside className="ls-sidebar" data-open={open} aria-label="Primary">
       <div className="ls-sidebar__brand">
-        <span className="ls-sidebar__brand-mark" aria-hidden="true">
-          LS
-        </span>
+        <BrandLogo />
         LSGit
       </div>
 

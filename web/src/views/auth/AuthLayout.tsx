@@ -34,9 +34,7 @@ export function AuthLayout({
     >
       <div style={{ width: 380 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-          <span className="ls-sidebar__brand-mark" aria-hidden="true">
-            LS
-          </span>
+          <BrandLogo />
           <span style={{ fontSize: 'var(--ls-fs-row)', fontWeight: 600 }}>LSGit</span>
         </div>
         <h1 style={{ marginBottom: 4 }}>{title}</h1>
