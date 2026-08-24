@@ -245,6 +245,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   registerAccountRoutes(app)
   registerProjectRoutes(app)
   registerUploadRoutes(app)
+  registerUploadSessionRoutes(app)
 
   app.get('/healthz', async () => ({ status: 'ok' }))
   return app
@@ -294,3 +295,4 @@ import { registerAuthRoutes } from './routes/auth.js'
 import { registerAccountRoutes } from './routes/account.js'
 import { registerProjectRoutes } from './routes/projects.js'
 import { registerUploadRoutes } from './routes/uploads.js'
+import { registerUploadSessionRoutes } from './routes/uploadsessions.js'
