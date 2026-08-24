@@ -74,7 +74,8 @@ describe('login / logout', () => {
     for (const login of ['alice', 'ghost']) {
       const res = await app.inject({ method: 'POST', url: '/api/v1/auth/login', payload: { login, password: 'nope-not-it-1234' } })
       expect(res.statusCode).toBe(400)
-      expect(res.json()).toEqual({ message: 'Invalid login or password' })
+      // Error envelope now carries the machine-readable code alongside message.
+      expect(res.json()).toEqual({ message: 'Invalid login or password', code: 'invalid_credentials' })
     }
   })
 
