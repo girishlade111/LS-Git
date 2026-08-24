@@ -713,6 +713,8 @@ export class GitRepository {
   /** Lists refs under a prefix, merging packed-refs beneath loose values. */
   listRefs(prefix = 'refs/'): Array<{ name: string; sha: string }> {
     const merged = new Map<string, string>(this.parsePackedRefs())
+    // Names are reported WITH their full ref path (e.g. refs/heads/main).
+    const baseRel = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix
     const walk = (dirAbs: string, relPrefix: string): void => {
       let items: string[]
       try {
@@ -723,7 +725,7 @@ export class GitRepository {
       for (const item of items) {
         if (item.endsWith('.lock')) continue
         const abs = join(dirAbs, item)
-        const rel = relPrefix ? `${relPrefix}/${item}` : item
+        const rel = `${relPrefix}/${item}`
         if (statSync(abs).isDirectory()) {
           walk(abs, rel)
         } else {
@@ -733,9 +735,9 @@ export class GitRepository {
         }
       }
     }
-    walk(join(this.root, ...prefix.split('/')), '')
+    walk(join(this.root, ...prefix.split('/')), baseRel)
     return [...merged.entries()]
-      .filter(([name]) => prefix === 'refs/' || name === prefix || name.startsWith(`${prefix}/`))
+      .filter(([name]) => name.startsWith(`${baseRel}/`) || name === baseRel)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([name, sha]) => ({ name, sha }))
   }
