@@ -71,11 +71,11 @@ export function ProjectDetailView({ owner, path }: { owner: string; path: string
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
             {isOwner && !project.archived && (
               <Button size="sm" variant="primary" iconStart="plus" onClick={() => setUploadOpen(true)}>
-                Upload file
+                Upload files
               </Button>
             )}
           </div>
-          <UploadDialog
+          <FolderUploadDialog
             project={project}
             open={uploadOpen}
             onClose={() => setUploadOpen(false)}
