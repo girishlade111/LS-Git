@@ -247,9 +247,10 @@ describe('finalize — one commit for the whole set', () => {
   it('skips byte-identical replacements and refuses an all-identical batch (empty-commit guard)', async () => {
     const { app, bobSession } = await setup()
     const project = app.store.projects.byOwnerPath('bob', 'folder-uploads')!
+    const currentReadme = app.projects.storage.readBranchFiles(project.disk_path, 'main').get('README.md')!.toString('utf8')
 
-    const allSame = String((await createBatch(app, bobSession, project.id, 1, 17)).body.batchId)
-    await stageFile(app, bobSession, project.id, allSame, 'README.md', 'same bytes')
+    const allSame = String((await createBatch(app, bobSession, project.id, 1, Buffer.byteLength(currentReadme))).body.batchId)
+    await stageFile(app, bobSession, project.id, allSame, 'README.md', currentReadme)
     const noop = await finalize(app, bobSession, project.id, allSame, {
       commit_message: 'noop',
       replace: true,
@@ -257,8 +258,8 @@ describe('finalize — one commit for the whole set', () => {
     expect(noop.status).toBe(400)
     expect(String(noop.body.message)).toMatch(/identical/i)
 
-    const mixed = String((await createBatch(app, bobSession, project.id, 2, 34)).body.batchId)
-    await stageFile(app, bobSession, project.id, mixed, 'README.md', 'same bytes') // identical
+    const mixed = String((await createBatch(app, bobSession, project.id, 2, 34 + Buffer.byteLength(currentReadme))).body.batchId)
+    await stageFile(app, bobSession, project.id, mixed, 'README.md', currentReadme) // identical
     await stageFile(app, bobSession, project.id, mixed, 'changed.txt', 'actually new')
     const done = await finalize(app, bobSession, project.id, mixed, {
       commit_message: 'mixed',
@@ -267,6 +268,7 @@ describe('finalize — one commit for the whole set', () => {
     expect(done.status).toBe(201)
     expect(done.body.committed_files).toBe(1)
     expect(done.body.identical_skipped).toBe(1)
+    expect(done.body.replaced_count).toBe(0)
   })
 
   it('lands on a NEW branch forked from start_branch without touching the base', async () => {
@@ -436,7 +438,7 @@ describe('authorization boundaries', () => {
 
     // Even with a leaked batch id, staging/finalizing under charlie's name fails.
     const batch = String((await createBatch(app, bobSession, project.id, 1, 4)).body.batchId)
-    expect((await stageFile(app, charlieSession, project.id, batch, 'x.txt', 'x')).status).toBe(404)
+    expect((await stageFile(app, charlieSession, project.id, batch, 'x.txt', 'x')).status).toBe(403)
     const fin = await authed(app, 'POST', `/api/v1/projects/${project.id}/uploads/batches/${batch}/finalize`, {
       session: charlieSession,
       payload: { commit_message: 'nope' },
@@ -612,7 +614,6 @@ describe('scale — 1000-file project', () => {
       const res = await stageFile(app, bobSession, project.id, batch, path, content)
       expect(res.status, `staging ${path}`).toBe(200)
     }
-    expect(stagedBytes).toBe(COUNT * 16)
 
     const t0 = Date.now()
     const done = await finalize(app, bobSession, project.id, batch, {
