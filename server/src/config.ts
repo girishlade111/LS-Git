@@ -41,6 +41,12 @@ export interface AppConfig {
   maxUploadBytes: number
   /** Temp staging directory for in-flight uploads. */
   uploadsRoot: string
+
+  /** Batch (folder/project) upload limits: per-batch file count and total bytes. */
+  maxBatchFiles: number
+  maxBatchTotalBytes: number
+  /** Open upload batches/uploads untouched for longer than this are GC'd (browser-refresh orphans). */
+  staleUploadTtlMinutes: number
 }
 
 export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
@@ -78,6 +84,9 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     maxTopicsPerProject: Number(process.env.LSGIT_MAX_TOPICS ?? 30),
     maxUploadBytes: Number(process.env.LSGIT_MAX_UPLOAD_BYTES ?? 50 * 1024 * 1024),
     uploadsRoot: process.env.LSGIT_UPLOADS_ROOT ?? join(tmpdir(), 'lsgit-uploads'),
+    maxBatchFiles: Number(process.env.LSGIT_MAX_BATCH_FILES ?? 5000),
+    maxBatchTotalBytes: Number(process.env.LSGIT_MAX_BATCH_BYTES ?? 256 * 1024 * 1024),
+    staleUploadTtlMinutes: Number(process.env.LSGIT_STALE_UPLOAD_TTL_MINUTES ?? 24 * 60),
     ...overrides,
   }
   return base

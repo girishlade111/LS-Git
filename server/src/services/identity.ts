@@ -78,6 +78,8 @@ export function makeServices(db: Database): IdentityServices {
     topics: new TopicsRepo(db),
     redirects: new RedirectsRepo(db),
     uploads: new UploadsRepo(db),
+    uploadBatches: new UploadBatchesRepo(db),
+    protectedBranches: new ProtectedBranchesRepo(db),
     events: new EventsRepo(db),
   }
 }

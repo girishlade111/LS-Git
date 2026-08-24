@@ -103,7 +103,7 @@ export interface FlatFile {
 }
 
 interface DirNode {
-  files: Array<{ mode: '100644' | '100755'; name: string; content: Buffer }>
+  files: Array<{ mode: '100644' | '100755'; name: string; content?: Buffer; sha?: string }>
   dirs: Map<string, DirNode>
 }
 
@@ -119,8 +119,14 @@ function entryCompare(a: { name: string; dir: boolean }, b: { name: string; dir:
 }
 
 function writeTreeLevel(objectsDir: string, node: DirNode): string {
-  const entries: Array<{ mode: '100644' | '100755' | '40000'; name: string; sha?: string; content?: Buffer }> = [
-    ...node.files.map((f) => ({ mode: f.mode, name: f.name, content: f.content })),
+  const entries: Array<{ mode: '100644' | '100755' | '40000'; name: string; sha?: string }> = [
+    ...node.files.map((f) => ({
+      mode: f.mode,
+      name: f.name,
+      // Blobs are written exactly once per unique path here — either eagerly by
+      // the caller (sha pre-computed) or lazily from buffered content below.
+      sha: f.sha ?? writeObject(objectsDir, 'blob', f.content!),
+    })),
     ...[...node.dirs.entries()].map(([name, child]) => ({
       mode: '40000' as const,
       name,
@@ -135,17 +141,39 @@ function writeTreeLevel(objectsDir: string, node: DirNode): string {
   )
   const chunks: Buffer[] = []
   for (const e of entries) {
-    let sha = e.sha
-    if (sha === undefined) {
-      sha = writeObject(objectsDir, 'blob', e.content!)
-    }
-    chunks.push(Buffer.concat([Buffer.from(`${e.mode} ${e.name}\0`, 'ascii'), Buffer.from(sha, 'hex')]))
+    chunks.push(Buffer.concat([Buffer.from(`${e.mode} ${e.name}\0`, 'ascii'), Buffer.from(e.sha!, 'hex')]))
   }
   return writeObject(objectsDir, 'tree', Buffer.concat(chunks))
 }
 
+interface FlatInput {
+  path: string
+  mode: '100644' | '100755'
+  content?: Buffer
+  sha?: string
+}
+
 /** Builds arbitrarily deep trees from flat file paths (implicit directories). */
 export function buildNestedTree(objectsDir: string, files: Array<FlatFile>): string {
+  return buildTreeFromInputs(
+    objectsDir,
+    files.map((f) => ({ path: f.path, mode: f.mode, content: f.content })),
+  )
+}
+
+/**
+ * Tree building from already-written blob SHAs. Lets batch finalize stream one
+ * temp file at a time into object storage without holding the whole changeset
+ * in memory.
+ */
+export function buildNestedTreeFromShas(
+  objectsDir: string,
+  entries: Array<{ path: string; mode: '100644' | '100755'; sha: string }>,
+): string {
+  return buildTreeFromInputs(objectsDir, entries)
+}
+
+function buildTreeFromInputs(objectsDir: string, files: Array<FlatInput>): string {
   const root = emptyDir()
   for (const f of files) {
     const segments = f.path.split('/')
@@ -159,7 +187,7 @@ export function buildNestedTree(objectsDir: string, files: Array<FlatFile>): str
       }
       node = child
     }
-    node.files.push({ mode: f.mode, name: segments[segments.length - 1]!, content: f.content })
+    node.files.push({ mode: f.mode, name: segments[segments.length - 1]!, content: f.content, sha: f.sha })
   }
   return writeTreeLevel(objectsDir, root)
 }
@@ -208,4 +236,29 @@ export function loadFilesUnderTree(objectsDir: string, treeSha: string, prefix =
 export function verifyLooseObject(objectsDir: string, sha: string): boolean {
   const raw = inflateSync(readFileSync(objectPath(objectsDir, sha)))
   return createHash('sha1').update(raw).digest('hex') === sha
+}
+
+/**
+ * Recursively lists a tree WITHOUT reading blob bodies — path → {mode, blobSha}.
+ * Used by batch finalize to merge large changesets cheaply and to compare
+ * existing content via object identity instead of loading bytes.
+ */
+export function loadTreeEntries(
+  objectsDir: string,
+  treeSha: string,
+  prefix = '',
+  out: Map<string, { mode: '100644' | '100755'; sha: string }> = new Map(),
+): Map<string, { mode: '100644' | '100755'; sha: string }> {
+  const { body } = readObject(objectsDir, treeSha)
+  for (const entry of parseTree(body)) {
+    if (entry.mode.startsWith('4')) {
+      loadTreeEntries(objectsDir, entry.sha, prefix + entry.name + '/', out)
+    } else {
+      out.set(prefix + entry.name, {
+        mode: entry.mode === '100755' ? '100755' : '100644',
+        sha: entry.sha,
+      })
+    }
+  }
+  return out
 }
