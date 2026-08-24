@@ -252,6 +252,25 @@
   padding: 8px 12px; font-size: var(--ls-fs-desc);
 }
 
+/* Compare view */
+.ls-cmp__pickers { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.ls-cmp__pickers .ls-field { width: 240px; }
+.ls-cmp__pickers svg { color: var(--ls-text-disabled); margin-bottom: 8px; }
+.ls-cmp__patches { display: flex; flex-direction: column; gap: var(--ls-gap, 12px); }
+
+/* Parent-commit links (commit detail) */
+.ls-rb__parentlink {
+  font-family: var(--ls-font-mono); font-size: var(--ls-fs-label);
+  color: var(--ls-accent); text-decoration: none;
+  border: 1px solid var(--ls-border); border-radius: 5px; padding: 1px 6px;
+}
+.ls-rb__parentlink:hover { background: var(--ls-hover); }
+
+/* Dense row action clusters inside tables */
+.ls-rb__rowactions { display: inline-flex; gap: 2px; }
+.ls-rb__cellcommit { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.ls-rb__cellcommit .ls-rb__muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 42ch; }
+
 @media (prefers-reduced-motion: reduce) {
   .ls-rb *, .ls-code *, .ls-blame * { transition: none !important; animation: none !important; }
 }
