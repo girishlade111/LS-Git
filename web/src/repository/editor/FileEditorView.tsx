@@ -320,6 +320,15 @@ export function FileEditorView({
 
       {editableText ? (
         <>
+          {isNew && (
+            <Input
+              label="File path"
+              value={path}
+              onChange={(e) => onNewPath(e.target.value)}
+              placeholder="docs/new-file.md"
+              hint="Directories are created implicitly. Commit when ready."
+            />
+          )}
           {showDiff && buffer && (
             <div className="ls-editor-diffpreview" aria-label="Uncommitted diff preview">
               {(() => {
