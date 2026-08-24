@@ -227,10 +227,9 @@ export function registerRepositoryRoutes(app: FastifyInstance): void {
     return { ok: true, branch: name }
   })
 
-  app.post('/api/v1/projects/:id/repository/branches/*/rename', { preHandler: auth }, async (req) => {
-    const oldName = decodeWildcard((req.params as Record<string, string>)['*'] ?? '')
+  app.post('/api/v1/projects/:id/repository/branches/rename', { preHandler: auth }, async (req) => {
     const body = (req.body ?? {}) as Record<string, unknown>
-    return repos.renameBranch(req.actor, projectId(req), oldName, String(body.new_name ?? ''))
+    return repos.renameBranch(req.actor, projectId(req), String(body.name ?? ''), String(body.new_name ?? ''))
   })
 
   // -- default branch ---------------------------------------------------------------

@@ -184,12 +184,11 @@ describe('rename', () => {
       expect((err as { code?: string }).code).toBe('protected_branch')
     }
 
-    s.app.store.protectedBranches.set(s.projectId, 'plain', 'maintainer')
     s.app.store.db.run('DELETE FROM protected_branches WHERE project_id = ? AND name = ?', s.projectId, 'plain')
     const httpRename = await authed(
       s.app, 'POST',
-      `${base(s)}/branches/${encodeURIComponent('plain')}/rename`,
-      { session: s.session, payload: { new_name: 'renamed-via-http' } },
+      `${base(s)}/branches/rename`,
+      { session: s.session, payload: { name: 'plain', new_name: 'renamed-via-http' } },
     )
     expect(httpRename.statusCode).toBe(200)
     expect(httpRename.json()).toMatchObject({ from: 'plain', to: 'renamed-via-http' })
