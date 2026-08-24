@@ -256,6 +256,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   registerProjectRoutes(app)
   registerRepositoryRoutes(app)
   registerForkRoutes(app)
+  registerSocialRoutes(app)
   registerUploadRoutes(app)
   registerUploadSessionRoutes(app)
 
@@ -308,5 +309,6 @@ import { registerAccountRoutes } from './routes/account.js'
 import { registerProjectRoutes } from './routes/projects.js'
 import { registerRepositoryRoutes } from './routes/repository.js'
 import { registerForkRoutes } from './routes/forks.js'
+import { registerSocialRoutes } from './routes/social.js'
 import { registerUploadRoutes } from './routes/uploads.js'
 import { registerUploadSessionRoutes } from './routes/uploadsessions.js'
