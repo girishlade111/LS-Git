@@ -595,7 +595,7 @@ export class UploadService {
       total_bytes: totalBytes,
       merge_request: {
         created: false,
-        reason: opts.create_merge_request_requested
+        reason: opts.create_merge_request
           ? 'Merge requests arrive with the collaboration phase — your branch is ready.'
           : 'Merge requests arrive with the collaboration phase; your branch is ready on the instance.',
       },
