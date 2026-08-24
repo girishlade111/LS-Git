@@ -110,8 +110,40 @@ export interface SearchMatch {
   line_matches?: Array<{ line: number; text: string }>
 }
 
-async function request<T>(url: string, method = 'GET'): Promise<T> {
+export interface BranchBrowseInfo extends BranchInfo {
+  title: string
+  author_name: string
+  committed_at: string
+}
+
+export interface CompareFile {
+  path: string
+  kind: 'added' | 'modified' | 'deleted'
+  patch?: string
+  stats?: { added: number; removed: number }
+}
+
+export interface CompareResult {
+  from: { ref: string; sha: string }
+  to: { ref: string; sha: string }
+  merge_base: string | null
+  ahead: CommitView[]
+  behind: CommitView[]
+  commits_ahead_count: number
+  commits_behind_count: number
+  files: CompareFile[]
+}
+
+export interface CommitDiffFile {
+  path: string
+  kind: 'added' | 'modified' | 'deleted'
+  patch: string
+  stats: { added: number; removed: number }
+}
+
+async function request<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
   const headers: Record<string, string> = {}
+  if (body !== undefined) headers['content-type'] = 'application/json'
   if (!['GET', 'HEAD'].includes(method)) {
     for (const part of document.cookie.split(';')) {
       const eq = part.indexOf('=')
@@ -121,7 +153,7 @@ async function request<T>(url: string, method = 'GET'): Promise<T> {
       }
     }
   }
-  const res = await fetch(url, { method, headers, credentials: 'same-origin' })
+  const res = await fetch(url, { method, headers, credentials: 'same-origin', ...(body !== undefined ? { body: JSON.stringify(body) } : {}) })
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>
   if (!res.ok) throw new Error(String(data.message ?? 'Request failed'))
   return data as T
@@ -181,6 +213,45 @@ export const repositoryApi = {
     dirPath
       ? `${repoBase(projectId)}/download/${encodeURIComponent(ref)}/${encodePath(dirPath)}`
       : `${repoBase(projectId)}/download/${encodeURIComponent(ref)}`,
+  // -- branch/tag management ------------------------------------------------
+  branches: (projectId: number, opts: { search?: string; sort?: 'name' | 'recent' } = {}) => {
+    const q = new URLSearchParams()
+    if (opts.search) q.set('search', opts.search)
+    if (opts.sort && opts.sort !== 'name') q.set('sort', opts.sort)
+    const qs = q.toString()
+    return request<{ branches: BranchBrowseInfo[] }>(`${repoBase(projectId)}/branches${qs ? `?${qs}` : ''}`)
+  },
+  createBranch: (projectId: number, name: string, startPoint: string | null) =>
+    request<{ branch: string; commit_sha: string }>(`${repoBase(projectId)}/branches`, 'POST', {
+      name,
+      ...(startPoint ? { start_point: startPoint } : {}),
+    }),
+  deleteBranch: (projectId: number, name: string, expectedOld?: string | null) =>
+    request<{ ok: boolean }>(
+      `${repoBase(projectId)}/branches/${encodePath(name)}${expectedOld ? `?expected_old=${encodeURIComponent(expectedOld)}` : ''}`,
+      'DELETE',
+    ),
+  renameBranch: (projectId: number, name: string, newName: string) =>
+    request<{ from: string; to: string; sha: string }>(`${repoBase(projectId)}/branches/rename`, 'POST', { name, new_name: newName }),
+  setDefaultBranch: (projectId: number, name: string) =>
+    request<{ default_branch: string; previous: string }>(`${repoBase(projectId)}/default_branch`, 'PUT', { name }),
+  compare: (projectId: number, from: string, to: string, withPatches = false) =>
+    request<CompareResult>(
+      `${repoBase(projectId)}/compare?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${withPatches ? '&with_patches=1' : ''}`,
+    ),
+  commitDiff: (projectId: number, sha: string) =>
+    request<{ commit_sha: string; parent_sha: string | null; files: CommitDiffFile[] }>(
+      `${repoBase(projectId)}/commit/${encodeURIComponent(sha)}/diff`,
+    ),
+  tagsList: (projectId: number) => request<{ tags: TagInfo[] }>(`${repoBase(projectId)}/tags`),
+  createTag: (projectId: number, name: string, refName: string, message: string | null) =>
+    request<{ name: string; annotated: boolean; target: string }>(`${repoBase(projectId)}/tags`, 'POST', {
+      name,
+      ref: refName,
+      ...(message ? { message } : {}),
+    }),
+  deleteTag: (projectId: number, name: string) =>
+    request<{ ok: boolean }>(`${repoBase(projectId)}/tags/${encodePath(name)}`, 'DELETE'),
 }
 
 export type { Project }

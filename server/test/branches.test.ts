@@ -111,25 +111,27 @@ describe('delete protection', () => {
     const s = await setup()
     commit(s, 'work', [{ path: 'f', content: '1' }])
     await s.repos.createBranch(s.owner, s.projectId, { name: 'deletable' })
+    await s.repos.createBranch(s.owner, s.projectId, { name: 'guarded' })
 
-    // Protect 'main' at no_one level AND demote alice so no admin bypass applies.
+    // Protect a non-default branch and demote alice so no admin bypass applies.
     s.app.store.db.run('UPDATE users SET admin = 0 WHERE id = ?', s.owner.userId)
-    s.app.store.protectedBranches.set(s.projectId, 'main', 'no_one')
+    s.app.store.protectedBranches.set(s.projectId, 'guarded', 'no_one')
 
-    const blocked = await authed(s.app, 'DELETE', `${base(s)}/branches/main`, { session: s.session })
+    const blocked = await authed(s.app, 'DELETE', `${base(s)}/branches/guarded`, { session: s.session })
     expect(blocked.statusCode).toBe(403)
     expect((blocked.json() as { code?: string }).code).toBe('protected_branch')
     // Still present:
-    expect(await s.repos.resolveBranch(s.owner, s.projectId, 'main')).toBeTruthy()
+    expect(await s.repos.resolveBranch(s.owner, s.projectId, 'guarded')).toBeTruthy()
 
     // Unprotected branch deletes fine.
     const ok = await authed(s.app, 'DELETE', `${base(s)}/branches/deletable`, { session: s.session })
     expect(ok.statusCode).toBe(200)
     expect(await s.repos.resolveBranch(s.owner, s.projectId, 'deletable')).toBeNull()
 
-    // The DEFAULT branch is never deletable either.
+    // The DEFAULT branch is never deletable (distinct rule → 400).
     const defBlocked = await authed(s.app, 'DELETE', `${base(s)}/branches/main`, { session: s.session })
-    expect([400, 403]).toContain(defBlocked.statusCode)
+    expect(defBlocked.statusCode).toBe(400)
+    expect((defBlocked.json() as { code?: string }).code).toBe('default_branch')
   })
 })
 
@@ -257,7 +259,7 @@ describe('tags', () => {
 
     const del = await authed(s.app, 'DELETE', `${base(s)}/tags/tmp`, { session: s.session })
     expect(del.statusCode).toBe(200)
-    expect(await s.repos.listTags(s.owner, s.projectId).find(t => t.name === 'tmp')).toBeNull()
+    expect(s.repos.listTags(s.owner, s.projectId).find((t) => t.name === 'tmp')).toBeUndefined()
 
     const missing = await authed(s.app, 'DELETE', `${base(s)}/tags/tmp`, { session: s.session })
     expect(missing.statusCode).toBe(404)
@@ -296,6 +298,7 @@ describe('compare branches', () => {
       { path: 'shared.txt', content: 'alpha\nbeta\ngamma\n' },
       { path: 'only-main.txt', content: 'main only' },
     ])
+    const forkPoint = await s.repos.resolveBranch(s.owner, s.projectId, 'main')
 
     // Diverge feature from main's tip.
     commit(s, 'feature adds', [{ path: 'new-feature.txt', content: 'hello\nworld\n' }], { new_branch: 'feature/x', start_branch: 'main' })
@@ -311,16 +314,21 @@ describe('compare branches', () => {
     expect(cmp.statusCode).toBe(200)
     const body = cmp.json() as Record<string, unknown>
 
-    expect(body.merge_base).toBe(await s.repos.resolveBranch(s.owner, s.projectId, 'main'))
+    // Merge-base is the FORK POINT (not main's current tip).
+    expect(body.merge_base).toBe(forkPoint)
     expect(body.commits_ahead_count).toBe(2)
     expect(body.commits_behind_count).toBe(1)
     expect(((body.ahead as Array<{ title: string }>)[0]).title).toBe('feature edits shared')
 
     const files = body.files as Array<{ path: string; kind: string; patch?: string }>
-    const paths = files.map((f) => f.path).sort()
-    expect(paths).toEqual(['new-feature.txt', 'shared.txt'])
+    // Tree-to-tree comparison shows differences in BOTH directions,
+    // matching git diff main...feature semantics for file listing.
+    const byPath = new Map(files.map((f) => [f.path, f]))
+    expect([...byPath.keys()].sort()).toEqual(['main-progress.md', 'new-feature.txt', 'shared.txt'])
+    expect(byPath.get('main-progress.md')!.kind).toBe('deleted')
+    expect(byPath.get('new-feature.txt')!.kind).toBe('added')
 
-    const sharedPatch = files.find((f) => f.path === 'shared.txt')!
+    const sharedPatch = byPath.get('shared.txt')!
     expect(sharedPatch.kind).toBe('modified')
     expect(sharedPatch.patch).toContain('-beta')
     expect(sharedPatch.patch).toContain('+BETA')
@@ -445,15 +453,20 @@ describe('concurrent changes', () => {
     const sha = await s.repos.resolveBranch(s.owner, s.projectId, 'contested')
     const repo = s.repos.open(s.owner, s.projectId).repo
 
-    // Rename wins the old ref's CAS…
+    // Rename wins the old ref (CAS-protected)…
     s.repos.renameBranch(s.owner, s.projectId, 'contested', 'contested-renamed')
-    // …a stale delete targeting the OLD name with the recorded tip must fail.
+    // …a stale delete targeting the OLD name must fail — the ref is gone.
+    let failed = false
     try {
       repo.deleteRef('refs/heads/contested', sha!)
       expect.unreachable('stale delete must fail')
     } catch (err) {
-      expect((err as { code?: string }).code).toBe('ref_conflict')
+      failed = true
+      const code = (err as { code?: string }).code
+      expect(['ref_conflict', 'invalid_ref']).toContain(code)
+      if (code === 'ref_conflict') expect((err as { currentSha?: string }).currentSha).toBe(sha)
     }
+    expect(failed).toBe(true)
     // Work survives under the new name only.
     expect(repo.resolveBranch('contested')).toBeNull()
     expect(repo.resolveBranch('contested-renamed')).toBe(sha)

@@ -825,10 +825,14 @@ export class GitRepository {
    */
   applyChangesToBranch(opts: ApplyChangesOptions): ApplyChangesResult {
     const targetRef = `refs/heads/${validateBranchName(opts.targetBranch)}`
-    const previousTip =
-      opts.targetBranch === opts.baseBranch
-        ? this.resolveBranch(opts.baseBranch)
-        : this.resolveBranch(opts.baseBranch)
+    const previousTip = this.resolveBranch(opts.baseBranch)
+    // When the TARGET branch already exists (commit-to-existing flow), the
+    // commit lands on top of ITS tip; otherwise it parents onto the base.
+    const creatingNewBranch = opts.targetBranch !== opts.baseBranch
+    const currentTargetTip = creatingNewBranch ? this.resolveBranch(opts.targetBranch) : previousTip
+    const parentTip = creatingNewBranch ? (currentTargetTip ?? previousTip) : previousTip
+    // CAS expectation: whatever the target holds right now (null ⇒ create-only).
+    const expectedForCas = creatingNewBranch ? currentTargetTip : previousTip
 
     const baseEntries = previousTip
       ? this.flattenTree(this.readCommit(previousTip).tree)
@@ -875,15 +879,14 @@ export class GitRepository {
     // Concurrency discipline:
     //   same branch  → expect the exact tip we built upon (lost-update guard);
     //   new branch   → expect whatever the target holds right now (null ⇒
-    //                  create-only). A racing creator/commiter conflicts.
-    const creatingNewBranch = opts.targetBranch !== opts.baseBranch
+    //                  create-only). A racing creator/committer conflicts.
     this.updateRef(targetRef, commitSha, expectedForCas)
     return {
       commitSha,
       treeSha,
       branch: opts.targetBranch,
       previousTip,
-      createdBranch: creatingNewBranch && previousTip !== parentTip ? true : creatingNewBranch,
+      createdBranch: creatingNewBranch && currentTargetTip === null,
       replacedPaths,
       deletedPaths,
     }
