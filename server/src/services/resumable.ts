@@ -501,16 +501,19 @@ export class ResumableUploadService {
     const targetBranch = String(opts.new_branch ?? opts.branch ?? project.default_branch)
     const baseBranch = opts.new_branch ? String(opts.start_branch ?? project.default_branch) : targetBranch
     const replace = opts.replace === true
-    const excludeIds = Array.isArray(opts.exclude) ? opts.exclude.map(String) : []
 
     // Exclusions are explicit operator intent ("3 of 500 failed — ship the rest").
+    // They persist: once skipped, an item never re-enters the include set.
     const items = this.s.uploadSessionItems.listForSession(sid)
-    const excluded = items.filter((i) => excludeIds.includes(i.id))
-    if (excluded.length !== excludeIds.length) {
+    const knownIds = new Set(items.map((i) => i.id))
+    const excludeIds = Array.isArray(opts.exclude)
+      ? (opts.exclude as unknown[]).map(String)
+      : []
+    if (excludeIds.some((id) => !knownIds.has(id))) {
       throw new AppError(400, 'exclude references unknown items', 'validation_failed')
     }
-    if (excluded.length > 0) this.s.uploadSessionItems.markSkipped(excluded.map((i) => i.id))
-    const included = items.filter((i) => !excludeIds.includes(i.id))
+    if (excludeIds.length > 0) this.s.uploadSessionItems.markSkipped(excludeIds)
+    const included = items.filter((i) => i.state !== 'skipped' && !excludeIds.includes(i.id))
     if (included.length === 0) {
       throw new AppError(400, 'No items remain in this session', 'empty_commit')
     }
