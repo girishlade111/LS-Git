@@ -370,6 +370,15 @@ export class GitRepository {
     return this.readLooseOrThrow(validateSha(sha)).type
   }
 
+  /**
+   * Raw object payload (type + body) — the cross-repo copy primitive used by
+   * fork sync: writing `{type, body}` into another repository reproduces the
+   * identical SHA (content-addressed), so history transfers verbatim.
+   */
+  readRaw(sha: string): { type: ObjectType; body: Buffer } {
+    return this.readLooseOrThrow(validateSha(sha))
+  }
+
   readBlob(sha: string): Buffer {
     const obj = this.readLooseOrThrow(validateSha(sha))
     if (obj.type !== 'blob') throw new InvalidObjectError(`${sha} is a ${obj.type}, not a blob`)

@@ -474,6 +474,10 @@ export interface ProjectRow {
   repository_storage: string
   disk_path: string
   initialized: number
+  /** Direct upstream project when this project is a fork. */
+  forked_from_project_id: number | null
+  /** Id of the fork network's root project; null when not (or no longer) part of a network. */
+  fork_network_id: number | null
   last_activity_at: string
   created_at: string
   updated_at: string

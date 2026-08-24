@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdirSync, existsSync, rmSync, renameSync } from 'node:fs'
+import { cpSync, mkdirSync, existsSync, rmSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { GitRepository } from './repository.js'
 
@@ -126,5 +126,72 @@ export class LocalHashedStorage implements RepositoryStorage {
       return
     }
     rmSync(trashPath, { recursive: true, force: true })
+  }
+
+  /**
+   * Full repository clone at the storage level (the fork primitive).
+   *
+   * Copies the ENTIRE object database plus all refs — commit SHAs are
+   * content-addressed, so history, branches and tags transfer verbatim.
+   * HEAD/config are written fresh for the new repository per policy.
+   */
+  copyRepository(srcDiskPath: string, destDiskPath: string, opts: { defaultBranch?: string } = {}): void {
+    const src = GitRepository.open(this.absolute(srcDiskPath))
+    const destAbs = this.absolute(destDiskPath)
+    if (existsSync(destAbs)) throw new Error('destination repository already exists')
+
+    // Fresh skeleton (bare init semantics).
+    const repo = GitRepository.createBare(destAbs, opts.defaultBranch ?? src.defaultBranch())
+
+    // Object database + packed-refs + refs/* verbatim.
+    if (existsSync(join(src.path, 'objects'))) {
+      cpSync(join(src.path, 'objects'), join(destAbs, 'objects'), { recursive: true })
+    }
+    for (const file of ['packed-refs']) {
+      const from = join(src.path, file)
+      if (existsSync(from)) cpSync(from, join(destAbs, file))
+    }
+    for (const ns of ['heads', 'tags']) {
+      const from = join(src.path, 'refs', ns)
+      if (existsSync(from)) cpSync(from, join(destAbs, 'refs', ns), { recursive: true })
+    }
+    void repo // skeleton already materialized on disk
+  }
+
+  /**
+   * Incremental object transfer from an upstream repository into a fork
+   * (the Sync-Fork primitive): walks `tipSha` ancestry in the source and
+   * writes every missing object into the destination. Content-addressed
+   * writes make the transfer idempotent and SHA-exact.
+   */
+  copyObjectsInto(
+    srcDiskPath: string,
+    destDiskPath: string,
+    tipSha: string,
+    limits: { maxObjects?: number } = {},
+  ): number {
+    const upstream = GitRepository.open(this.absolute(srcDiskPath))
+    const fork = GitRepository.open(this.absolute(destDiskPath))
+    const maxObjects = limits.maxObjects ?? 200_000
+
+    const stack: Array<string> = [tipSha]
+    let copied = 0
+    while (stack.length > 0) {
+      if (copied > maxObjects) throw new Error('Fork sync exceeded the object-transfer limit')
+      const sha = stack.pop()!
+      // Presence implies ancestry completeness for content-addressed stores:
+      // every prior write transferred a full closure, so skip whole subtrees.
+      if (fork.hasObject(sha)) continue
+      const { type, body } = upstream.readRaw(sha)
+      fork.writeObject(type, body)
+      copied++
+      if (type === 'commit') {
+        const parsed = fork.readCommit(sha)
+        stack.push(...parsed.parents, parsed.tree)
+      } else if (type === 'tree') {
+        for (const entry of fork.readTree(sha)) stack.push(entry.sha)
+      }
+    }
+    return copied
   }
 }
