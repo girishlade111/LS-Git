@@ -144,6 +144,7 @@ export class UploadService {
         403,
         `Branch '${branch}' is protected — push to an unprotected branch instead`,
         'protected_branch',
+        { code: 'protected_branch' },
       )
     }
   }
@@ -469,7 +470,7 @@ export class UploadService {
         409,
         `${pendingIncomplete.length} file(s) have not finished transferring — retry or remove them first`,
         'incomplete_batch',
-        { pending_paths: pendingIncomplete.slice(0, MAX_CONFLICT_LIST).map((r) => r.file_path) },
+        { code: 'incomplete_batch', pending_paths: pendingIncomplete.slice(0, MAX_CONFLICT_LIST).map((r) => r.file_path) },
       )
     }
     const included = rows.filter((r) => r.state === 'pending') // fully received
@@ -517,7 +518,7 @@ export class UploadService {
             ? `'${conflicts[0]}' already exists`
             : `${conflicts.length} files already exist in this branch`,
           'file_exists',
-          { conflict_paths: conflicts.slice(0, MAX_CONFLICT_LIST), conflict_count: conflicts.length },
+          { code: 'file_exists', conflict_paths: conflicts.slice(0, MAX_CONFLICT_LIST), conflict_count: conflicts.length },
         )
       }
     }
