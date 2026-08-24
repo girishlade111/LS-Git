@@ -328,8 +328,8 @@ export function FileEditorView({
           {isNew && (
             <Input
               label="File path"
-              value={activePath} + '
-' +               onChange={(e) => setNewPath(e.target.value)}
+              value={activePath}
+              onChange={(e) => setNewPath(e.target.value)}
               placeholder="docs/new-file.md"
               hint="Directories are created implicitly. Commit when ready."
             />
@@ -401,7 +401,7 @@ export function FileEditorView({
 
       {/* Multi-file commit workflow */}
       <CommitDialog
-        key={`${projectId}:${path}:${commitOpen}`}
+        key={`${projectId}:${activePath}:${commitOpen}`}
         open={commitOpen}
         onClose={() => setCommitOpen(false)}
         buffers={[...(buffer ? [buffer] : [])]}
@@ -409,9 +409,9 @@ export function FileEditorView({
         onCommitted={(outcome: CommitOutcomeView | null) => {
           if (!outcome) return
           editSession.clearAll(projectId)
-          discardDraft(projectId, path)
+          discardDraft(projectId, activePath)
           navigate(
-            `/proj/${projectPath}/blob/${encodeURIComponent(outcome.branch)}/${encodePath(path)}`,
+            `/proj/${projectPath}/blob/${encodeURIComponent(outcome.branch)}/${encodePath(activePath)}`,
           )
         }}
       />
