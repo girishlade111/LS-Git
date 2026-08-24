@@ -109,6 +109,11 @@ export class ForksService {
     return `${owner?.username ?? ''}/${p.path}`
   }
 
+  /** Public accessor for serializers. */
+  fullPathOf(p: ProjectRow): string {
+    return this.fullPath(p)
+  }
+
   // ------------------------------------------------------------------- fork --
 
   /**

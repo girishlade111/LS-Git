@@ -253,6 +253,59 @@ export const repositoryApi = {
     }),
   deleteTag: (projectId: number, name: string) =>
     request<{ ok: boolean }>(`${repoBase(projectId)}/tags/${encodePath(name)}`, 'DELETE'),
+  // -- fork system -----------------------------------------------------------
+  createFork: (
+    projectId: number,
+    input: { path?: string; name?: string; visibility?: string; namespace?: string },
+  ) =>
+    request<{
+      project: { id: number; path: string; name: string; full_path?: string }
+      source: { id: number; full_path: string }
+    }>(`/api/v1/projects/${projectId}/fork`, 'POST', input),
+  forkDivergence: (projectId: number, branch?: string | null) => {
+    const q = branch ? `?branch=${encodeURIComponent(branch)}` : ''
+    return request<ForkDivergenceReport>(`${repoBase(projectId)}/fork/divergence${q}`)
+  },
+  forkSync: (projectId: number, branch?: string | null) =>
+    request<{ outcome: 'updated' | 'noop'; report: ForkDivergenceReport }>(
+      `${repoBase(projectId)}/fork/sync`,
+      'POST',
+      branch ? { branch } : {},
+    ),
+  forkDetach: (projectId: number, confirmPath: string) =>
+    request<{ detached: boolean }>(`${repoBase(projectId)}/fork/detach`, 'POST', { confirm_path: confirmPath }),
+  forkNetwork: (projectId: number) => request<ForkNetworkGraph>(`${repoBase(projectId)}/fork/network`),
+}
+
+export interface ForkDivergenceReport {
+  state: 'up_to_date' | 'ahead' | 'behind' | 'diverged'
+  branch: string
+  upstream_branch: string
+  fork_tip: string | null
+  upstream_tip: string | null
+  behind_count: number
+  ahead_count: number
+}
+
+export interface ForkNetworkNode {
+  id: number
+  name: string
+  path: string
+  full_path: string
+  visibility: string
+  default_branch: string
+  forked_from: number | null
+  is_root: boolean
+  direct_forks: number
+  total_descendants: number
+  children: ForkNetworkNode[]
+}
+
+export interface ForkNetworkGraph {
+  root: ForkNetworkNode
+  members: ForkNetworkNode[]
+  total_size: number
+  max_depth: number
 }
 
 export type { Project }

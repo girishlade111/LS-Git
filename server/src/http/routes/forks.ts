@@ -31,7 +31,7 @@ export function registerForkRoutes(app: FastifyInstance): void {
     })
     reply.code(201)
     return {
-      project: serializeProject(result.project),
+      project: { ...serializeProject(result.project), full_path: forks.fullPathOf(result.project) },
       source: result.source,
     }
   })

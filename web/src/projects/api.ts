@@ -14,6 +14,8 @@ export interface Project {
   created_at: string
   last_activity_at: string
   repository_empty: boolean
+  /** owner/path of this fork's direct upstream, when present. */
+  upstream_full_path: string | null
 }
 
 export interface Catalog {
