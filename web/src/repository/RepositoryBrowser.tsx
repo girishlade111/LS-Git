@@ -117,7 +117,6 @@ export function RepositoryBrowser({
   if (!project) {
     return <div className="ls-rb__loading" role="status">Loading repository…</div>
   }
-  const activeProject = project
   const activeRef = resolved.ref || project.default_branch
 
   const nav = makeNav(owner, projectPath)
