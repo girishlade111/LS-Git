@@ -524,14 +524,14 @@ export class ResumableUploadService {
     let totalBytes = 0
 
     const abs = join(this.cfg.repositoriesRoot, project.disk_path)
-    const objectsDir = join(abs, 'objects')
-    const baseHead = resolveRef(abs, baseBranch)
-    const targetHead = resolveRef(abs, targetBranch)
+    const repo = GitRepository.open(abs)
+    const baseHead = repo.resolveBranch(baseBranch)
+    const targetHead = repo.resolveBranch(targetBranch)
     if (!(targetBranch === baseBranch && !targetHead && !baseHead) && !baseHead && targetBranch === baseBranch) {
       throw new AppError(400, `Source branch does not exist: ${baseBranch}`, 'branch_missing')
     }
     const baseEntries = baseHead
-      ? loadTreeEntries(objectsDir, parseCommit(readObject(objectsDir, baseHead).body).tree)
+      ? repo.flattenTree(repo.readCommit(baseHead).tree)
       : new Map<string, { mode: '100644' | '100755'; sha: string }>()
 
     const conflicts: string[] = []
@@ -596,25 +596,36 @@ export class ResumableUploadService {
       throw new AppError(400, 'All uploaded files are identical to the branch — nothing to commit', 'empty_commit')
     }
 
-    // ---- git mutation: blobs (already buffered by verification) → tree → commit → ref.
+    // ---- git mutation: blobs (already buffered by verification) → tree → commit → CAS ref update.
+    // The tip observed before verification doubles as the CAS expectation, so a
+    // concurrent writer landing meanwhile produces a 409 instead of a lost update.
     for (const content of assembled.values()) {
-      writeObject(objectsDir, 'blob', content)
+      repo.writeBlob(content)
     }
     const merged = new Map(baseEntries)
     for (const [path, entry] of stagedShas) merged.set(path, entry)
-    const treeSha = buildNestedTreeFromShas(
-      objectsDir,
+    const treeSha = repo.writeTreeFromShas(
       [...merged.entries()].map(([path, e]) => ({ path, mode: e.mode, sha: e.sha })),
     )
     const user = this.s.users.byId(actor!.userId)!
-    const commitSha = commitTree(
-      objectsDir,
-      treeSha,
+    const commitSha = repo.writeCommit({
+      tree: treeSha,
+      parents: baseHead ? [baseHead] : [],
       message,
-      { name: user.name ?? user.username, email: `${user.username}@users.lsgit.local` },
-      baseHead ? [baseHead] : [],
-    )
-    writeRef(abs, targetBranch, commitSha)
+      identity: { name: user.name ?? user.username, email: `${user.username}@users.lsgit.local` },
+    })
+    try {
+      repo.updateRef(`refs/heads/${targetBranch}`, commitSha, targetHead ?? null)
+    } catch (err) {
+      if (err instanceof RefConflictError || err instanceof RefLockError) {
+        throw new AppError(
+          409,
+          'The branch changed while the session was finalizing — retry the finalize',
+          'ref_update_conflict',
+        )
+      }
+      throw err
+    }
 
     const committedIds = included.filter((i) => !failures.some((f) => f.item_id === i.id)).map((i) => i.id)
     this.s.db.transaction(() => {
