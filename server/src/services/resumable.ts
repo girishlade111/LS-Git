@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdirSync, writeFileSync, readFileSync, existsSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { AppError } from './identity.js'
 import type { IdentityServices } from './identity.js'
@@ -10,14 +9,7 @@ import type {
   UploadSessionItemRow,
   UploadSessionRow,
 } from '../db/store.js'
-import {
-  buildNestedTreeFromShas,
-  commitTree,
-  loadTreeEntries,
-  parseCommit,
-  readObject,
-  writeObject,
-} from '../storage/gitobjects.js'
+import { GitRepository, RefConflictError, RefLockError } from '../storage/repository.js'
 import type { LocalHashedStorage } from '../storage/local.js'
 import type { UploadStagingStore } from '../storage/uploadstaging.js'
 import { LocalChunkStore } from '../storage/uploadstaging.js'
