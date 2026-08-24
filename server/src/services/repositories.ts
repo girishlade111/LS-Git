@@ -582,7 +582,7 @@ export class RepositoriesService {
 
     const candidate = normalizeRevCandidate(rev)
     if (!candidate) return null
-    if (repo.hasObject(candidate)) {
+    if (candidate.length === 40 && repo.hasObject(candidate)) {
       return { sha: candidate, via: 'sha', source: null }
     }
     // Unique short-sha prefix resolution (≥7 chars), scanning loose objects.
