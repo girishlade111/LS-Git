@@ -25,9 +25,14 @@ import {
   PasswordResetsRepo,
   SessionsRepo,
   SshKeysRepo,
+  StarsRepo,
   UsersRepo,
+  WatchSubscriptionsRepo,
+  NotificationPreferencesRepo,
+  NotificationsRepo,
   type UserRow,
 } from '../db/store.js'
+import { notifyOnEvent } from './notifications.js'
 import { verificationEmail, passwordResetEmail, type Mailer } from './mailer.js'
 
 /** Domain error carrying an HTTP status and a safe, user-facing message. */
@@ -65,10 +70,14 @@ export interface IdentityServices {
   uploadSessionItems: UploadSessionItemsRepo
   protectedBranches: ProtectedBranchesRepo
   events: EventsRepo
+  stars: StarsRepo
+  watchSubscriptions: WatchSubscriptionsRepo
+  notificationPreferences: NotificationPreferencesRepo
+  notifications: NotificationsRepo
 }
 
 export function makeServices(db: Database): IdentityServices {
-  return {
+  const services: Omit<IdentityServices, 'events'> = {
     db,
     users: new UsersRepo(db),
     sessions: new SessionsRepo(db),
@@ -86,8 +95,16 @@ export function makeServices(db: Database): IdentityServices {
     uploadSessions: new UploadSessionsRepo(db),
     uploadSessionItems: new UploadSessionItemsRepo(db),
     protectedBranches: new ProtectedBranchesRepo(db),
-    events: new EventsRepo(db),
+    stars: new StarsRepo(db),
+    watchSubscriptions: new WatchSubscriptionsRepo(db),
+    notificationPreferences: new NotificationPreferencesRepo(db),
+    notifications: new NotificationsRepo(db),
   }
+  // Event-driven fanout: every durable domain event flows through this single
+  // choke point after commit. Idempotent by dedupe key, so a future queue
+  // worker can replay the same rows safely.
+  const events = new EventsRepo(db, (row) => notifyOnEvent(services as IdentityServices, row))
+  return { ...services, events }
 }
 
 // ---------------------------------------------------------------------------
