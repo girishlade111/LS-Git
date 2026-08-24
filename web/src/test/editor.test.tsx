@@ -206,7 +206,7 @@ describe('commit workflow', () => {
       />,
     )
 
-    await user.type(screen.getByLabelText(/Commit message/i), 'my message')
+    setInputValue(/Commit message/i, '${''}'.replace('X',''))
     await user.click(screen.getByRole('button', { name: 'Commit' }))
 
     await waitFor(() => expect(onCommitted).toHaveBeenCalled())
@@ -237,7 +237,7 @@ describe('commit workflow', () => {
     )
     await user.click(screen.getByLabelText(/Create new branch/i))
     await user.type(screen.getByLabelText('New branch name'), 'patch-1')
-    await user.type(screen.getByLabelText(/Commit message/i), 'branch commit')
+    setInputValue(/Commit message/i, '${''}'.replace('X',''))
     await user.click(screen.getByRole('button', { name: 'Commit' }))
 
     await waitFor(() => expect(screen.getByText(/Changes committed/)).toBeTruthy())
@@ -270,7 +270,7 @@ describe('commit workflow', () => {
         onCommitted={onCommitted}
       />,
     )
-    await user.type(screen.getByLabelText(/Commit message/i), 'stale attempt')
+    setInputValue(/Commit message/i, '${''}'.replace('X',''))
     await user.click(screen.getByRole('button', { name: 'Commit' }))
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
@@ -301,7 +301,7 @@ describe('commit workflow', () => {
         onCommitted={() => undefined}
       />,
     )
-    await user.type(screen.getByLabelText(/Commit message/i), 'nope')
+    setInputValue(/Commit message/i, '${''}'.replace('X',''))
     await user.click(screen.getByRole('button', { name: 'Commit' }))
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('not allowed'))
@@ -329,7 +329,7 @@ describe('commit workflow', () => {
         onCommitted={() => undefined}
       />,
     )
-    await user.type(screen.getByLabelText(/Commit message/i), 'blocked push')
+    setInputValue(/Commit message/i, '${''}'.replace('X',''))
     await user.click(screen.getByRole('button', { name: 'Commit' }))
 
     await waitFor(() =>
@@ -356,7 +356,7 @@ describe('commit workflow', () => {
         onCommitted={() => undefined}
       />,
     )
-    await user.type(screen.getByLabelText(/Commit message/i), 'too big')
+    setInputValue(/Commit message/i, '${''}'.replace('X',''))
     await user.click(screen.getByRole('button', { name: 'Commit' }))
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('exceeds'))
     vi.unstubAllGlobals()
