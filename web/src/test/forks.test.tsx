@@ -132,8 +132,8 @@ describe('fork status panel', () => {
     await waitFor(() => expect(screen.getByText('behind')).toBeTruthy())
 
     await user.click(screen.getByRole('button', { name: 'Sync fork' }))
-    await waitFor(() => expect(screen.getByText(/Fast-forwarded main to upstream/)).toBeTruthy())
-    expect(screen.getByText('up to date')).toBeTruthy()
+    await waitFor(() => expect(screen.getByText(/Fast-forwarded main to upstream/)).toBeTruthy(), { timeout: 2000 })
+    await waitFor(() => expect(screen.getByText('up to date')).toBeTruthy(), { timeout: 2000 })
 
     const syncBody = JSON.parse(
       (fetchMock.mock.calls.find((c) => String(c[0]).includes('/fork/sync'))![1] as RequestInit).body as string,
@@ -171,7 +171,16 @@ describe('fork status panel', () => {
   })
 
   it('detach requires typing the exact full project path', async () => {
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ detached: true })))
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
+      if (String(url).includes('/fork/divergence')) {
+        return Promise.resolve(jsonResponse({
+          state: 'up_to_date', branch: 'main', upstream_branch: 'main',
+          fork_tip: 'a'.repeat(40), upstream_tip: 'a'.repeat(40),
+          behind_count: 0, ahead_count: 0,
+        }))
+      }
+      return Promise.resolve(jsonResponse({ detached: true }))
+    })
     vi.stubGlobal('fetch', fetchMock)
 
     const user = userEvent.setup()
