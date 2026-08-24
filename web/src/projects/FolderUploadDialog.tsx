@@ -136,11 +136,11 @@ export function FolderUploadDialog({
   }
 
   function start() {
-    void sessionRef.current?.start()
+    void session?.start()
   }
 
   async function doFinalize() {
-    const session = sessionRef.current
+    const session = session
     if (!session) return
     setFinalizeError(null)
     try {
@@ -185,7 +185,7 @@ export function FolderUploadDialog({
     footer = (
       <>
         <Button onClick={() => close()}>Cancel</Button>
-        <Button variant="primary" data-autofocus disabled={!sessionRef.current || !stats || stats.totalFiles < 1} onClick={start}>
+        <Button variant="primary" data-autofocus disabled={!session || !stats || stats.totalFiles < 1} onClick={start}>
           Upload {stats ? `${stats.totalFiles} file${stats.totalFiles === 1 ? '' : 's'}` : ''}
         </Button>
       </>
@@ -202,15 +202,15 @@ export function FolderUploadDialog({
   } else if (phase === 'running' || phase === 'paused') {
     footer = (
       <>
-        <Button variant="danger" onClick={() => sessionRef.current?.cancel()}>
+        <Button variant="danger" onClick={() => session?.cancel()}>
           Cancel upload
         </Button>
         {phase === 'running' ? (
-          <Button data-autofocus iconStart="more" onClick={() => sessionRef.current?.pause()}>
+          <Button data-autofocus iconStart="more" onClick={() => session?.pause()}>
             Pause
           </Button>
         ) : (
-          <Button variant="primary" data-autofocus iconStart="check" onClick={() => sessionRef.current?.resume()}>
+          <Button variant="primary" data-autofocus iconStart="check" onClick={() => session?.resume()}>
             Resume
           </Button>
         )}
@@ -219,7 +219,7 @@ export function FolderUploadDialog({
   } else if (phase === 'awaiting-commit' || stage === 'committing') {
     footer = (
       <>
-        <Button variant="danger" onClick={() => { sessionRef.current?.cancel(); resetAll(); onClose() }}>
+        <Button variant="danger" onClick={() => { session?.cancel(); resetAll(); onClose() }}>
           Discard upload
         </Button>
         <Button variant="primary" data-autofocus disabled={!canCommit || phase === 'finalizing'} onClick={() => void doFinalize()}>
@@ -381,7 +381,7 @@ export function FolderUploadDialog({
               <ItemList
                 items={visibleItems}
                 overflowCount={items.length - visibleItems.length}
-                onRemove={(id) => sessionRef.current?.removeItem(id)}
+                onRemove={(id) => session?.removeItem(id)}
               />
 
               {stats.failed > 0 && (
@@ -390,7 +390,7 @@ export function FolderUploadDialog({
                     <Icon name="warning" size={14} />
                     {stats.failed} file{stats.failed === 1 ? '' : 's'} failed
                   </p>
-                  <Button size="sm" onClick={() => sessionRef.current?.retryFailed()}>
+                  <Button size="sm" onClick={() => session?.retryFailed()}>
                     Retry failed
                   </Button>
                 </div>
