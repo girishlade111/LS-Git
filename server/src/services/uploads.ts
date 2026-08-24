@@ -223,9 +223,11 @@ export class UploadService {
       state: batch.state,
       declared_files: batch.declared_files,
       staged_files: rows.length,
-      received_files: rows.filter((r) => r.state === 'pending' && r.received_size > 0 && r.sha256).length,
+      // A transfer counts as received once its bytes+hash landed, even if the
+      // row later reached a terminal state via finalize.
+      received_files: rows.filter((r) => r.received_size > 0 && r.sha256).length,
       cancelled_files: rows.filter((r) => r.state === 'cancelled').length,
-      received_bytes: rows.reduce((acc, r) => acc + (r.state === 'cancelled' ? 0 : r.received_size), 0),
+      received_bytes: rows.reduce((acc, r) => acc + r.received_size, 0),
     }
   }
 

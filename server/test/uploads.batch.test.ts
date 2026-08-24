@@ -352,6 +352,7 @@ describe('finalize — one commit for the whole set', () => {
     const batch = String((await createBatch(app, bobSession, project.id, 2, 16)).body.batchId)
 
     const kept = await stageFile(app, bobSession, project.id, batch, 'kept.txt', 'keep me')
+    expect(kept.uploadId).toBeTruthy()
     const removed = await stageFile(app, bobSession, project.id, batch, 'removed.txt', 'remove me')
     expect(removed.uploadId).toBeTruthy()
 
