@@ -275,7 +275,7 @@ describe('chunk protocol — boundaries, checksums, idempotency, attempt caps', 
 
 describe('interruption & resume', () => {
   it('resumes an interrupted transfer from the authoritative chunk map and commits exact bytes', async () => {
-    const { app, bobSession } = await setup()
+    const { app, bobSession } = await setup({ minChunkSize: 8 })
     const project = app.store.projects.byOwnerPath('bob', 'resumable')!
     const path = nextPath('resume')
     const created = await createSession(app, bobSession, project.id, [{ file_path: path, size: 30 }], { chunk_size: 8 })
@@ -314,7 +314,7 @@ describe('interruption & resume', () => {
 
 describe('bounded parallelism', () => {
   it('survives many concurrent chunk uploads across items and on the same chunk', async () => {
-    const { app, bobSession } = await setup()
+    const { app, bobSession } = await setup({ minChunkSize: 12 })
     const project = app.store.projects.byOwnerPath('bob', 'resumable')!
 
     const paths = [nextPath('p'), nextPath('p'), nextPath('p')]
@@ -401,7 +401,7 @@ describe('finalize — idempotency, structured failures, no partial commits', ()
   })
 
   it('reports STRUCTURED state when some items fail — success is never faked, nothing committed', async () => {
-    const { app, bobSession } = await setup()
+    const { app, bobSession } = await setup({ minChunkSize: 4 })
     const project = app.store.projects.byOwnerPath('bob', 'resumable')!
     const mainBefore = readBranchFingerprint()
 
