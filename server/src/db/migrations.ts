@@ -663,4 +663,71 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
       CREATE INDEX idx_pr_drafts ON pr_draft_comments(pr_id, author_id);
     `,
   },
+  {
+    version: 12,
+    sql: `
+      -- Community discussions (GitLab Discussions parity, LSGit-native schema).
+      -- Deliberately SEPARATE from issues: no iid, no labels/milestones, no
+      -- state machine — just category + community lifecycle flags.
+
+      CREATE TABLE discussions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        author_id INTEGER NOT NULL REFERENCES users(id),
+        category TEXT NOT NULL DEFAULT 'general'
+          CHECK (category IN ('question', 'idea', 'announcement', 'showcase', 'general', 'poll')),
+        title TEXT NOT NULL,
+        body TEXT NOT NULL DEFAULT '',
+        pinned INTEGER NOT NULL DEFAULT 0,
+        locked INTEGER NOT NULL DEFAULT 0,
+        best_answer_comment_id INTEGER,
+        poll_options TEXT,
+        last_activity_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_discussions_list ON discussions(project_id, pinned DESC, last_activity_at DESC);
+      CREATE INDEX idx_discussions_category ON discussions(project_id, category);
+
+      CREATE TABLE discussion_comments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        discussion_id INTEGER NOT NULL REFERENCES discussions(id) ON DELETE CASCADE,
+        parent_id INTEGER REFERENCES discussion_comments(id) ON DELETE CASCADE,
+        author_id INTEGER NOT NULL REFERENCES users(id),
+        body TEXT NOT NULL,
+        edited_at TEXT,
+        deleted INTEGER NOT NULL DEFAULT 0,
+        deleted_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_dcomments_disc ON discussion_comments(discussion_id, id);
+
+      -- Poll foundation (category='poll'): options stored as JSON on the row;
+      -- one vote per user, switchable until the discussion locks.
+      CREATE TABLE discussion_poll_votes (
+        discussion_id INTEGER NOT NULL REFERENCES discussions(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        option_index INTEGER NOT NULL,
+        voted_at TEXT NOT NULL,
+        PRIMARY KEY (discussion_id, user_id)
+      );
+
+      -- Reactions widen to discussion targets (rows preserved).
+      CREATE TABLE reactions_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        noteable_type TEXT NOT NULL CHECK (noteable_type IN ('issue', 'note', 'pull_request', 'discussion', 'discussion_comment')),
+        noteable_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE (user_id, noteable_type, noteable_id, name)
+      );
+      INSERT INTO reactions_new (id, user_id, noteable_type, noteable_id, name, created_at)
+        SELECT id, user_id, noteable_type, noteable_id, name, created_at FROM reactions;
+      DROP TABLE reactions;
+      ALTER TABLE reactions_new RENAME TO reactions;
+      CREATE INDEX idx_reactions_target ON reactions(noteable_type, noteable_id);
+    `,
+  },
 ]
