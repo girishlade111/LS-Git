@@ -531,7 +531,7 @@ export function renderIssueBody(form: IssueFormDef, answers: NormalizedAnswers):
       case 'text':
       case 'textarea': {
         if (typeof value !== 'string' || value === '') continue
-        sections.push(sectionOf(field, field.type === 'textarea' ? value : value))
+        sections.push(sectionOf(field, value))
         break
       }
       case 'dropdown': {
