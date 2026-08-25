@@ -92,7 +92,7 @@ describe('inline diff comments', () => {
       path: 'src.txt', side: 'new', line_start: 3, line_end: 3,
     })
     expect(r.status).toBe(201)
-    const thread = r.body as unknown as Record<string, unknown>
+    const thread = ((r.body as Record<string, unknown>).thread ?? r.body) as unknown as Record<string, unknown>
     expect(thread.path).toBe('src.txt')
     expect(thread.line_start).toBe(3)
     expect(thread.line_end).toBe(3)
