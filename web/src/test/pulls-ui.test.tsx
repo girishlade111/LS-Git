@@ -96,7 +96,7 @@ describe('pull request list', () => {
 
     await user.selectOptions(await screen.findByRole('combobox', { name: 'Source branch' }), 'feature/x')
     await fireEvent.change(screen.getByLabelText(/^Title$/), { target: { value: 'New work' } })
-    await user.click(screen.getByRole('button', { name: /Open pull request/ }))
+    await user.click(screen.getByRole('button', { name: 'Create pull request' }))
 
     await waitFor(() => expect(created).toBeTruthy())
     expect(created!.source_branch).toBe('feature/x')
