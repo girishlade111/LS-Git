@@ -152,7 +152,7 @@ describe('pull request detail — merge box contract', () => {
       <PullDetailPage projectId={5} owner="alice" projectPath="web" iid={7} canMaintain={false} />,
     )
 
-    const mergeBtn = await screen.findByRole('button', { name: /^Merge$/ })
+    const mergeBtn = (await screen.findByRole('button', { name: /^Merge$/ })) as HTMLButtonElement
     await waitFor(() => expect(mergeBtn.disabled).toBe(false))
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Merge strategy' }), 'squash')
