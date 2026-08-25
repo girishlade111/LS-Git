@@ -2258,12 +2258,13 @@ export class PullRequestsRepo {
     | 'milestone_id' | 'merge_status' | 'merge_status_reason'
     | 'merge_commit_sha' | 'squash_commit_sha'
     | 'closed_at' | 'closed_by_id' | 'merged_at' | 'merged_by_id'
+    | 'seen_source_sha'
   >>): void {
     const allowed = [
       'title', 'description', 'state', 'draft', 'target_branch',
       'milestone_id', 'merge_status', 'merge_status_reason',
       'merge_commit_sha', 'squash_commit_sha',
-      'closed_at', 'closed_by_id', 'merged_at', 'merged_by_id',
+      'closed_at', 'closed_by_id', 'merged_at', 'merged_by_id', 'seen_source_sha',
     ] as const
     const sets: string[] = []
     const values: SqlParam[] = []
