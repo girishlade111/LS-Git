@@ -36,6 +36,7 @@ import {
   NotesRepo,
   ReactionsRepo,
   InternalIdsRepo,
+  PullRequestsRepo,
   type UserRow,
 } from '../db/store.js'
 import { notifyOnEvent } from './notifications.js'
@@ -86,6 +87,7 @@ export interface IdentityServices {
   notes: NotesRepo
   reactions: ReactionsRepo
   internalIds: InternalIdsRepo
+  pullRequests: PullRequestsRepo
 }
 
 export function makeServices(db: Database): IdentityServices {
@@ -117,6 +119,7 @@ export function makeServices(db: Database): IdentityServices {
     notes: new NotesRepo(db),
     reactions: new ReactionsRepo(db),
     internalIds: new InternalIdsRepo(db),
+    pullRequests: new PullRequestsRepo(db),
   }
   // Event-driven fanout: every durable domain event flows through this single
   // choke point after commit. Idempotent by dedupe key, so a future queue

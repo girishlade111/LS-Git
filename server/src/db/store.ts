@@ -1479,7 +1479,7 @@ export interface IssueRow {
 export class InternalIdsRepo {
   constructor(private db: Database) {}
 
-  next(projectId: number, usage: 'issue'): number {
+  next(projectId: number, usage: 'issue' | 'merge_request'): number {
     return this.db.transaction(() => {
       this.db.run(
         `INSERT INTO internal_ids (project_id, usage_name, last_value) VALUES (?, ?, 0)
@@ -2145,4 +2145,282 @@ export interface TaskProgress { total: number; completed: number }
 export function taskProgress(markdown: string): TaskProgress {
   const items = extractTaskItems(markdown)
   return { total: items.length, completed: items.filter((i) => i.checked).length }
+}
+
+// ---------------------------------------------------------------------------
+// Pull requests (GitLab Merge Request workflow semantics).
+// States: opened · closed · merged · locked(transient merge claim, rolled
+// back on failure). `merged` is terminal. Draft is an orthogonal flag.
+// ---------------------------------------------------------------------------
+
+export type PullRequestState = 'opened' | 'closed' | 'merged' | 'locked'
+export type MergeStatus = 'unchecked' | 'can_be_merged' | 'cannot_be_merged'
+
+export interface PullRequestRow {
+  id: number
+  project_id: number
+  iid: number
+  author_id: number
+  title: string
+  description: string
+  state: PullRequestState
+  draft: number
+  source_branch: string
+  target_branch: string
+  milestone_id: number | null
+  merge_status: MergeStatus
+  merge_status_reason: string | null
+  merge_commit_sha: string | null
+  squash_commit_sha: string | null
+  closed_at: string | null
+  closed_by_id: number | null
+  merged_at: string | null
+  merged_by_id: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PrFilterOptions {
+  state?: PullRequestState | 'all'
+  draft?: boolean
+  sourceBranch?: string
+  targetBranch?: string
+  authorId?: number
+  reviewerId?: number // EXISTS probe over pr_reviewers
+  search?: string
+  orderBy?: 'created_at' | 'updated_at'
+  sort?: 'asc' | 'desc'
+  page?: number
+  perPage?: number
+}
+
+export interface PrListResult {
+  rows: Array<PullRequestRow>
+  total: number
+  page: number
+  perPage: number
+}
+
+export class PullRequestsRepo {
+  constructor(private db: Database) {}
+
+  create(data: {
+    project_id: number
+    author_id: number
+    title: string
+    description?: string
+    draft?: boolean
+    source_branch: string
+    target_branch: string
+    milestone_id?: number | null
+  }): PullRequestRow {
+    const now = nowIso()
+    const iid = new InternalIdsRepo(this.db).next(data.project_id, 'merge_request')
+    const res = this.db.run(
+      `INSERT INTO pull_requests (project_id, iid, author_id, title, description, draft, source_branch, target_branch, milestone_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      data.project_id,
+      iid,
+      data.author_id,
+      data.title,
+      data.description ?? '',
+      data.draft ? 1 : 0,
+      data.source_branch,
+      data.target_branch,
+      data.milestone_id ?? null,
+      now,
+      now,
+    )
+    return this.byId(res.lastInsertRowid)!
+  }
+
+  byId(id: number): PullRequestRow | undefined {
+    return this.db.get('SELECT * FROM pull_requests WHERE id = ?', id) as PullRequestRow | undefined
+  }
+
+  byIid(projectId: number, iid: number): PullRequestRow | undefined {
+    return this.db.get('SELECT * FROM pull_requests WHERE project_id = ? AND iid = ?', projectId, iid) as
+      | PullRequestRow
+      | undefined
+  }
+
+  update(id: number, fields: Partial<Pick<
+    PullRequestRow,
+    | 'title' | 'description' | 'state' | 'draft' | 'target_branch'
+    | 'milestone_id' | 'merge_status' | 'merge_status_reason'
+    | 'merge_commit_sha' | 'squash_commit_sha'
+    | 'closed_at' | 'closed_by_id' | 'merged_at' | 'merged_by_id'
+  >>): void {
+    const allowed = [
+      'title', 'description', 'state', 'draft', 'target_branch',
+      'milestone_id', 'merge_status', 'merge_status_reason',
+      'merge_commit_sha', 'squash_commit_sha',
+      'closed_at', 'closed_by_id', 'merged_at', 'merged_by_id',
+    ] as const
+    const sets: string[] = []
+    const values: SqlParam[] = []
+    for (const key of allowed) {
+      if (fields[key] !== undefined) {
+        sets.push(`${key} = ?`)
+        values.push(fields[key] as SqlParam)
+      }
+    }
+    if (sets.length === 0) return
+    sets.push('updated_at = ?')
+    values.push(nowIso(), id)
+    this.db.run(`UPDATE pull_requests SET ${sets.join(', ')} WHERE id = ?`, ...values)
+  }
+
+  delete(id: number): boolean {
+    return this.db.run('DELETE FROM pull_requests WHERE id = ?', id).changes > 0
+  }
+
+  /** Open PRs already claiming the same branch pair — duplicate guard input. */
+  openForBranches(projectId: number, sourceBranch: string, targetBranch: string): Array<PullRequestRow> {
+    return this.db.all(
+      `SELECT * FROM pull_requests WHERE project_id = ? AND state IN ('opened','locked')
+       AND source_branch = ? AND target_branch = ?`,
+      projectId,
+      sourceBranch,
+      targetBranch,
+    ) as unknown as Array<PullRequestRow>
+  }
+
+  listFiltered(projectId: number, f: PrFilterOptions): PrListResult {
+    const clauses: string[] = ['p.project_id = ?']
+    const params: SqlParam[] = [projectId]
+
+    clauses.push(f.state === undefined || f.state === 'all' ? '1=1' : 'p.state = ?')
+    if (f.state && f.state !== 'all') params.push(f.state)
+
+    if (f.draft !== undefined) { clauses.push('p.draft = ?'); params.push(f.draft ? 1 : 0) }
+    if (f.sourceBranch) { clauses.push('p.source_branch = ?'); params.push(f.sourceBranch) }
+    if (f.targetBranch) { clauses.push('p.target_branch = ?'); params.push(f.targetBranch) }
+    if (f.authorId !== undefined) { clauses.push('p.author_id = ?'); params.push(f.authorId) }
+    if (f.reviewerId !== undefined) {
+      clauses.push('EXISTS (SELECT 1 FROM pr_reviewers r WHERE r.pr_id = p.id AND r.user_id = ?)')
+      params.push(f.reviewerId)
+    }
+    if (f.search) {
+      clauses.push('(p.title LIKE ? OR p.description LIKE ?)')
+      const like = `%${f.search}%`
+      params.push(like, like)
+    }
+
+    const order = f.orderBy === 'created_at' ? 'p.created_at' : 'p.updated_at'
+    const dir = f.sort === 'asc' ? 'ASC' : 'DESC'
+    const page = Math.max(1, Math.floor(f.page ?? 1))
+    const perPage = Math.min(100, Math.max(1, Math.floor(f.perPage ?? 20)))
+
+    const total = Number(
+      ((this.db.get(`SELECT COUNT(*) AS c FROM pull_requests p WHERE ${clauses.join(' AND ')}`, ...params)) as Row).c,
+    )
+    const rows = this.db.all(
+      `SELECT p.* FROM pull_requests p WHERE ${clauses.join(' AND ')}
+       ORDER BY ${order} ${dir}, p.iid ${dir} LIMIT ? OFFSET ?`,
+      ...params,
+      perPage,
+      (page - 1) * perPage,
+    ) as unknown as Array<PullRequestRow>
+
+    return { rows, total, page, perPage }
+  }
+
+  setAssignees(prId: number, userIds: number[]): void {
+    this.db.run('DELETE FROM pr_assignees WHERE pr_id = ?', prId)
+    for (const uid of [...new Set(userIds)]) {
+      this.db.run('INSERT OR IGNORE INTO pr_assignees (pr_id, user_id) VALUES (?, ?)', prId, uid)
+    }
+  }
+
+  assigneeIds(prId: number): number[] {
+    return (
+      this.db.all('SELECT user_id FROM pr_assignees WHERE pr_id = ? ORDER BY user_id', prId) as Array<Row>
+    ).map((r) => Number(r.user_id))
+  }
+
+  setReviewers(prId: number, userIds: number[]): void {
+    this.db.run('DELETE FROM pr_reviewers WHERE pr_id = ?', prId)
+    for (const uid of [...new Set(userIds)]) {
+      this.db.run(
+        `INSERT INTO pr_reviewers (pr_id, user_id, review_state) VALUES (?, ?, 'unreviewed')`,
+        prId,
+        uid,
+      )
+    }
+  }
+
+  reviewers(prId: number): Array<{ userId: number; reviewState: 'unreviewed' | 'approved' | 'changes_requested' }> {
+    return (
+      this.db.all('SELECT user_id, review_state FROM pr_reviewers WHERE pr_id = ? ORDER BY user_id', prId) as Array<Row>
+    ).map((r) => ({ userId: Number(r.user_id), reviewState: String(r.review_state) as never }))
+  }
+
+  setReviewerState(prId: number, userId: number, state: 'unreviewed' | 'approved' | 'changes_requested'): boolean {
+    return this.db.run(
+      'UPDATE pr_reviewers SET review_state = ? WHERE pr_id = ? AND user_id = ?',
+      state,
+      prId,
+      userId,
+    ).changes > 0
+  }
+
+  setLabels(prId: number, labelIds: number[]): void {
+    this.db.run('DELETE FROM pr_labels WHERE pr_id = ?', prId)
+    for (const lid of labelIds) {
+      this.db.run('INSERT OR IGNORE INTO pr_labels (pr_id, label_id) VALUES (?, ?)', prId, lid)
+    }
+  }
+
+  labelRows(prId: number): Array<LabelRow> {
+    return this.db.all(
+      `SELECT l.* FROM labels l JOIN pr_labels pl ON pl.label_id = l.id
+       WHERE pl.pr_id = ? ORDER BY l.title COLLATE NOCASE`,
+      prId,
+    ) as unknown as Array<LabelRow>
+  }
+
+  setLinkedIssues(prId: number, issueIids: number[]): void {
+    this.db.run('DELETE FROM pr_linked_issues WHERE pr_id = ?', prId)
+    for (const iid of [...new Set(issueIids)]) {
+      this.db.run('INSERT OR IGNORE INTO pr_linked_issues (pr_id, issue_iid) VALUES (?, ?)', prId, iid)
+    }
+  }
+
+  linkedIssueIids(prId: number): number[] {
+    return (
+      this.db.all('SELECT issue_iid FROM pr_linked_issues WHERE pr_id = ? ORDER BY issue_iid', prId) as Array<Row>
+    ).map((r) => Number(r.issue_iid))
+  }
+
+  approve(prId: number, userId: number): boolean {
+    return this.db.run(
+      `INSERT OR IGNORE INTO pr_approvals (pr_id, user_id, created_at) VALUES (?, ?, ?)`,
+      prId,
+      userId,
+      nowIso(),
+    ).changes > 0
+  }
+
+  unapprove(prId: number, userId: number): boolean {
+    return this.db.run(
+      'DELETE FROM pr_approvals WHERE pr_id = ? AND user_id = ?',
+      prId,
+      userId,
+    ).changes > 0
+  }
+
+  approvals(prId: number): number[] {
+    return (
+      this.db.all('SELECT user_id FROM pr_approvals WHERE pr_id = ? ORDER BY created_at', prId) as Array<Row>
+    ).map((r) => Number(r.user_id))
+  }
+
+  hasApproved(prId: number, userId: number): boolean {
+    return !!this.db.get(
+      'SELECT 1 FROM pr_approvals WHERE pr_id = ? AND user_id = ?',
+      prId,
+      userId,
+    )
+  }
 }

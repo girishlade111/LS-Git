@@ -1338,7 +1338,7 @@ export class RepositoriesService {
   }
 
   /** Best common ancestor approximation: newest commit reachable from both tips. */
-  private mergeBase(repo: GitRepository, a: string, b: string): string | null {
+  mergeBase(repo: GitRepository, a: string, b: string): string | null {
     const ancestorsA = new Set<string>()
     const frontierA: string[] = [a]
     let guard = 0
@@ -1364,8 +1364,8 @@ export class RepositoriesService {
     return null
   }
 
-  /** Commits reachable from `tip` but NOT from `exclude` (bounded). */
-  private reachableSet(repo: GitRepository, tip: string, exclude: string | null): Set<string> {
+  /** Commits reachable from `tip` but NOT from `exclude` (bounded). Public: the PR merge engine reuses it. */
+  reachableSet(repo: GitRepository, tip: string, exclude: string | null): Set<string> {
     const excluded = new Set<string>()
     if (exclude) {
       const f: string[] = [exclude]

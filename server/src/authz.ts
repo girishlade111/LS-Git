@@ -43,6 +43,14 @@ export type Permission =
   | 'labels:maintain'     // label CRUD — reporter+ (owner/admin today)
   | 'milestones:maintain' // milestone CRUD — reporter+ (owner/admin today)
   | 'issue_forms:maintain' // issue form template CRUD — maintainer-equivalent (owner/admin today)
+  // Pull request domain (developer workflow). Until membership tables land:
+  // push-code capabilities map to owner/admin; participation (comment/
+  // approve) extends to any authenticated reader of the project.
+  | 'pr:create'           // developer+ — needs branch-push rights to be meaningful
+  | 'pr:update'           // author OR maintainer+
+  | 'pr:comment'          // guest(10)+ — any authenticated reader
+  | 'pr:approve'          // authenticated reader EXCEPT the PR author
+  | 'pr:merge'            // maintainer+ AND the target branch's protection rule
 
 /** Capabilities any authenticated READER of a project keeps (guest parity). */
 const ISSUE_GUEST_PERMISSIONS = new Set<Permission>(['issue:create', 'issue:comment'])
@@ -82,6 +90,14 @@ function canOwnerPlus(
   project: NonNullable<AuthzContext['resourceProject']>,
 ): boolean {
   return actor.admin || actor.userId === project.ownerId
+}
+
+/** Developer-role equivalent (branch push rights) until memberships land. */
+function canPushCode(
+  actor: Actor,
+  project: NonNullable<AuthzContext['resourceProject']>,
+): boolean {
+  return canReporterPlus(actor, project)
 }
 
 export function can(actor: Actor | null, permission: Permission, ctx: AuthzContext = {}): boolean {
@@ -156,6 +172,29 @@ export function can(actor: Actor | null, permission: Permission, ctx: AuthzConte
     case 'issue_forms:maintain':
       if (!project) return false
       return canReporterPlus(actor, project)
+    case 'pr:create':
+      // Developer-role equivalent: same gate as pushing branches.
+      if (!project) return false
+      return canPushCode(actor, project)
+    case 'pr:update': {
+      if (!project) return false
+      if (canReporterPlus(actor, project)) return true
+      return ctx.resourceUserId === actor.userId
+    }
+    case 'pr:comment': {
+      if (project && canReadProject(actor, project)) return true
+      return false
+    }
+    case 'pr:approve': {
+      if (!project) return false
+      if (!canReadProject(actor, project)) return false
+      return ctx.resourceUserId !== undefined ? ctx.resourceUserId !== actor.userId : true
+    }
+    case 'pr:merge':
+      // Maintainer-equivalent; the protected-branch rule is evaluated in the
+      // service where the target branch context exists.
+      if (!project) return false
+      return canPushCode(actor, project)
     case 'issue:close': {
       if (!project) return false
       if (canReporterPlus(actor, project)) return true
