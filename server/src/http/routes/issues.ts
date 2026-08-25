@@ -385,7 +385,6 @@ export function registerIssueRoutes(app: FastifyInstance): void {
     reply.code(201)
     return { ...noteView(app, note), noteable_iid: iid }
   })
-
   app.patch('/api/v1/projects/:id/issues/:iid/notes/:note_id', { preHandler: auth }, async (req) => {
     const projectId = numParam(req, 'id')
     const iid = numParam(req, 'iid')
