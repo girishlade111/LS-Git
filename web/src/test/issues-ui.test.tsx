@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { IssuesListPage } from '../issues/IssuesListPage'
 import { IssueDetailPage } from '../issues/IssueDetailPage'
@@ -150,7 +150,7 @@ describe('issue detail page', () => {
     )
     await waitFor(() => expect(screen.getByText('Login page crashes')).toBeTruthy())
 
-    const fixBox = screen.getByRole('checkbox', { name: "Mark 'fix it' incomplete" }) as HTMLInputElement
+    const fixBox = screen.getByRole('checkbox', { name: "Mark 'fix it' complete" }) as HTMLInputElement
     expect((fixBox.checked)).toBe(false)
     await user.click(fixBox)
 
@@ -206,6 +206,7 @@ describe('issue detail page', () => {
       if (u.includes('/milestones')) return Promise.resolve(jsonResponse([]))
       return Promise.resolve(jsonResponse(ISSUE))
     })
+    vi.stubGlobal('fetch', fetchMock)
     const user = userEvent.setup()
     render(
       <IssueDetailPage
@@ -271,7 +272,8 @@ describe('labels manager', () => {
     await waitFor(() => expect(screen.getByText('bug')).toBeTruthy())
 
     await user.click(screen.getByRole('button', { name: /New label/ }))
-    await user.type(screen.getByLabelText(/^Name$/), 'performance')
+    // Direct change event: the dialog's focus trap can steal focus mid-type.
+    fireEvent.change(screen.getByLabelText(/^Name$/), { target: { value: 'performance' } })
     await user.click(screen.getByRole('button', { name: 'Create' }))
 
     await waitFor(() => {

@@ -308,7 +308,7 @@ describe('issue references', () => {
     })
     const iidOne = one.body.iid as number
     const tl = await s.app.store.notes.timeline('issue', one.body.id as number)
-    expect(tl.filter((n) => String(n.body).includes('mentioned in'))).toEqual([])
+    expect(tl.filter((n) => String(n.note).includes('mentioned in'))).toEqual([])
     void iidOne
   })
 })
@@ -332,7 +332,9 @@ describe('reactions', () => {
     await authed(s.app, 'POST', url, { session: s.bobSession, payload: { name: 'tada' } })
     await authed(s.app, 'POST', url, { session: s.bobSession, payload: { name: 'thumbsup' } })
     const summary = await authed(s.app, 'GET', url, { session: s.bobSession })
-    const byName = new Map((summary.json() as Array<Record<string, unknown>>).map((r) => [r.name, r]))
+    const byName = new Map(
+      ((summary.json() as unknown) as Array<Record<string, unknown>>).map((r) => [r.name, r]),
+    )
     expect(byName.get('thumbsup')).toMatchObject({ count: 1, me: true })
     expect(byName.get('tada')).toMatchObject({ count: 1, me: true })
 

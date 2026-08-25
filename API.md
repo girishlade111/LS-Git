@@ -1,8 +1,9 @@
 # LSGit — API
 
-Status: **PARTIALLY IMPLEMENTED** — identity, projects, uploads, protected branches and
-the repository code-browser (§3.5) are live in `server/src/http/routes/`; the remainder
-of this document stays the planned contract.
+Status: **PARTIALLY IMPLEMENTED** — identity, projects, uploads, protected branches, the
+repository code-browser (§3.5–3.7) and the issues/labels/milestones collaboration
+surface (§3.8) are live in `server/src/http/routes/`; the remainder of this document
+stays the planned contract.
 
 Reference behavior: GitLab REST v4 + GraphQL + internal APIs
 (https://docs.gitlab.com/api/rest/, https://docs.gitlab.com/api/graphql/).
@@ -208,6 +209,58 @@ binary files are sniffed (NUL byte / invalid UTF-8) and never inlined; large fil
 return `too_large` flags so the UI offers raw/download; deleted paths keep their
 history with a terminal `deleted` event. The web client lives in
 `web/src/repository/` and renders through design tokens only.
+
+### 3.8 Issues, labels & milestones (IMPLEMENTED)
+
+GitLab REST v4 semantics on LSGit URLs. Issues are addressed by per-project `iid`
+(DATABASE.md §2 `internal_ids` sequencing). Confidential issues follow
+PERMISSIONS.md §6 (visible to author/assignees/reporter+; hidden from everyone else,
+including listings and single reads → 404).
+
+```
+GET    /api/v1/projects/:id/issues        state= · labels=a,b · milestone=<title|id|none|any> ·
+                                          assignee_username=(user|none) · author_username= · search=
+                                          order_by=(updated_at|created_at) · sort=(asc|desc)
+                                          page/per_page — X-Total-Count/X-Total-Pages headers +
+                                          {pagination:{page,per_page,total,total_pages,has_more}}
+POST   /api/v1/projects/:id/issues        {title, description?, confidential?, assignee_ids?,
+                                          labels?: [title…], milestone_id?} → 201
+GET    /api/v1/projects/:id/issues/:iid
+PATCH  /api/v1/projects/:id/issues/:iid   partial update incl. state_event: close|reopen;
+                                          every state/metadata change appends a SYSTEM note
+POST   .../issues/:iid/close | /reopen    explicit state transitions
+DELETE /api/v1/projects/:id/issues/:iid   owner/admin only
+
+GET/POST  .../issues/:iid/notes           timeline = human comments + system notes (chronological);
+                                          POST body {body} — @mentions fan out through EVENTS.md bus
+PATCH/DELETE .../notes/:note_id          author or owner/admin only; system notes immutable
+POST      .../issues/:iid/tasks/toggle    {index} flips the nth `- [ ]`/`- [x]` checkbox IN the
+                                          persisted description (GitLab storage contract); returns
+                                          fresh task_progress {total, completed}
+GET/POST  .../issues/:iid/award_emoji     reactions (server allowlist of emoji names); POST toggles
+DELETE    .../award_emoji/:name           revokes the viewer's award
+GET/POST  .../notes/:note_id/award_emoji[/:name]   same for comments
+
+GET/POST/PATCH/DELETE /api/v1/projects/:id/labels[/:label_id]
+                                          title/description/color/scope; colors normalized to
+                                          canonical #rrggbb (anything else → 400); presentation
+                                          layer renders user hues as fixed-alpha tints only.
+                                          Defaults seeded at project creation (bug/feature/
+                                          documentation/critical). ?with_counts=true adds usage.
+GET/POST/PATCH/DELETE /api/v1/projects/:id/milestones[/:milestone_id]
+                                          title/description/due_date/state(active|closed);
+                                          PATCH accepts state_event: close|activate. List/detail
+                                          include total/opened/closed issue counts and
+                                          completion_percent = floor(closed/total*100).
+                                          merge_requests_count is part of the shape now (0 until
+                                          the MR phase). Deleting a milestone unlinks its issues
+                                          (SET NULL), never deletes them.
+```
+
+Web client (`web/src/issues/`): filtered/paginated list, detail view with interactive
+Markdown task lists + activity timeline + reactions, label & milestone managers.
+Label chips composite user colors at low alpha over panel tokens so arbitrary/neon
+choices cannot violate the design palette (`web/src/issues/labelcolor.ts`).
 
 ## 4. GraphQL principles
 

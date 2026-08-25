@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { makeApp, registerUser, loginRaw, extractSession, authed } from './helpers.js'
 
+type ListBody = { pagination: { total: number }; issues: Array<Record<string, unknown>> }
+
 /**
  * Search / filter / sort / pagination over the indexed issue list
  * (DATABASE.md §4: issues(project_id, state, updated_at DESC)).
@@ -95,13 +97,13 @@ describe('issue search & filters', () => {
     expect(any.json().pagination.total).toBe(3)
 
     const assignedBob = await authed(s.app, 'GET', listUrl(s.projectId, { assignee_username: 'bob', state: 'opened' }), {})
-    expect(assignedBob.json().pagination.total).toBe(6) // bug-2,4,6,8,10,12
+    expect((assignedBob.json() as unknown as { pagination: { total: number } }).pagination.total).toBe(6) // bug-2,4,6,8,10,12
 
     const unassigned = await authed(s.app, 'GET', listUrl(s.projectId, { assignee_username: 'none' }), {})
-    expect(unassigned.json().pagination.total).toBe(12)
+    expect((unassigned.json() as unknown as { pagination: { total: number } }).pagination.total).toBe(12)
 
     const byAuthor = await authed(s.app, 'GET', listUrl(s.projectId, { author_username: 'bob' }), {})
-    expect(byAuthor.json().pagination.total).toBe(0)
+    expect((byAuthor.json() as unknown as { pagination: { total: number } }).pagination.total).toBe(0)
 
     // Unknown label → explicit error, never a silent empty page.
     const badLabel = await authed(s.app, 'GET', listUrl(s.projectId, { labels: 'ghost' }), {})
