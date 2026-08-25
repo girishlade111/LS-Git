@@ -21,6 +21,7 @@ import { IssuesRoute, IssueDetailRoute } from './issues/IssuesRouter'
 import { ProjectContextRoute } from './issues/ProjectContextRoute'
 import { LabelsView } from './issues/LabelsView'
 import { MilestonesView } from './issues/MilestonesView'
+import { FormsManagerView } from './issues/FormsManagerView'
 import './repository/repository.css'
 import './issues/issues.css'
 
@@ -116,14 +117,16 @@ export default function App() {
           </AppShell>
         )
       }
-      if (action === 'labels' || action === 'milestones') {
+      if (action === 'labels' || action === 'milestones' || action === 'issue_forms') {
         return (
           <AppShell sidebarCurrent="projects" onNavigate={(id) => navigate(`/${id}`)} repo={{ group: owner, project: projPath, visibility: 'Private', tabs: [], currentTab: '', onTab: () => undefined }}>
             <ProjectContextRoute owner={owner} projectPath={projPath}>
               {(project) =>
                 action === 'labels'
                   ? <LabelsView projectId={project.id} />
-                  : <MilestonesView projectId={project.id} />
+                  : action === 'milestones'
+                    ? <MilestonesView projectId={project.id} />
+                    : <FormsManagerView projectId={project.id} />
               }
             </ProjectContextRoute>
           </AppShell>

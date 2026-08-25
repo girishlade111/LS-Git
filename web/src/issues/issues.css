@@ -283,3 +283,56 @@
   font-size: var(--ls-fs-label);
   color: var(--ls-success);
 }
+
+/* ---------- issue forms ---------- */
+/* Creation-mode switch: two flat, border-driven options. */
+.ls-createmode { display: inline-flex; gap: 2px; border: 1px solid var(--ls-border); border-radius: var(--ls-radius-sm); padding: 2px; }
+.ls-createmode__opt {
+  height: 26px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--ls-radius-sm);
+  background: none;
+  font-size: var(--ls-fs-label);
+  font-weight: 500;
+  color: var(--ls-text-secondary);
+  cursor: pointer;
+}
+.ls-createmode__opt:disabled { color: var(--ls-text-disabled); cursor: not-allowed; }
+.ls-createmode__opt--current { background: var(--ls-tint-accent); color: var(--ls-accent); }
+.ls-formintro { margin: 0; font-size: var(--ls-fs-desc); color: var(--ls-text-secondary); }
+
+/* Field sections: border-driven blocks on the panel surface. */
+.ls-formfields { display: flex; flex-direction: column; gap: 14px; }
+.ls-formfield {
+  border: 1px solid var(--ls-border);
+  border-radius: var(--ls-radius);
+  background: var(--ls-panel);
+  padding: 10px 12px;
+}
+.ls-formfield--invalid { border-color: var(--ls-danger-muted); }
+.ls-formfield__head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+.ls-formfield__label {
+  font-size: var(--ls-fs-label);
+  font-weight: 500;
+  color: var(--ls-text);
+  letter-spacing: 0.02em;
+}
+.ls-formfield__req { color: var(--ls-accent); font-style: normal; margin-left: 3px; }
+.ls-formfield__desc { margin: 0; font-size: var(--ls-fs-label); color: var(--ls-text-secondary); }
+.ls-formfield__error { margin: 8px 0 0; font-size: var(--ls-fs-label); color: var(--ls-danger); }
+
+.ls-textarea-dense { min-height: 90px; resize: vertical; }
+
+/* Choice groups (dropdown-multi / radio / checkboxes / tasklist). */
+.ls-choices { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.ls-checkline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: var(--ls-fs-body);
+  color: var(--ls-text);
+  cursor: pointer;
+}
+.ls-checkline input[type="checkbox"],
+.ls-checkline input[type="radio"] { accent-color: var(--ls-accent); transform: translateY(1px); }

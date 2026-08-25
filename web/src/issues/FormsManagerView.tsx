@@ -5,6 +5,7 @@ import { Dialog } from '../design-system/Dialog'
 import { EmptyState } from '../design-system/EmptyState'
 import { IconButton } from '../design-system/IconButton'
 import { Input } from '../design-system/Input'
+import { Textarea } from '../design-system/Textarea'
 import { Tooltip } from '../design-system/Tooltip'
 import { issuesApi, type FormListEntry } from './api'
 
