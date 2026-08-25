@@ -113,6 +113,7 @@ function FieldRow({
             id={uid}
             className="ls-input"
             type="text"
+            aria-label={field.label}
             placeholder={field.placeholder || undefined}
             value={typeof value === 'string' ? value : ''}
             aria-invalid={!!error || undefined}
@@ -124,6 +125,7 @@ function FieldRow({
             id={uid}
             className="ls-input ls-textarea-dense"
             rows={5}
+            aria-label={field.label}
             placeholder={field.placeholder || undefined}
             value={typeof value === 'string' ? value : ''}
             aria-invalid={!!error || undefined}
@@ -135,6 +137,7 @@ function FieldRow({
           <select
             id={uid}
             className="ls-select"
+            aria-label={field.label}
             value={typeof value === 'string' ? value : ''}
             onChange={(e) => onChange(field.id, e.target.value || undefined)}
           >

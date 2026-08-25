@@ -87,11 +87,11 @@ describe('form-driven issue creation', () => {
     expect(useForm).not.toHaveProperty('disabled', true)
     await user.click(useForm)
 
-    await user.selectOptions(await screen.findByLabelText(/^Form$/), 'bug_report')
+    await user.selectOptions(await screen.findByRole('combobox', { name: /^Form$/ }), 'bug_report')
     expect(await screen.findByText('One line')).toBeTruthy()
 
-    await fireEvent.change(screen.getByPlaceholderText('Login returns 500'), { target: { value: 'Crash on save' } })
-    await user.selectOptions(screen.getByLabelText(/Severity/i), 'high')
+    await fireEvent.change(await screen.findByRole('textbox', { name: 'Summary' }), { target: { value: 'Crash on save' } })
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Severity' }), 'high')
     await user.click(screen.getByRole('checkbox', { name: /^On staging/ }))
     await user.click(screen.getByRole('checkbox', { name: /collect logs/ }))
 
@@ -128,16 +128,16 @@ describe('form-driven issue creation', () => {
     render(<IssuesListPage projectId={5} owner="alice" projectPath="web" navigate={NAV} />)
     await user.click(screen.getByRole('button', { name: /New issue/ }))
     await user.click(await screen.findByRole('radio', { name: /Use a form/ }))
-    await user.selectOptions(await screen.findByLabelText(/^Form$/), 'bug_report')
+    await user.selectOptions(await screen.findByRole('combobox', { name: /^Form$/ }), 'bug_report')
 
     const submit = await screen.findByRole('button', { name: 'Submit form' })
     await waitFor(() => expect(submit).toBeTruthy())
 
     // Fill only SOME required fields; submission stays blocked + error shows.
-    await fireEvent.change(await screen.findByPlaceholderText('Login returns 500'), { target: { value: 'Crash on save' } })
+    await fireEvent.change(await screen.findByRole('textbox', { name: 'Summary' }), { target: { value: 'Crash on save' } })
     expect(submit).toHaveProperty('disabled', true)
 
-    await user.selectOptions(screen.getByLabelText(/Severity/i), 'low')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Severity' }), 'low')
     expect(submit).toHaveProperty('disabled', false)
 
     // No POST was ever sent while invalid.
@@ -169,7 +169,8 @@ describe('forms manager view', () => {
     const user = userEvent.setup()
     render(<FormsManagerView projectId={5} />)
 
-    await user.click(screen.getByRole('button', { name: /New form/ }))
+    // Wait for the initial load before interacting.
+    await user.click(await screen.findByRole('button', { name: /New form/ }))
     const editor = await screen.findByLabelText(/Template YAML/)
     // The editor opens pre-seeded with an LSGit-native schema skeleton.
     expect(editor.value).toContain('fields:')
