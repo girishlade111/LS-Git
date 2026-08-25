@@ -10,6 +10,7 @@ import { Textarea } from '../design-system/Textarea'
 import { LabelChip } from '../issues/LabelChip'
 import { timeAgo } from '../repository/widgets'
 import { pullsApi, type PullRequest, type PrState } from './api'
+import type { Pagination as PaginationMeta } from '../issues/api'
 
 /**
  * Pull request list — GitLab MR semantics, LSGit density.
@@ -31,7 +32,7 @@ export function PullsListPage({
 }) {
   const [state, setState] = useState<PrState | 'all' | 'draft'>('opened')
   const [search, setSearch] = useState('')
-  const [result, setResult] = useState<{ pull_requests: PullRequest[]; pagination: Pagination } | null>(null)
+  const [result, setResult] = useState<{ pull_requests: PullRequest[]; pagination: PaginationMeta } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // New-PR dialog state.
@@ -105,7 +106,7 @@ export function PullsListPage({
             label="Search"
             placeholder="Search titles and descriptions…"
             value={search}
-            onChange={(e) => setSearch(e.target.value || undefined)}
+            onChange={(e) => setSearch(e.target.value)}
           />
         </div>
       </div>

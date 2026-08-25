@@ -3,7 +3,8 @@
  * GitLab Merge Request semantics on LSGit naming.
  */
 
-import type { LabelRef, MilestoneRef, Note, Pagination, UserBrief } from '../issues/api'
+import type { LabelRef, Note, UserBrief } from '../issues/api'
+import type { Pagination as PaginationMeta } from '../issues/api'
 
 export type PrState = 'opened' | 'closed' | 'merged'
 export type MergeMethod = 'merge' | 'squash' | 'rebase'
@@ -98,7 +99,7 @@ export const pullsApi = {
       if (v !== undefined && v !== '' && !(k === 'state' && v === 'all') && !(k === 'page' && Number(v) <= 1)) q.set(k, String(v))
     }
     const qs = q.toString()
-    return request<{ pull_requests: PullRequest[]; pagination: Pagination }>(`${base(projectId)}${qs ? `?${qs}` : ''}`)
+    return request<{ pull_requests: PullRequest[]; pagination: PaginationMeta }>(`${base(projectId)}${qs ? `?${qs}` : ''}`)
   },
   byIid: (projectId: number, iid: number) => request<PullRequest>(`${base(projectId)}/${iid}`),
   create: (
