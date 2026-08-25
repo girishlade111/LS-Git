@@ -353,4 +353,103 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
       ALTER TABLE watch_subscriptions ADD COLUMN muted_events TEXT NOT NULL DEFAULT '[]';
     `,
   },
+  {
+    version: 9,
+    sql: `
+      -- Collaboration phase (DATABASE.md §2): issues + labels + milestones.
+
+      -- Per-project sequence numbers (GitLab internal_ids parity). SQLite is
+      -- single-writer so the increment is naturally serialized; the dedicated
+      -- table keeps the PostgreSQL FOR UPDATE port mechanical.
+      CREATE TABLE internal_ids (
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        usage_name TEXT NOT NULL CHECK (usage_name IN ('issue')),
+        last_value INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (project_id, usage_name)
+      );
+
+      CREATE TABLE issues (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        iid INTEGER NOT NULL,
+        author_id INTEGER NOT NULL REFERENCES users(id),
+        title TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        state TEXT NOT NULL DEFAULT 'opened' CHECK (state IN ('opened', 'closed')),
+        confidential INTEGER NOT NULL DEFAULT 0,
+        milestone_id INTEGER REFERENCES milestones(id) ON DELETE SET NULL,
+        due_date TEXT,
+        closed_at TEXT,
+        closed_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        moved_to_id INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      UNIQUE(project_id, iid);
+      -- DATABASE.md §4 hot path: filtered issue lists hit exactly this index.
+      CREATE INDEX idx_issues_list ON issues(project_id, state, updated_at DESC);
+      CREATE INDEX idx_issues_milestone ON issues(milestone_id);
+      CREATE INDEX idx_issues_author ON issues(author_id);
+
+      -- Multiple assignees are a first-class relation (GitLab parity), not a column.
+      CREATE TABLE issue_assignees (
+        issue_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        PRIMARY KEY (issue_id, user_id)
+      );
+      CREATE INDEX idx_issue_assignees_user ON issue_assignees(user_id);
+
+      -- Labels are project-scoped rows; `scope` leaves room for group labels
+      -- once groups exist (scope='group', project_id = owning namespace).
+      CREATE TABLE labels (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        title TEXT NOT NULL COLLATE NOCASE,
+        description TEXT NOT NULL DEFAULT '',
+        color TEXT NOT NULL DEFAULT '#8a8a8a',
+        scope TEXT NOT NULL DEFAULT 'project'
+          CHECK (scope IN ('project', 'group')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (project_id, title)
+      );
+      CREATE INDEX idx_labels_project ON labels(project_id);
+
+      CREATE TABLE issue_labels (
+        issue_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+        label_id INTEGER NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
+        PRIMARY KEY (issue_id, label_id)
+      );
+      CREATE INDEX idx_issue_labels_label ON issue_labels(label_id);
+
+      -- Polymorphic notes (comments + system activity). The timeline is the
+      -- union of human and system rows ordered by id.
+      CREATE TABLE notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        noteable_type TEXT NOT NULL CHECK (noteable_type IN ('issue')),
+        noteable_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        note TEXT NOT NULL,
+        system INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      -- DATABASE.md §4: timeline reads use this covering index.
+      CREATE INDEX idx_notes_timeline ON notes(noteable_type, noteable_id, id);
+
+      -- Reactions on issues AND notes. Emoji names come from a server-side
+      -- allowlist (no arbitrary content enters the DB).
+      CREATE TABLE reactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        noteable_type TEXT NOT NULL CHECK (noteable_type IN ('issue', 'note')),
+        noteable_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE (user_id, noteable_type, noteable_id, name)
+      );
+      CREATE INDEX idx_reactions_target ON reactions(noteable_type, noteable_id);
+    `,
+  },
 ]
