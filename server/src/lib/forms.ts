@@ -548,8 +548,8 @@ export function renderIssueBody(form: IssueFormDef, answers: NormalizedAnswers):
         break
       }
       case 'checkbox': {
-        if (typeof value !== 'boolean') continue
-        sections.push(sectionOf(field, value ? '- [x]' : '- [ ]'))
+        if (value !== true) continue // unchecked single checkboxes render nothing
+        sections.push(sectionOf(field, `- [x] ${field.label}`))
         break
       }
       case 'checkboxes': {
