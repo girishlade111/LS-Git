@@ -69,7 +69,7 @@ describe('pull request list', () => {
     await waitFor(() => expect(screen.getByText('Add export flow')).toBeTruthy())
     expect(screen.getByText(/feature\/export → main/)).toBeTruthy()
 
-    await user.click(screen.getByRole('tab', { name: 'Merged' }))
+    await user.click(screen.getByRole('button', { name: 'Merged' }))
     await waitFor(() => {
       const calls = fetchMock.mock.calls.map((c) => String(c[0]))
       expect(calls.some((u) => u.includes('state=merged'))).toBe(true)
@@ -93,7 +93,7 @@ describe('pull request list', () => {
     render(<PullsListPage projectId={5} owner="alice" projectPath="web" navigate={NAV} />)
     await user.click(await screen.findByRole('button', { name: /New pull request/ }))
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Source branch' }), 'feature/x')
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Source branch' }), await screen.findByRole('option', { name: 'feature/x' }))
     await fireEvent.change(screen.getByLabelText(/^Title$/), { target: { value: 'New work' } })
     await user.click(screen.getByRole('button', { name: /Open pull request/ }))
 
