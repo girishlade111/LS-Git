@@ -75,26 +75,26 @@ describe('issue search & filters', () => {
   it('searches titles AND descriptions case-insensitively', async () => {
     const s = await setup()
     const byTitle = await authed(s.app, 'GET', listUrl(s.projectId, { search: 'CRASH' }), {})
-    expect(byTitle.json().pagination.total).toBe(6)
+    expect((byTitle.json() as unknown as ListBody).pagination.total).toBe(6)
 
     const byDesc = await authed(s.app, 'GET', listUrl(s.projectId, { search: 'zebra' }), {})
-    expect(byDesc.json().pagination.total).toBe(1)
+    expect((byDesc.json() as unknown as ListBody).pagination.total).toBe(1)
     expect((byDesc.json().issues as Array<Record<string, unknown>>)[0]!.title).toBe('bug-7')
   })
 
   it('filters by label, milestone (title/none/any) and assignee', async () => {
     const s = await setup()
     const labeled = await authed(s.app, 'GET', listUrl(s.projectId, { labels: 'bug' }), {})
-    expect(labeled.json().pagination.total).toBe(5)
+    expect((labeled.json() as unknown as ListBody).pagination.total).toBe(5)
 
     const byMsTitle = await authed(s.app, 'GET', listUrl(s.projectId, { milestone: 'v1' }), {})
-    expect(byMsTitle.json().pagination.total).toBe(3)
+    expect((byMsTitle.json() as unknown as ListBody).pagination.total).toBe(3)
 
     const none = await authed(s.app, 'GET', listUrl(s.projectId, { milestone: 'none' }), {})
-    expect(none.json().pagination.total).toBe(15)
+    expect((none.json() as unknown as ListBody).pagination.total).toBe(15)
 
     const any = await authed(s.app, 'GET', listUrl(s.projectId, { milestone: 'any' }), {})
-    expect(any.json().pagination.total).toBe(3)
+    expect((any.json() as unknown as ListBody).pagination.total).toBe(3)
 
     const assignedBob = await authed(s.app, 'GET', listUrl(s.projectId, { assignee_username: 'bob', state: 'opened' }), {})
     expect((assignedBob.json() as unknown as { pagination: { total: number } }).pagination.total).toBe(6) // bug-2,4,6,8,10,12

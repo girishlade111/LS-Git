@@ -92,7 +92,7 @@ describe('label management', () => {
     expect(del.statusCode).toBe(200)
 
     const fresh = await authed(s.app, 'GET', `/api/v1/projects/${s.projectId}/issues`, { session: s.alice })
-    const row = (fresh.json().issues as Array<Record<string, unknown>>)[0]!
+    const row = ((fresh.json() as unknown) as { issues: Array<Record<string, unknown>> }).issues[0]!
     expect(row.labels).toEqual([])
   })
 
@@ -107,7 +107,7 @@ describe('label management', () => {
       payload: { title: 'B', labels: ['bug'] },
     })
     const list = await authed(s.app, 'GET', `/api/v1/projects/${s.projectId}/labels?with_counts=true`, { session: s.alice })
-    const bug = (list.json() as Array<Record<string, unknown>>).find((l) => l.title === 'bug')!
+    const bug = ((list.json() as unknown) as Array<Record<string, unknown>>).find((l) => l.title === 'bug')!
     expect(bug.open_issues_count).toBe(2)
   })
 })

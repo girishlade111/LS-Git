@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { makeApp, registerUser, loginRaw, extractSession, authed } from './helpers.js'
 import type { FastifyInstance } from 'fastify'
-import type { Actor } from '../src/authz.js'
 
 /**
  * Issue lifecycle: creation (per-project iid), updates, state transitions,
@@ -31,11 +30,6 @@ async function setup(opts: { visibility?: string } = {}): Promise<Setup> {
   })
   expect(res.statusCode).toBe(201)
   return { app, projectId: app.store.projects.byOwnerPath('alice', 'issue-repo')!.id, aliceSession, bobSession }
-}
-
-function actorOf(app: FastifyInstance, name: string): Actor {
-  const u = app.store.users.byUsername(name)!
-  return { userId: u.id, username: name, admin: false, state: 'active', via: { kind: 'session' } }
 }
 
 async function createIssue(
