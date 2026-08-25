@@ -66,7 +66,7 @@ async function setup() {
   const projectId = app.store.projects.byOwnerPath('alice', 'forms-repo')!.id
 
   // 'bug' is part of the GitLab-parity default label set seeded at creation.
-  const bugLabel = s.app.store.labels.byTitle(projectId, 'bug')
+  const bugLabel = app.store.labels.byTitle(projectId, 'bug')
   expect(bugLabel).toBeTruthy()
   return { app, alice, bob, projectId }
 }
