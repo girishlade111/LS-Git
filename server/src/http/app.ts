@@ -105,6 +105,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
     cfg,
     app.projects.storage,
   )
+  app.issues = new IssuesService(services, cfg)
   app.authRateLimiter = new RateLimiter(cfg.authRateLimit.max, cfg.authRateLimit.windowSeconds * 1000)
 
   // ---- authentication resolution ------------------------------------------
@@ -261,6 +262,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   registerSocialRoutes(app)
   registerUploadRoutes(app)
   registerUploadSessionRoutes(app)
+  registerIssueRoutes(app)
 
   app.get('/healthz', async () => ({ status: 'ok' }))
   return app
