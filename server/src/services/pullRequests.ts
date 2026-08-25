@@ -535,8 +535,46 @@ export class PullRequestsService {
    * Recomputes and persists merge_status. Pure read over git objects plus one
    * UPDATE — safe to call from any request path.
    */
+  /**
+   * Approval-reset policy (GitLab "reset approvals on pushes" parity):
+   * detects source-branch movement since the review machinery last looked,
+   * and when `reset_approvals_on_push` is on, clears accumulated approvals
+   * and reviewer states exactly once per push, with a timeline note.
+   */
+  private syncSeenSourceSha(pr: PullRequestRow): void {
+    if (pr.state !== 'opened') return
+    const project = this.s.projects.byId(pr.project_id)!
+    let srcTip: string | null = null
+    try {
+      srcTip = this.storage.repository(project.disk_path).resolveBranch(pr.source_branch)
+    } catch {
+      return // empty repo — nothing to sync
+    }
+    if (!srcTip || srcTip === pr.seen_source_sha) return
+
+    if (project.reset_approvals_on_push && pr.seen_source_sha !== null) {
+      this.s.db.transaction(() => {
+        this.s.pullRequests.resetApprovals(pr.id)
+        for (const r of this.s.pullRequests.reviewers(pr.id)) {
+          this.s.pullRequests.setReviewerState(pr.id, r.userId, 'unreviewed')
+        }
+      })
+      // System note attributed to the PR author's context — no actor here.
+      this.s.notes.create({
+        noteable_type: 'pull_request',
+        noteable_id: pr.id,
+        project_id: pr.project_id,
+        author_id: pr.author_id,
+        note: 'approvals were reset because new commits were pushed',
+        system: true,
+      })
+    }
+    this.s.pullRequests.update(pr.id, { seen_source_sha: srcTip })
+  }
+
   refreshMergeStatus(pr: PullRequestRow): PullRequestRow {
     if (pr.state === 'merged') return pr
+    this.syncSeenSourceSha(pr)
     const project = this.s.projects.byId(pr.project_id)!
     let status: MergeStatus = 'cannot_be_merged'
     let reason: string
@@ -632,7 +670,11 @@ export class PullRequestsService {
     // ── G1: permission ──
     this.authorize(actor, 'pr:merge', project)
 
-    const pr = this.requirePr(projectId, iid)
+    let pr = this.requirePr(projectId, iid)
+    // Approval-reset policy runs BEFORE the gate checks so a stale approval
+    // count can never satisfy G6 after new pushes.
+    this.syncSeenSourceSha(pr)
+    pr = this.requirePr(projectId, iid)
 
     // ── G2 implicit (404 above). ──
     // ── G3: state ──

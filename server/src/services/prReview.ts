@@ -51,8 +51,8 @@ function applyRange(lines: string[], job: Job): { ok: true; lines: string[] } | 
 export class PrReviewService {
   constructor(
     private s: IdentityServices,
-    private repos: RepositoriesService,
     private storage: LocalHashedStorage,
+    private repos: RepositoriesService,
   ) {}
 
   private requirePr(projectId: number, iid: number): PullRequestRow {
@@ -640,7 +640,7 @@ export class PrReviewService {
         reviewer_id: actor.userId,
         state: state as 'approved' | 'changes_requested' | 'commented',
         head_sha: headSha,
-        body: summaryBody ?? null,
+        body: summaryBody === null ? undefined : summaryBody,
       })
 
       if (state === 'approved') {

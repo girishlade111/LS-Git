@@ -16,6 +16,7 @@ import { ResumableUploadService } from '../services/resumable.js'
 import { IssuesService } from '../services/issues.js'
 import { IssueFormsService } from '../services/issueForms.js'
 import { PullRequestsService } from '../services/pullRequests.js'
+import { PrReviewService } from '../services/prReview.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -35,6 +36,7 @@ declare module 'fastify' {
     issues: IssuesService
     issueForms: IssueFormsService
     pullRequests: PullRequestsService
+    prReview: PrReviewService
     authRateLimiter: RateLimiter
     store: ReturnType<typeof makeServices>
     requireAuth: (needed?: 'read_api' | 'write_api' | 'read_user') => PreHandlerFn
@@ -111,6 +113,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   )
   app.issues = new IssuesService(services, cfg)
   app.pullRequests = new PullRequestsService(services, cfg, app.repositories, app.issues, app.projects.storage)
+  app.prReview = new PrReviewService(services, cfg, app.projects.storage, app.repositories)
   app.issueForms = new IssueFormsService(
     services,
     cfg,
@@ -277,6 +280,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   registerIssueRoutes(app)
   registerIssueFormRoutes(app)
   registerPullRequestRoutes(app)
+  registerPrReviewRoutes(app)
 
   app.get('/', async () => ({
     name: 'LSGit API Server',
@@ -340,3 +344,4 @@ import { registerUploadSessionRoutes } from './routes/uploadsessions.js'
 import { registerIssueRoutes } from './routes/issues.js'
 import { registerIssueFormRoutes } from './routes/issueForms.js'
 import { registerPullRequestRoutes } from './routes/pullRequests.js'
+import { registerPrReviewRoutes } from './routes/prReview.js'
