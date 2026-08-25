@@ -541,7 +541,7 @@ export class PrReviewService {
     }
     if (project.reset_approvals_on_push) {
       this.s.db.transaction(() => {
-        this.s.pullRequests.setApprovalsReset(pr.id)
+        this.s.pullRequests.resetApprovals(pr.id)
         for (const r of this.s.pullRequests.reviewers(pr.id)) {
           this.s.pullRequests.setReviewerState(pr.id, r.userId, 'unreviewed')
         }

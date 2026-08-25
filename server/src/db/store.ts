@@ -2424,6 +2424,11 @@ export class PullRequestsRepo {
     ).map((r) => Number(r.user_id))
   }
 
+  /** Policy hook: clears every accumulated approval for the PR. */
+  resetApprovals(prId: number): void {
+    this.db.run('DELETE FROM pr_approvals WHERE pr_id = ?', prId)
+  }
+
   hasApproved(prId: number, userId: number): boolean {
     return !!this.db.get(
       'SELECT 1 FROM pr_approvals WHERE pr_id = ? AND user_id = ?',
