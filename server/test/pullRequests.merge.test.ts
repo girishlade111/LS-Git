@@ -337,10 +337,10 @@ describe('gates: draft · nothing-to-merge · stale sha · permissions · protec
     await commitBranch(h, 'feature', { newBranch: true, message: 'feature commit' })
     const pr = await openPr(h)
 
-    // Protect main at the strictest level.
-    await authed(h.app, 'PUT', `/api/v1/projects/${h.projectId}/repository/protected_branches/main`, {
+    // Protect main at the strictest level (collection route: name in body).
+    await authed(h.app, 'PUT', `/api/v1/projects/${h.projectId}/repository/protected_branches`, {
       session: h.alice,
-      payload: { level: 'no_one' },
+      payload: { name: 'main', push_access_level: 'no_one' },
     })
 
     const blocked = await merge(h, pr.iid as number)
