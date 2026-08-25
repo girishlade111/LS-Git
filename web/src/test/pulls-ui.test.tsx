@@ -51,17 +51,20 @@ beforeEach(() => {
 
 const NAV = (to: string) => void to
 
+const $refsReply = jsonResponse({ branches: [{ name: 'main', sha: 'a', default: true, protected: false }, { name: 'feature/x', sha: 'b', default: false, protected: false }], tags: [] })
+
 describe('pull request list', () => {
   it('renders dense rows with branch direction and switches state tabs', async () => {
     const fetchMock = vi.fn((url: string) => {
       const u = String(url)
       if (u.includes('/pull_requests')) return Promise.resolve(jsonResponse({ pull_requests: [PR], pagination: { page: 1, per_page: 20, total: 1, total_pages: 1, has_more: false } }))
+      if (u.includes('/repository/refs')) return $refsReply
       return Promise.resolve(jsonResponse({}))
     })
     vi.stubGlobal('fetch', fetchMock)
 
     const user = userEvent.setup()
-    render(<PullsListPage projectId={5} owner="alice" projectPath="web" navigate={NAV} refs={[{ name: 'main' }, { name: 'feature/x' }]} />)
+    render(<PullsListPage projectId={5} owner="alice" projectPath="web" navigate={NAV} />)
 
     await waitFor(() => expect(screen.getByText('Add export flow')).toBeTruthy())
     expect(screen.getByText(/feature\/export → main/)).toBeTruthy()
@@ -81,12 +84,13 @@ describe('pull request list', () => {
         created = JSON.parse(String(init?.body)) as Record<string, unknown>
         return Promise.resolve(jsonResponse({ ...PR, web_path: '/proj/alice/web/pulls/8', iid: 8 }, 201))
       }
+      if (u.includes('/repository/refs')) return $refsReply
       return Promise.resolve(jsonResponse({ pull_requests: [], pagination: { page: 1, per_page: 20, total: 0, total_pages: 1, has_more: false } }))
     })
     vi.stubGlobal('fetch', fetchMock)
 
     const user = userEvent.setup()
-    render(<PullsListPage projectId={5} owner="alice" projectPath="web" navigate={NAV} refs={[{ name: 'main' }, { name: 'feature/x' }]} />)
+    render(<PullsListPage projectId={5} owner="alice" projectPath="web" navigate={NAV} />)
     await user.click(await screen.findByRole('button', { name: /New pull request/ }))
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Source branch' }), 'feature/x')
