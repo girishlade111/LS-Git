@@ -1,6 +1,6 @@
 import { AppError } from './identity.js'
 import type { IdentityServices } from './identity.js'
-import type { ProjectRow, PullRequestRow, PrThreadRow, PrThreadNoteRow } from '../db/store.js'
+import type { ProjectRow, PullRequestRow, PrThreadRow, PrThreadNoteRow, PrReviewRow } from '../db/store.js'
 import type { Actor } from '../authz.js'
 import { can } from '../authz.js'
 import type { RepositoriesService } from './repositories.js'
@@ -561,7 +561,7 @@ export class PrReviewService {
     projectId: number,
     iid: number,
     input: { state?: unknown; body?: unknown },
-  ): { review: ReturnType<IdentityServices['prReviews']['byId']>; published_drafts: number } {
+  ): { review: PrReviewRow | null; published_drafts: number } {
     const project = this.s.projects.byId(projectId)!
     const pr = this.visiblePr(actor, projectId, iid)
     this.commentGate(actor, project)
@@ -639,7 +639,7 @@ export class PrReviewService {
         reviewer_id: actor.userId,
         state: state as 'approved' | 'changes_requested' | 'commented',
         head_sha: headSha,
-        body: summaryBody,
+        body: summaryBody ?? null,
       })
 
       if (state === 'approved') {
@@ -674,7 +674,7 @@ export class PrReviewService {
     return null
   }
 
-  private coveredLinesAt(pr: PullRequestRow, d: { path: string; side: string | null }): { base: string; head: string; lines: string[] } {
+  private coveredLinesAt(pr: PullRequestRow, d: { path: string; side: 'new' | 'old'; line_start: number; line_end: number }): { base: string; head: string; lines: string[] } {
     try {
       const project = this.s.projects.byId(pr.project_id)!
       const repo = this.engineFor(project)
