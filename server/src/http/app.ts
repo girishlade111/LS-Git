@@ -108,6 +108,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
     app.projects.storage,
   )
   app.issues = new IssuesService(services, cfg)
+  app.issueForms = new IssueFormsService(services, cfg, app.repositories, app.issues)
   app.authRateLimiter = new RateLimiter(cfg.authRateLimit.max, cfg.authRateLimit.windowSeconds * 1000)
 
   // ---- authentication resolution ------------------------------------------
