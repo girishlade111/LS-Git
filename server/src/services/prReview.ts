@@ -131,3 +131,164 @@ export class PrReviewService {
     return v
   }
 }
+  // ── threads ──────────────────────────────────────────────────────────────
+
+  createThread(
+    actor: Actor,
+    projectId: number,
+    iid: number,
+    input: { path?: unknown; side?: unknown; line_start?: unknown; line_end?: unknown; body?: unknown },
+  ): PrThreadRow {
+    const project = this.s.projects.byId(projectId)!
+    const pr = this.visiblePr(actor, projectId, iid)
+    this.commentGate(actor, project)
+
+    const body = this.assertBody(input.body)
+    const path = String(input.path ?? '').trim()
+    if (!path) throw new AppError(400, 'path is required')
+
+    const side = input.side === 'old' ? ('old' as const) : ('new' as const)
+    const lineStart = Number(input.line_start)
+    const lineEndRaw = input.line_end === undefined || input.line_end === null ? lineStart : Number(input.line_end)
+
+    // Validate the position against the reviewed commit's actual content.
+    const { srcTip, baseSha } = this.tips(pr)
+    const repo = this.engineFor(project)
+    let shaAtSide: string | null = null
+    if (side === 'new') {
+      shaAtSide = repo.findEntryAt(repo.readCommit(srcTip).tree, path)?.sha ?? null
+    } else if (baseSha) {
+      shaAtSide = repo.findEntryAt(repo.readCommit(baseSha).tree, path)?.sha ?? null
+    }
+    if (!shaAtSide) {
+      throw new AppError(422, "'" + 'path' + "' does not exist on the " + (side === 'new' ? 'source tip' : 'base version') + ' of this diff', 'invalid_position')
+    }
+    const text = repo.readBlob(shaAtSide).toString('utf8')
+    const totalLines = text === '' ? 0 : text.replace(/\n$/, '').split('\n').length
+    if (
+      !Number.isInteger(lineStart) || !Number.isInteger(lineEndRaw) ||
+      lineStart < 1 || lineEndRaw < lineStart || lineEndRaw > totalLines
+    ) {
+      throw new AppError(422, 'Invalid line range for a ' + totalLines + '-line file', 'invalid_position')
+    }
+
+    const coveredLines = text.replace(/\n$/, '').split('\n').slice(lineStart - 1, lineEndRaw)
+    return this.s.db.transaction(() => {
+      const t = this.s.prThreads.create({
+        pr_id: pr.id,
+        project_id: projectId,
+        path,
+        side,
+        line_start: lineStart,
+        line_end: lineEndRaw,
+        base_sha: baseSha,
+        head_sha: srcTip,
+        covered_lines: coveredLines,
+      })
+      const suggestion = extractSuggestion(body)
+      this.s.prThreadNotes.create({
+        thread_id: t.id,
+        project_id: projectId,
+        author_id: actor.userId,
+        body,
+        suggestionLines: suggestion,
+      })
+      return t
+    })
+  }
+
+  reply(actor: Actor, projectId: number, iid: number, threadId: number, input: { body?: unknown }): PrThreadNoteRow {
+    const project = this.s.projects.byId(projectId)!
+    const pr = this.visiblePr(actor, projectId, iid)
+    this.commentGate(actor, project)
+    const thread = this.s.prThreads.byId(threadId)
+    if (!thread || thread.pr_id !== pr.id) throw new AppError(404, 'Thread not found')
+    const body = this.assertBody(input.body)
+    const suggestion = extractSuggestion(body)
+    return this.s.prThreadNotes.create({
+      thread_id: thread.id,
+      project_id: projectId,
+      author_id: actor.userId,
+      body,
+      suggestionLines: suggestion,
+    })
+  }
+
+  listThreads(actor: Actor | null, projectId: number, iid: number) {
+    const pr = this.visiblePr(actor, projectId, iid)
+    const { srcTip } = this.tips(pr)
+    const project = this.s.projects.byId(projectId)!
+    const ownerRules = this.loadCodeOwnerRules(project)
+    return {
+      threads: this.s.prThreads.listForPr(pr.id).map((t) => {
+        const applicability = this.threadApplicability(pr, t, srcTip)
+        const owners = ownersForPath(ownerRules, t.path)
+        return {
+          ...this.threadView(t, applicability),
+          code_owner_users: owners.users,
+          code_owner_unresolved: owners.unresolved,
+          notes: this.s.prThreadNotes.listForThread(t.id).map((n) => ({
+            id: n.id,
+            author: this.userBrief(n.author_id),
+            body: n.body,
+            suggestion: n.suggestion_lines
+              ? { status: n.suggestion_status, applied_commit_sha: n.applied_commit_sha }
+              : null,
+            created_at: n.created_at,
+          })),
+        }
+      }),
+      head_sha: srcTip,
+    }
+  }
+
+  resolve(actor: Actor, projectId: number, iid: number, threadId: number): PrThreadRow {
+    const project = this.s.projects.byId(projectId)!
+    const pr = this.visiblePr(actor, projectId, iid)
+    this.commentGate(actor, project)
+    const thread = this.s.prThreads.byId(threadId)
+    if (!thread || thread.pr_id !== pr.id) throw new AppError(404, 'Thread not found')
+    if (!thread.resolved) {
+      this.s.db.transaction(() => {
+        this.s.prThreads.setResolved(thread.id, true, actor.userId)
+        this.recordSystemNote(pr, actor, 'resolved the thread on ' + thread.path)
+      })
+    }
+    return this.s.prThreads.byId(thread.id)!
+  }
+
+  unresolve(actor: Actor, projectId: number, iid: number, threadId: number): PrThreadRow {
+    const project = this.s.projects.byId(projectId)!
+    const pr = this.visiblePr(actor, projectId, iid)
+    this.commentGate(actor, project)
+    const thread = this.s.prThreads.byId(threadId)
+    if (!thread || thread.pr_id !== pr.id) throw new AppError(404, 'Thread not found')
+    if (thread.resolved) {
+      this.s.db.transaction(() => {
+        this.s.prThreads.setResolved(thread.id, false, null)
+        this.recordSystemNote(pr, actor, 'reopened the thread on ' + thread.path)
+      })
+    }
+    return this.s.prThreads.byId(thread.id)!
+  }
+
+  private userBrief(id: number | null) {
+    if (id === null) return null
+    const u = this.s.users.byId(id)
+    return u ? { id: u.id, username: u.username, name: u.name } : null
+  }
+
+  private threadView(t: PrThreadRow, applicability: { outdated: boolean; reason?: string }) {
+    return {
+      id: t.id,
+      path: t.path,
+      side: t.side,
+      line_start: t.line_start,
+      line_end: t.line_end,
+      resolved: !!t.resolved,
+      outdated: applicability.outdated,
+      outdated_reason: applicability.reason ?? null,
+      head_sha: t.head_sha,
+      created_at: t.created_at,
+    }
+  }
