@@ -111,7 +111,7 @@ describe('inline diff comments', () => {
       path: 'src.txt', side: 'new', line_start: 2, line_end: 3,
     })
     expect(r.status).toBe(201)
-    expect(r.body.line_end).toBe(3)
+    expect(((r.body as Record<string, unknown>).thread as Record<string, unknown>).line_end).toBe(3)
   })
 
   it('REJECTS invalid positions: missing file, out-of-bounds, inverted ranges', async () => {
@@ -140,7 +140,7 @@ describe('inline diff comments', () => {
     const t = await createThread(h, h.bob, 'Initial concern.', {
       path: 'src.txt', side: 'new', line_start: 3, line_end: 3,
     })
-    const tid = (t.body as unknown as { id: number }).id
+    const tid = ((t.body as Record<string, unknown>).thread as Record<string, unknown>).id as number
 
     const reply = await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/pull_requests/1/threads/${tid}/replies`, {
       session: h.alice,
@@ -189,7 +189,7 @@ describe('outdated diff handling', () => {
     expect(thread.outdated).toBe(true)
 
     // Replying to outdated threads remains possible (GitLab parity).
-    const tid = (t.body as unknown as { id: number }).id
+    const tid = ((t.body as Record<string, unknown>).thread as Record<string, unknown>).id as number
     expect(
       (
         await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/pull_requests/1/threads/${tid}/replies`, {
@@ -211,8 +211,8 @@ describe('code suggestions', () => {
       '```',
     ].join('\n'), { path: 'src.txt', side: 'new', line_start: 3, line_end: 3 })
     expect(t.status).toBe(201)
-    const notes = ((t.body as unknown as Record<string, unknown>).notes ?? []) as Array<Record<string, unknown>>
-    return { noteId: notes[0]!.id as number }
+    const thread = (t.body as Record<string, unknown>).thread as { notes: Array<{ id: number }> }
+    return { noteId: thread.notes[0]!.id }
   }
 
   it('APPLY produces a REAL commit on the source branch with the suggested lines', async () => {
@@ -254,8 +254,8 @@ describe('code suggestions', () => {
     const s2 = await createThread(h, h.bob, ['```suggestion', 'EPSILON-BATCH', '```'].join('\n'), {
       path: 'src.txt', side: 'new', line_start: 5, line_end: 5,
     })
-    const idOf = (r: { status: number; body: Record<string, unknown> }) =>
-      ((((r.body as Record<string, unknown>).notes) as Array<Record<string, unknown>>)[0]!.id) as number
+    const idOf = (r: { body: Record<string, unknown> }) =>
+      ((((r.body.thread as Record<string, unknown>).notes) as Array<{ id: number }>)[0]!.id)
 
     // A failing member blocks the WHOLE batch — nothing is committed.
     const stale = await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/repository/commit`, {

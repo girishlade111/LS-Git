@@ -2426,6 +2426,17 @@ export class PullRequestsRepo {
   }
 
   /** Policy hook: clears every accumulated approval for the PR. */
+  /** Upserts the reviewer row so review states survive non-reviewer votes. */
+  upsertReviewer(prId: number, userId: number, state: 'unreviewed' | 'approved' | 'changes_requested'): void {
+    this.db.run(
+      `INSERT INTO pr_reviewers (pr_id, user_id, review_state) VALUES (?, ?, ?)
+       ON CONFLICT(pr_id, user_id) DO UPDATE SET review_state = excluded.review_state`,
+      prId,
+      userId,
+      state,
+    )
+  }
+
   resetApprovals(prId: number): void {
     this.db.run('DELETE FROM pr_approvals WHERE pr_id = ?', prId)
   }

@@ -129,7 +129,8 @@ export function registerPullRequestRoutes(app: FastifyInstance): void {
   })
 
   app.get('/api/v1/projects/:id/pull_requests/:iid', async (req) => {
-    const pr = svc.visiblePr(req.actor, numParam(req, 'id'), numParam(req, 'iid'))
+    const pr0 = svc.visiblePr(req.actor, numParam(req, 'id'), numParam(req, 'iid'))
+    const pr = svc.refreshMergeStatus(pr0)
     return prView(app, pr)
   })
 

@@ -185,14 +185,14 @@ export class PrReviewService {
         covered_lines: coveredLines,
       })
       const suggestion = extractSuggestion(body)
-      this.s.prThreadNotes.create({
+      const note = this.s.prThreadNotes.create({
         thread_id: t.id,
         project_id: projectId,
         author_id: actor.userId,
         body,
         suggestionLines: suggestion,
       })
-      return t
+      return { ...t, notes: [note] }
     })
   }
 
@@ -223,7 +223,7 @@ export class PrReviewService {
         const applicability = this.threadApplicability(pr, t, srcTip)
         const owners = ownersForPath(ownerRules, t.path)
         return {
-          ...this.threadView(t, applicability),
+          ...this.threadView(t, applicability, t.head_sha !== srcTip),
           code_owner_users: owners.users,
           code_owner_unresolved: owners.unresolved,
           notes: this.s.prThreadNotes.listForThread(t.id).map((n) => ({
@@ -277,7 +277,7 @@ export class PrReviewService {
     return u ? { id: u.id, username: u.username, name: u.name } : null
   }
 
-  private threadView(t: PrThreadRow, applicability: { outdated: boolean; reason?: string }) {
+  private threadView(t: PrThreadRow, applicability: { outdated: boolean; reason?: string }, headMoved?: boolean) {
     return {
       id: t.id,
       path: t.path,
@@ -285,7 +285,7 @@ export class PrReviewService {
       line_start: t.line_start,
       line_end: t.line_end,
       resolved: !!t.resolved,
-      outdated: applicability.outdated,
+      outdated: headMoved === true || applicability.outdated,
       outdated_reason: applicability.reason ?? null,
       head_sha: t.head_sha,
       created_at: t.created_at,
@@ -376,7 +376,7 @@ export class PrReviewService {
       for (const n of plan.notes) this.s.prThreadNotes.setStatus(n.id, 'applied', commit)
       this.recordSystemNote(pr, actor, 'applied ' + plan.entries.length + ' suggestion' + (plan.entries.length === 1 ? '' : 's') + ' (' + commit.slice(0, 10) + ')')
     })
-    return { commit_sha: commit, applied: plan.entries.length }
+    return { commit_sha: commit, applied: plan.notes.length }
   }
 
   rejectSuggestion(actor: Actor, projectId: number, iid: number, threadNoteId: number): void {
@@ -645,11 +645,11 @@ export class PrReviewService {
 
       if (state === 'approved') {
         this.s.pullRequests.approve(pr.id, actor.userId)
-        this.s.pullRequests.setReviewerState(pr.id, actor.userId, 'approved')
+        this.s.pullRequests.upsertReviewer(pr.id, actor.userId, 'approved')
         this.recordSystemNote(pr, actor, summaryBody ? 'approved this pull request' : 'approved this pull request')
       } else if (state === 'changes_requested') {
         this.s.pullRequests.unapprove(pr.id, actor.userId)
-        this.s.pullRequests.setReviewerState(pr.id, actor.userId, 'changes_requested')
+        this.s.pullRequests.upsertReviewer(pr.id, actor.userId, 'changes_requested')
         this.recordSystemNote(pr, actor, 'requested changes')
       }
 
