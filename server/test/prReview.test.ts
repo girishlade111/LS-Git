@@ -517,7 +517,7 @@ describe('CODEOWNERS foundation', () => {
     expect(cov.statusCode).toBe(200)
     const rules = cov.json().rules as Array<Record<string, unknown>>
     expect(rules).toHaveLength(2)
-    const coverage = cov.json().coverage as Array<{ path: string; owner_users: string[] }>
+    const coverage = cov.json().coverage as Array<{ path: string; owner_users: string[]; owner_unresolved: string[] }>
     const srcRow = coverage.find((c) => c.path === 'src.txt')!
           expect(srcRow.owner_users).toEqual(['bob']) // last match wins
       expect(srcRow.owner_unresolved).toContain('@devs/core') // groups deferred
