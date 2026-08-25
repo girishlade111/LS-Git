@@ -33,7 +33,7 @@ async function setup(): Promise<Harness> {
     },
   })
   expect(res.statusCode).toBe(201)
-  const projectId = app.store.projects.byOwnerPath('alice', 'review')!.id
+  const projectId = app.store.projects.byOwnerPath('alice', 'review-pr')!.id
 
   // Base file on main, then a feature branch that MODIFIES it (so the diff exists).
   await authed(app, 'POST', `/api/v1/projects/${projectId}/repository/commit`, {
