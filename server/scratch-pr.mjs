@@ -11,4 +11,4 @@ const res = await authed(app, 'POST', `/api/v1/projects/${pid}/pull_requests`, {
   session: s,
   payload: { title: 'Backwards PR', source_branch: 'main', target_branch: 'hotfix-target' },
 })
-console.log('pr status:', res.statusCode, res.body.slice(0, 200))
+console.log('pr status:', res.statusCode, JSON.stringify(res.json()).slice(0, 250))
