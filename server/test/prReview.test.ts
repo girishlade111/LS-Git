@@ -510,7 +510,7 @@ describe('CODEOWNERS foundation', () => {
       session: h.alice,
       payload: {
         branch: 'main', commit_message: 'add codeowners',
-        changes: [{ path: 'CODEOWNERS', content: '# comment\n* @alice\nsrc.txt @bob @legacy-team\n' }],
+        changes: [{ path: 'CODEOWNERS', content: '# comment\n* @alice\nsrc.txt @bob @devs/core\n' }],
       },
     })
     const cov = await authed(h.app, 'GET', `/api/v1/projects/${h.projectId}/pull_requests/1/codeowners`, {})
@@ -519,6 +519,7 @@ describe('CODEOWNERS foundation', () => {
     expect(rules).toHaveLength(2)
     const coverage = cov.json().coverage as Array<{ path: string; owner_users: string[] }>
     const srcRow = coverage.find((c) => c.path === 'src.txt')!
-    expect(srcRow.owner_users).toEqual(['bob']) // last match wins
+          expect(srcRow.owner_users).toEqual(['bob']) // last match wins
+      expect(srcRow.owner_unresolved).toContain('@devs/core') // groups deferred
   })
 })

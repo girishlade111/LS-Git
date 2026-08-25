@@ -362,9 +362,9 @@ export class PrReviewService {
 
     const plan = this.validateSuggestionsForApply(pr, ids)
     const message =
-      plan.entries.length === 1
+      plan.notes.length === 1
         ? 'Apply suggestion from !' + pr.iid + ' (' + plan.entries[0]!.path + ')'
-        : 'Apply ' + plan.entries.length + ' suggestions from !' + pr.iid
+        : 'Apply ' + plan.notes.length + ' suggestions from !' + pr.iid
     const commit = this.commitChangesToSource(
       pr,
       actor,
