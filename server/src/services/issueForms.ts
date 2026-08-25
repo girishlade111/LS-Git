@@ -6,6 +6,7 @@ import type { Actor } from '../authz.js'
 import { can } from '../authz.js'
 import type { RepositoriesService } from './repositories.js'
 import type { IssuesService } from './issues.js'
+import type { LocalHashedStorage } from '../storage/local.js'
 import { parseSafeYaml, YamlParseError, DEFAULT_YAML_LIMITS } from '../lib/yaml.js'
 import {
   FORM_LIMITS,
@@ -52,6 +53,7 @@ export class IssueFormsService {
   constructor(
     private s: IdentityServices,
     private cfg: AppConfig,
+    private storage: LocalHashedStorage,
     private repos: RepositoriesService,
     private issues: IssuesService,
   ) {}
@@ -101,7 +103,7 @@ export class IssueFormsService {
   /** Reads every stored template file. Missing/empty repositories yield []. */
   private readTemplates(project: ProjectRow): Array<{ name: string; yaml: string }> {
     try {
-      const files = this.s.projects.storage.readBranchFiles(project.disk_path, project.default_branch)
+      const files = this.storage.readBranchFiles(project.disk_path, project.default_branch)
       const out: Array<{ name: string; yaml: string }> = []
       for (const [path, content] of files) {
         if (!path.startsWith(`${FORMS_DIR}/`)) continue
@@ -133,17 +135,26 @@ export class IssueFormsService {
 
   listForms(actor: Actor | null, projectId: number): FormListEntry[] {
     const project = this.requireReadable(actor, projectId)
-    return this.readTemplates(project).flatMap(({ name, yaml }) => {
+    const out: FormListEntry[] = []
+    for (const { name, yaml } of this.readTemplates(project)) {
       if (Buffer.byteLength(yaml, 'utf8') > FORM_LIMITS.maxTemplateBytes) {
-        return [{ name, title: name, description: '', field_count: 0, valid: false, error: 'template too large' }]
+        out.push({ name, title: name, description: '', field_count: 0, valid: false, error: 'template too large' })
+        continue
       }
       const parsed = this.parseTemplate(yaml)
       if (parsed.error || !parsed.def) {
-        return [{ name, title: name, description: '', field_count: 0, valid: false, error: parsed.error }]
+        out.push({ name, title: name, description: '', field_count: 0, valid: false, error: parsed.error })
+        continue
       }
-      const d = parsed.def
-      return [{ name, title: d.name, description: d.description, field_count: d.fields.length, valid: true }]
-    })
+      out.push({
+        name,
+        title: parsed.def.name,
+        description: parsed.def.description,
+        field_count: parsed.def.fields.length,
+        valid: true,
+      })
+    }
+    return out
   }
 
   getForm(actor: Actor | null, projectId: number, name: string): IssueFormDef & { raw_name: string } {
