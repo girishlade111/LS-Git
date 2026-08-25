@@ -1,0 +1,96 @@
+/* Pull request styles. Token-driven only; border-driven sections; dense
+   typography; no shadows, no gradients, no giant action panels. */
+
+.ls-pulls__state {
+  display: inline-flex;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--ls-radius-full);
+  margin-top: 1px;
+}
+.ls-pulls__state--opened { color: var(--ls-accent); background: var(--ls-tint-accent); }
+.ls-pulls__state--merged { color: var(--ls-success); background: var(--ls-tint-success); }
+.ls-pulls__state--closed { color: var(--ls-text-secondary); background: var(--ls-surface-2); }
+
+.ls-pulls__drafttag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 7px;
+  border: 1px solid var(--ls-border);
+  border-radius: var(--ls-radius-full);
+  font-size: var(--ls-fs-label);
+  font-weight: 500;
+  color: var(--ls-text-secondary);
+}
+
+.ls-pulls__branches {
+  font-family: var(--ls-font-mono);
+  font-size: var(--ls-fs-label);
+  color: var(--ls-text);
+  padding: 1px 8px;
+  border: 1px solid var(--ls-border);
+  border-radius: var(--ls-radius-sm);
+  background: var(--ls-surface-1);
+}
+
+/* ── the merge box: single compact strip ── */
+.ls-mergebox {
+  border: 1px solid var(--ls-border);
+  border-left: 3px solid var(--ls-border);
+  border-radius: var(--ls-radius);
+  background: var(--ls-panel);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ls-mergebox--ok { border-left-color: var(--ls-success-muted); }
+.ls-mergebox--blocked { border-left-color: var(--ls-danger-muted); }
+.ls-mergebox__status { font-size: var(--ls-fs-body); color: var(--ls-text); }
+.ls-mergebox__blockers { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.ls-mergebox__blockers li { display: flex; align-items: baseline; gap: 6px; font-size: var(--ls-fs-desc); color: var(--ls-text-secondary); }
+.ls-mergebox__blockers svg { transform: translateY(2px); flex: none; color: var(--ls-danger-muted); }
+.ls-mergebox__actions { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+
+/* ── collapsible sections (commits/changes) ── */
+.ls-pulls__section {
+  border: 1px solid var(--ls-border);
+  border-radius: var(--ls-radius);
+  background: var(--ls-panel);
+  padding: 8px 12px;
+}
+.ls-pulls__section > summary {
+  cursor: pointer;
+  font-size: var(--ls-fs-row);
+  font-weight: 500;
+  color: var(--ls-text);
+  user-select: none;
+}
+.ls-pulls__commits { margin: 8px 0 2px; padding: 0 0 0 4px; list-style: none; display: flex; flex-direction: column; gap: 5px; font-size: var(--ls-fs-body); }
+.ls-pulls__commits code { font-family: var(--ls-font-mono); font-size: var(--ls-fs-label); color: var(--ls-accent); margin-right: 6px; }
+.ls-pulls__file { display: inline-block; margin: 6px 0 4px; font-family: var(--ls-font-mono); font-size: var(--ls-fs-label); color: var(--ls-text-secondary); }
+
+/* ── approvals strip ── */
+.ls-pulls__approvals {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--ls-border);
+  border-radius: var(--ls-radius);
+  background: var(--ls-panel);
+  padding: 8px 12px;
+  font-size: var(--ls-fs-body);
+}
+.ls-pulls__approvals strong { font-weight: 500; }
+.ls-pulls__approvalbtns { margin-left: auto; display: inline-flex; gap: 6px; }
+
+/* ── sidebar bits ── */
+.ls-pulls__reviewers { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: var(--ls-fs-body); }
+.ls-pulls__reviewers li { display: flex; align-items: center; gap: 6px; }
+.ls-pulls__linked { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; font-size: var(--ls-fs-body); }
+
+.ls-mt8 { margin-top: 8px; }
+.ls-mt16 { margin-top: 16px; }

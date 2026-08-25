@@ -7,7 +7,6 @@ import { Input } from '../design-system/Input'
 import { Pagination } from '../design-system/Pagination'
 import { Select } from '../design-system/Select'
 import { Textarea } from '../design-system/Textarea'
-import { Tooltip } from '../design-system/Tooltip'
 import { LabelChip } from '../issues/LabelChip'
 import { timeAgo } from '../repository/widgets'
 import { pullsApi, type PullRequest, type PrState } from './api'
@@ -205,4 +204,3 @@ export function PullsListPage({
   )
 }
 
-void Tooltip

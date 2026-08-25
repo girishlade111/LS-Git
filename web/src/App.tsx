@@ -22,8 +22,11 @@ import { ProjectContextRoute } from './issues/ProjectContextRoute'
 import { LabelsView } from './issues/LabelsView'
 import { MilestonesView } from './issues/MilestonesView'
 import { FormsManagerView } from './issues/FormsManagerView'
+import { PullsListPage } from './pulls/PullsListPage'
+import { PullDetailPage } from './pulls/PullDetailPage'
 import './repository/repository.css'
 import './issues/issues.css'
+import './pulls/pulls.css'
 
 const PUBLIC_ROUTES = new Set(['/login', '/register', '/forgot', '/reset', '/verify-email'])
 
@@ -104,7 +107,19 @@ export default function App() {
       const BROWSER_ACTIONS = new Set(['tree', 'blob', 'commits', 'commit', 'blame', 'search', 'edit', 'new', 'branches', 'tags', 'compare', 'network', 'notifications'])
       const action = segments[3]
 
-      // Collaboration routes: issues · labels · milestones.
+      // Collaboration routes: pulls · issues · labels · milestones.
+      if (action === 'pulls') {
+        const prIid = Number(segments[4])
+        return (
+          <AppShell sidebarCurrent="projects" onNavigate={(id) => navigate(\/\\)} repo={{ group: owner, project: projPath, visibility: 'Private', tabs: [], currentTab: '', onTab: () => undefined }}>
+            {Number.isInteger(prIid) && prIid > 0 ? (
+              <PullDetailRouteBridge owner={owner} projectPath={projPath} iid={prIid} />
+            ) : (
+              <PullsListRouteBridge owner={owner} projectPath={projPath} navigate={(to: string) => { window.location.hash = to.replace(/^#/, '') }} />
+            )}
+          </AppShell>
+        )
+      }
       if (action === 'issues') {
         const iid = Number(segments[4])
         return (
