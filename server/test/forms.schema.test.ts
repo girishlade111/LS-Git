@@ -390,7 +390,7 @@ fields:
   it('enforces option membership for choices', () => {
     expectFieldError({ summary: 'Aaa', details: 'd', severity: 'CATASTROPHIC' }, 'severity', 'not a valid option')
     expectFieldError(
-      { summary: 'Aaa', details: 'd', consent: true, environment: ['Invented'] },
+      { summary: 'Aaa', details: 'd', severity: 'low', consent: true, environment: ['Invented'] },
       'environment',
       'not a valid option',
     )
@@ -398,7 +398,7 @@ fields:
 
   it('enforces individually-required checkbox options', () => {
     expectFieldError(
-      { summary: 'Aaa', details: 'd', consent: true, environment: ['In production'] },
+      { summary: 'Aaa', details: 'd', severity: 'low', consent: true, environment: ['In production'] },
       'environment',
       "'On staging' must be confirmed",
     )
