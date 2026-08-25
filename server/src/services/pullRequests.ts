@@ -946,36 +946,57 @@ export class PullRequestsService {
     sourceTip: string,
     committer: CommitIdentity,
   ): string {
-    // Source-only commits, OLDEST first.
+    // Source-only commits, replayed PARENTS-FIRST via topological order
+    // (Kahn's algorithm, oldest-committer-first among ready nodes). Committer
+    // seconds can tie, so parentage — not array order — decides correctness.
     const aheadSet = this.repos.reachableSet(repo, sourceTip, baseSha)
-    const chain = [...aheadSet]
-      .map((sha) => repo.readCommit(sha))
-      .sort((a, b) => a.committer.timestamp.time - b.committer.timestamp.time)
+    const nodes = new Map<string, { parents: string[]; time: number; message: string; author: CommitIdentity }>()
+    for (const sha of aheadSet) {
+      const c = repo.readCommit(sha)
+      nodes.set(sha, {
+        parents: c.parents.filter((p) => aheadSet.has(p)),
+        time: c.committer.timestamp.time,
+        message: c.message,
+        author: c.author.identity,
+      })
+    }
 
-    let head = targetTip
-    for (const commit of chain) {
-      const parentSha = commit.parents[0] ?? baseSha
-      const result = this.mergeTrees(repo, parentSha, head, commit.sha)
+    const ordered: Array<{ sha: string; message: string; author: CommitIdentity }> = []
+    const emitted = new Set<string>()
+    while (ordered.length < nodes.size) {
+      let chosen: { sha: string; time: number; message: string; author: CommitIdentity } | null = null
+      for (const [sha, n] of nodes) {
+        if (emitted.has(sha)) continue
+        if (!n.parents.every((p) => emitted.has(p))) continue
+        if (!chosen || n.time < chosen.time) chosen = { sha, ...n }
+      }
+      if (!chosen) throw new AppError(500, 'Rebase chain has a cycle', 'rebase_cycle')
+      emitted.add(chosen.sha)
+      ordered.push({ sha: chosen.sha, message: chosen.message, author: chosen.author })
+    }
+
+    let tip = targetTip
+    for (const item of ordered) {
+      const original = repo.readCommit(item.sha)
+      const parentTree = original.parents[0] ?? baseSha
+      const result = this.mergeTrees(repo, parentTree, tip, item.sha)
       if (result.conflictPaths.length > 0) {
-        throw new AppError(422, `Rebase hit conflicts at ${commit.sha.slice(0, 10)} (${result.conflictPaths[0] ?? "?"}); rebase locally and push`, 'rebase_conflict', {
+        throw new AppError(422, `Rebase hit conflicts at ${item.sha.slice(0, 10)} (${result.conflictPaths[0] ?? '?'}); rebase locally and push`, 'rebase_conflict', {
           conflicts: result.conflictPaths,
         })
       }
       // Empty pick (change already upstream): skip rather than fabricate a commit.
-      if (result.treeSha === repo.readCommit(head).tree) continue
+      if (result.treeSha === repo.readCommit(tip).tree) continue
 
-      head = repo.writeCommit({
+      tip = repo.writeCommit({
         tree: result.treeSha,
-        parents: [head],
-        author: {
-          name: commit.author.identity.name,
-          email: commit.author.identity.email,
-        },
+        parents: [tip],
+        author: item.author,
         committer,
-        message: commit.message,
+        message: item.message,
       })
     }
-    return head
+    return tip
   }
 
   /** Required-checks hook (Phase 3 CI plugs in here). Never fakes success/failure. */

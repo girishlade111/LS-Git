@@ -137,8 +137,8 @@ describe('strategy: merge commit', () => {
 describe('strategy: squash and merge', () => {
   it('lands ONE single-parent commit combining all source changes', async () => {
     const h = await setup()
-    await commitBranch(h, 'feature', { newBranch: true, content: 'part one\n', message: 'commit one' })
-    await commitBranch(h, 'feature', { content: 'part one\npart two\n', message: 'commit two' })
+    const shaOne = await commitBranch(h, 'feature', { newBranch: true, content: 'part one\n', message: 'commit one' })
+    const shaTwo = await commitBranch(h, 'feature', { content: 'part one\npart two\n', message: 'commit two' })
 
     const pr = await openPr(h, { title: 'Squash me' })
     const merged = await merge(h, pr.iid as number, { method: 'squash' })
@@ -156,9 +156,10 @@ describe('strategy: squash and merge', () => {
     const tree = repo.flattenTree(commit.tree)
     expect(repo.readBlob(tree.get('feature.txt')!.sha).toString()).toContain('part two')
 
-    // Original feature commits are NOT ancestors of the squashed tip (linear history).
-    expect(repo.isAncestor(commit.parents[0]!, tip)).toBe(false)
-    void repo
+    // The ORIGINAL feature commits are NOT ancestors of the squashed tip
+    // (their content was re-committed; their history was not).
+    expect(repo.isAncestor(shaOne, tip)).toBe(false)
+    expect(repo.isAncestor(shaTwo, tip)).toBe(false)
   })
 })
 
