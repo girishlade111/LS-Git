@@ -197,25 +197,22 @@ describe('strategy: rebase and merge', () => {
 // ── gates ────────────────────────────────────────────────────────────────────
 
 describe('gate: unresolved conflicts block the merge', () => {
-  it('refuses when both branches rewrite the same line, succeeds after resolution', async () => {
+  it('refuses when both branches rewrite the same line of a COMMON ancestor file', async () => {
     const h = await setup()
-    await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/repository/commit`, {
-      session: h.alice,
-      payload: {
-        branch: 'conflict-a', new_branch: 'conflict-a', start_branch: 'main',
-        commit_message: 'side a', changes: [{ path: 'shared.txt', content: 'version A\n' }],
-      },
+    // Base version lives on MAIN so both sides share it as ancestor content.
+    await commitBranch(h, 'main', {
+      file: 'shared.txt', content: 'line1\nline2\n', message: 'add shared base',
     })
-    await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/repository/commit`, {
-      session: h.alice,
-      payload: {
-        branch: 'conflict-b', new_branch: 'conflict-b', start_branch: 'main',
-        commit_message: 'side b', changes: [{ path: 'shared.txt', content: 'version B\n' }],
-      },
+    // Feature edits the first line…
+    await commitBranch(h, 'feature', {
+      newBranch: true, file: 'shared.txt', content: 'line1-A\nline2\n', message: 'feature edit',
     })
-    // conflict-b also edits a DIFFERENT line of an existing file to prove
-    // partial merges still report the conflicting paths.
-    const pr = await openPr(h, { title: 'Conflicting', source_branch: 'conflict-b' })
+    // …and main independently rewrites the SAME line.
+    await commitBranch(h, 'main', {
+      file: 'shared.txt', content: 'line1-B\nline2\n', message: 'main edit',
+    })
+
+    const pr = await openPr(h, { title: 'Conflicting' })
     const iid = pr.iid as number
 
     const blocked = await merge(h, iid)
@@ -227,11 +224,9 @@ describe('gate: unresolved conflicts block the merge', () => {
     const fresh = await authed(h.app, 'GET', `/api/v1/projects/${h.projectId}/pull_requests/${iid}`, { session: h.alice })
     expect(fresh.json().state).toBe('opened')
     expect(fresh.json().merge_status).toBe('cannot_be_merged')
+    expect(fresh.json().merge_status_reason).toBe('conflicts')
 
-    // Resolve by making the source match a superset the target accepts:
-    // delete the conflicting branch pair via force-aligned change is out of
-    // scope for this test — instead close the conflicted PR and verify the
-    // closed gate below fires before anything else.
+    // Closing afterwards routes to the closed gate — never a silent merge.
     await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/pull_requests/${iid}/close`, { session: h.alice })
     const closedGate = await merge(h, iid)
     expect(closedGate.statusCode).toBe(422)
@@ -240,38 +235,17 @@ describe('gate: unresolved conflicts block the merge', () => {
 
   it('auto-merges non-overlapping edits to DIFFERENT regions of one file', async () => {
     const h = await setup()
-    await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/repository/commit`, {
-      session: h.alice,
-      payload: {
-        branch: 'lines', new_branch: 'lines', start_branch: 'main',
-        commit_message: 'base lines',
-        changes: [{ path: 'doc.txt', content: 'one\ntwo\nthree\nfour\nfive\n' }],
-      },
+    // Common-ancestor version committed on MAIN first.
+    await commitBranch(h, 'main', {
+      file: 'doc.txt', content: 'one\ntwo\nthree\nfour\nfive\n', message: 'doc base',
     })
-    // Ours (main) edits the top; theirs (branch) edits the bottom.
-    await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/repository/commit`, {
-      session: h.alice,
-      payload: {
-        branch: 'main', commit_message: 'edit head',
-        changes: [{ path: 'doc.txt', content: 'ONE\ntwo\nthree\nfour\nfive\n' }],
-        expected_base_tip: undefined,
-      },
-    }).catch(() => undefined) // may 409 without expected tip; retry with tip
-    const mainTip = h.app.projects.storage.repository(h.app.store.projects.byId(h.projectId)!.disk_path).resolveBranch('main')
-    await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/repository/commit`, {
-      session: h.alice,
-      payload: {
-        branch: 'main', commit_message: 'edit head',
-        expected_base_tip: mainTip,
-        changes: [{ path: 'doc.txt', content: 'ONE\ntwo\nthree\nfour\nfive\n' }],
-      },
+    // Feature branch then edits the TOP region…
+    await commitBranch(h, 'lines', {
+      newBranch: true, file: 'doc.txt', content: 'ONE\ntwo\nthree\nfour\nfive\n', message: 'edit top',
     })
-    await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/repository/commit`, {
-      session: h.alice,
-      payload: {
-        branch: 'lines', commit_message: 'edit tail',
-        changes: [{ path: 'doc.txt', content: 'one\ntwo\nthree\nfour\nFIVE\n' }],
-      },
+    // …while main independently edits the BOTTOM region.
+    await commitBranch(h, 'main', {
+      file: 'doc.txt', content: 'one\ntwo\nthree\nfour\nFIVE\n', message: 'edit bottom',
     })
 
     const pr = await openPr(h, { title: 'Clean textual', source_branch: 'lines' })
