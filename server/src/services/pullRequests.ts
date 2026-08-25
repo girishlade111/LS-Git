@@ -915,19 +915,21 @@ export class PullRequestsService {
         continue
       }
 
-      // Exactly one side has the file.
-      const present = (o ?? t)!
-      const otherDeletedIt = o ? false : true // !o ⇒ theirs deleted
-      void otherDeletedIt
-      if (b && present.sha === b.sha) {
-        continue // clean deletion (the side holding it never modified it)
-      }
+      // Exactly one side has the file: addition, deletion, or modify/delete.
+      const presentSide = (o ?? t)!
+      const addedOnTheirs = !o && !!t
       if (!b) {
-        // add/delete race on a brand-new file — genuinely conflicting intent
-        conflictPaths.push(path)
+        // Absent from the base: whichever side HAS it added it cleanly;
+        // this cannot be a conflict (the other side never expressed intent).
+        entries.push({ path, mode: normMode(presentSide.mode), sha: presentSide.sha })
         continue
       }
-      // modify/delete conflict
+      if (presentSide.sha === b.sha) {
+        // The holding side matches the base ⇒ the OTHER side deleted it cleanly.
+        continue
+      }
+      // One side holds a MODIFIED version while the other deleted it.
+      void addedOnTheirs
       conflictPaths.push(path)
     }
 
