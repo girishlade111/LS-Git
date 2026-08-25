@@ -407,10 +407,8 @@ export class PullRequestsService {
     pendingAssignees.delete(pr.id)
     pendingLabels.delete(pr.id)
 
-    if (sets.merge_status === 'unchecked' || Object.keys(sets).length > 0) {
-      const fresh = this.requirePr(projectId, iid)
-      if (fresh.state === 'opened') this.refreshMergeStatus(fresh)
-    }
+    const fresh = this.requirePr(projectId, iid)
+    if (fresh.state === 'opened') this.refreshMergeStatus(fresh)
     if (activities.length > 0) {
       this.fanout(project, 'mr.updated', {
         action: 'updated', title: pr.title, iid: pr.iid, actor_user_id: actor.userId,
@@ -1000,6 +998,10 @@ export class PullRequestsService {
 /** Scratch space for multi-table updates inside update(); call-scoped lifetime. */
 const pendingAssignees = new Map<number, number[]>()
 const pendingLabels = new Map<number, number[]>()
+
+function normMode(mode: string): '100644' | '100755' {
+  return mode === '100755' ? '100755' : '100644'
+}
 
 // Re-export for routes.
 export type { LabelRow }
