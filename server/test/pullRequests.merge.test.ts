@@ -85,7 +85,7 @@ async function merge(h: Harness, iid: number, payload: Record<string, unknown> =
 describe('strategy: merge commit', () => {
   it('creates a TWO-PARENT merge commit on the target and combines both sides', async () => {
     const h = await setup()
-    const srcSha = await commitBranch(h, 'feature', { newBranch: true, content: 'feature line\n' })
+    const srcSha = await commitBranch(h, 'feature', { newBranch: true, content: 'feature line\n', message: 'feature work' })
     // Target moves AFTER the branch was cut — the merge must combine.
     await commitBranch(h, 'main', { content: 'main-side addition\n', file: 'main.txt', message: 'main work' })
 
