@@ -36,17 +36,15 @@ export function PullsListRouteBridge({
   projectPath: string
   navigate: (hash: string) => void
 }) {
-  const { project, refs, failed } = useProjectContext(owner, projectPath)
+  const { project, failed } = useProjectContext(owner, projectPath)
   if (failed) return <EmptyState icon="warning" title="Project not found" description="Check the address or your access rights." />
   if (!project) return <div className="ls-rb__loading" role="status">Loading…</div>
-  const branchNames = [...(refs?.branches ?? []).map((b) => ({ name: b.name })), ...(refs?.tags ?? []).map((t) => ({ name: t.name }))]
   return (
     <PullsListPage
       projectId={project.id}
       owner={owner}
       projectPath={projectPath}
       navigate={navigate}
-      refs={branchNames}
     />
   )
 }

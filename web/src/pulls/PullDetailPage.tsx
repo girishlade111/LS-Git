@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { Badge } from '../design-system/Badge'
 import { Button } from '../design-system/Button'
 import { Dialog } from '../design-system/Dialog'
-import { DiffViewer } from '../design-system/DiffViewer'
 import { EmptyState } from '../design-system/EmptyState'
 import { Icon } from '../design-system/Icon'
 import { Input } from '../design-system/Input'
@@ -11,7 +10,8 @@ import { Textarea } from '../design-system/Textarea'
 import { renderMarkdown } from '../repository/markdown'
 import { timeAgo } from '../repository/widgets'
 import type { ChangedFile, CommitRow, MergeMethod, Mergeability, PullRequest } from './api'
-import { pullsApi } from './api'
+import { pullsApi, type DraftComment, type ReviewThread } from './api'
+import { ReviewChanges } from './ReviewChanges'
 import type { Note } from '../issues/api'
 
 /**
@@ -37,6 +37,8 @@ export function PullDetailPage({
   const [mergeability, setMergeability] = useState<Mergeability | null>(null)
   const [commits, setCommits] = useState<CommitRow[]>([])
   const [files, setFiles] = useState<ChangedFile[] | null>(null)
+  const [threads, setThreads] = useState<ReviewThread[] | null>(null)
+  const [drafts, setDrafts] = useState<DraftComment[]>([])
   const [notes, setNotes] = useState<Array<Omit<Note, 'reactions'>>>([])
   const [error, setError] = useState<string | null>(null)
   const [notFound, setNotFound] = useState(false)
@@ -71,6 +73,8 @@ export function PullDetailPage({
   useEffect(() => { void reloadAll() }, [reloadAll])
   useEffect(() => {
     void pullsApi.changes(projectId, iid, true).then((c) => setFiles(c.files)).catch(() => setFiles([]))
+    void pullsApi.threads(projectId, iid).then((t) => setThreads(t.threads)).catch(() => setThreads([]))
+    void pullsApi.drafts(projectId, iid).then((d) => setDrafts(d.drafts)).catch(() => setDrafts([]))
   }, [projectId, iid])
 
   async function act(fn: () => Promise<unknown>): Promise<boolean> {
@@ -214,28 +218,28 @@ export function PullDetailPage({
             </ol>
           </details>
 
-          {/* ── changes ── */}
+          {/* ── changes + inline review ── */}
           <details className="ls-pulls__section" open>
             <summary>Changes <span className="ls-rb__muted">· {files?.length ?? '…'}</span></summary>
-            {files === null ? (
-              <div role="status" className="ls-rb__muted">Loading diff…</div>
+            {files === null || threads === null ? (
+              <div role="status" className="ls-rb__muted">Loading review surface…</div>
             ) : files.length === 0 ? (
               <p className="ls-rb__muted">No changed files.</p>
             ) : (
-              <div className="ds-stack">
-                {files.map((f) => (
-                  <div key={`${f.kind}-${f.path}`}>
-                    <code className="ls-pulls__file">{f.path}</code>
-                    {f.patch && <DiffViewer diff={f.patch} />}
-                  </div>
-                ))}
-              </div>
+              <ReviewChanges
+                projectId={projectId}
+                iid={iid}
+                files={files}
+                threads={threads}
+                drafts={drafts}
+                onChanged={() => reloadAll()}
+              />
             )}
           </details>
 
           {/* ── timeline ── */}
           <ol className="ls-issues__timeline" aria-label="Activity">
-            {notes.map((n) =>
+            {(notes ?? []).map((n) =>
               n.system ? (
                 <li key={n.id} className="ls-timeline__sysnote">
                   <Icon name="settings" size={12} />

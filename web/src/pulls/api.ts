@@ -127,4 +127,81 @@ export const pullsApi = {
     request<{ notes: Array<Omit<Note, 'reactions'>> }>(`${base(projectId)}/${iid}/notes`),
   comment: (projectId: number, iid: number, body: string) =>
     request<Note>(`${base(projectId)}/${iid}/notes`, 'POST', { body }),
+  // ── code review ──────────────────────────────────────────────────────────
+  threads: (projectId: number, iid: number) =>
+    request<{ threads: ReviewThread[]; head_sha: string }>(`${base(projectId)}/${iid}/threads`),
+  createThread: (
+    projectId: number,
+    iid: number,
+    input: { body: string; path: string; side?: 'new' | 'old'; line_start: number; line_end?: number },
+  ) => request<{ thread: ReviewThread }>(`${base(projectId)}/${iid}/threads`, 'POST', input),
+  replyThread: (projectId: number, iid: number, threadId: number, body: string) =>
+    request<{ note: unknown }>(`${base(projectId)}/${iid}/threads/${threadId}/replies`, 'POST', { body }),
+  resolveThread: (projectId: number, iid: number, threadId: number, unresolve = false) =>
+    request<{ id: number; resolved: boolean }>(
+      `${base(projectId)}/${iid}/threads/${threadId}/${unresolve ? 'unresolve' : 'resolve'}`, 'POST', {},
+    ),
+  reviews: (projectId: number, iid: number) =>
+    request<{ reviews: ReviewSummary[] }>(`${base(projectId)}/${iid}/reviews`),
+  submitReview: (projectId: number, iid: number, input: { state: 'approved' | 'changes_requested' | 'commented'; body?: string }) =>
+    request<{ published_drafts: number; pull_request: PullRequest | null }>(
+      `${base(projectId)}/${iid}/reviews`, 'POST', input,
+    ),
+  drafts: (projectId: number, iid: number) =>
+    request<{ drafts: DraftComment[] }>(`${base(projectId)}/${iid}/draft_comments`),
+  addDraft: (projectId: number, iid: number, input: { body: string; path?: string; side?: 'new' | 'old'; line_start?: number; line_end?: number }) =>
+    request<{ draft: DraftComment }>(`${base(projectId)}/${iid}/draft_comments`, 'POST', input),
+  deleteDraft: (projectId: number, iid: number, draftId: number) =>
+    request<{ ok: boolean }>(`${base(projectId)}/${iid}/draft_comments/${draftId}`, 'DELETE'),
+  applySuggestions: (projectId: number, iid: number, suggestionNoteIds: number[]) =>
+    request<{ commit_sha: string; applied: number }>(
+      `${base(projectId)}/${iid}/suggestions/apply`, 'POST', { suggestion_note_ids: suggestionNoteIds },
+    ),
+}
+
+export interface ReviewNote {
+  id: number
+  author: UserBrief | null
+  body: string
+  suggestion: { status: 'pending' | 'applied' | 'rejected' | null; applied_commit_sha: string | null } | null
+  created_at: string
+}
+
+export interface ReviewThread {
+  id: number
+  path: string
+  side: 'new' | 'old'
+  line_start: number
+  line_end: number
+  resolved: boolean
+  outdated: boolean
+  outdated_reason: string | null
+  head_sha: string
+  created_at: string
+  notes: ReviewNote[]
+  code_owner_users: string[]
+}
+
+export type ReviewState = 'approved' | 'changes_requested' | 'commented'
+
+export interface ReviewSummary {
+  id: number
+  reviewer: UserBrief | null
+  state: ReviewState
+  head_sha: string
+  body: string | null
+  submitted_at: string
+}
+
+export interface DraftComment {
+  id: number
+  pr_id: number
+  author_id: number
+  body: string
+  path: string | null
+  side: 'new' | 'old' | null
+  line_start: number | null
+  line_end: number | null
+  created_at: string
+  updated_at: string
 }

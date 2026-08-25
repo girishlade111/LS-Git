@@ -1,0 +1,101 @@
+/* Code-review surface. Color contract:
+   green (--ls-success) ONLY for approved/resolved/applied;
+   red (--ls-danger/-muted) ONLY for blocking/request-changes/outdated-danger;
+   terracotta (--ls-accent) marks actionable accents; neutral stays neutral. */
+
+.ls-review { display: flex; flex-direction: column; gap: 14px; }
+.ls-mb8 { margin-bottom: 8px; }
+
+/* Finish bar — subtle, border-driven, no shadow. */
+.ls-finishbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--ls-accent);
+  border-radius: var(--ls-radius);
+  background: var(--ls-tint-accent);
+  font-size: var(--ls-fs-body);
+}
+.ls-accent { color: var(--ls-accent); font-weight: 500; }
+
+/* ── file patch ── */
+.ls-filepatch {
+  border: 1px solid var(--ls-border);
+  border-radius: var(--ls-radius);
+  background: var(--ls-panel);
+  overflow: hidden;
+}
+.ls-filepatch__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--ls-surface-1);
+  border-bottom: 1px solid var(--ls-border);
+}
+.ls-filepatch__head code { font-family: var(--ls-font-mono); font-size: var(--ls-fs-label); color: var(--ls-text); }
+.ls-pulls__kind { font-size: var(--ls-fs-label); color: var(--ls-text-secondary); }
+
+.ls-patch { width: 100%; border-collapse: collapse; font-family: var(--ls-font-mono); font-size: var(--ls-fs-label); table-layout: fixed; }
+.ls-patch__row td { padding: 1px 8px; vertical-align: top; white-space: pre-wrap; word-break: break-word; }
+.ls-patch__row--ctx .ls-patch__code, .ls-patch__row--ctx code { color: var(--ls-text-secondary); }
+.ls-patch__ln {
+  width: 40px; min-width: 40px; text-align: right;
+  color: var(--ls-text-disabled); user-select: none;
+}
+.ls-patch__sign { width: 16px; min-width: 16px; color: var(--ls-text-secondary); user-select: none; }
+.ls-patch__code code { font-family: inherit; color: var(--ls-text); }
+.ls-patch__row:not(.ls-patch__row--ctx) { cursor: pointer; }
+.ls-patch__row:not(.ls-patch__row--ctx):hover { background: var(--ls-hover); }
+.ls-patch__row--sel { background: var(--ls-tint-accent); }
+.ls-patch__threadanchor td { height: 4px; padding: 0; }
+
+/* ── threads ── */
+.ls-thread {
+  margin: 8px 12px 12px;
+  border: 1px solid var(--ls-border);
+  border-left: 3px solid var(--ls-border);
+  border-radius: var(--ls-radius-sm);
+  background: var(--ls-bg);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ls-thread--outdated { opacity: 0.65; border-left-color: var(--ls-text-disabled); }
+.ls-thread--resolved { border-left-color: var(--ls-success-muted); }
+.ls-thread__meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--ls-fs-label); }
+.ls-thread__loc { color: var(--ls-text-secondary); font-family: var(--ls-font-mono); }
+.ls-thread__resolvedmark { display: inline-flex; align-items: center; gap: 3px; color: var(--ls-success); }
+.ls-thread__owners { color: var(--ls-text-disabled); }
+.ls-thread__spacer { flex: 1; }
+.ls-thread__action {
+  height: 22px; padding: 0 8px;
+  border: 1px solid var(--ls-border); border-radius: var(--ls-radius-sm);
+  background: none; font-size: var(--ls-fs-label); color: var(--ls-text-secondary);
+  cursor: pointer;
+}
+.ls-thread__action:hover { color: var(--ls-text); border-color: var(--ls-text-disabled); }
+.ls-thread__note { font-size: var(--ls-fs-body); }
+.ls-thread__body { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.ls-thread__actions { display: flex; gap: 6px; align-items: center; }
+
+/* Suggestion blocks — terracotta accent while pending (actionable). */
+.ls-suggestion {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--ls-border);
+  border-left: 3px solid var(--ls-border);
+  border-radius: var(--ls-radius-sm);
+  background: var(--ls-surface-1);
+  font-size: var(--ls-fs-desc);
+}
+.ls-suggestion--pending { border-left-color: var(--ls-accent); } /* actionable */
+.ls-suggestion--applied { border-left-color: var(--ls-success-muted); }
+.ls-suggestion--rejected { border-left-color: var(--ls-text-disabled); opacity: 0.7; }
+.ls-suggestion__head { display: flex; gap: 6px; align-items: center; font-size: var(--ls-fs-label); color: var(--ls-text-secondary); }
+.ls-suggestion--applied .ls-suggestion__head { color: var(--ls-success); }
+.ls-suggestion--pending .ls-suggestion__head { color: var(--ls-accent); }
+
+.ls-inlinecomposer { margin: 8px 12px; display: flex; flex-direction: column; gap: 8px; }

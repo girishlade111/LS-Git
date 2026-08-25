@@ -26,6 +26,7 @@ import { PullsListRouteBridge, PullDetailRouteBridge } from './pulls/PullsRouter
 import './repository/repository.css'
 import './issues/issues.css'
 import './pulls/pulls.css'
+import './pulls/review.css'
 
 const PUBLIC_ROUTES = new Set(['/login', '/register', '/forgot', '/reset', '/verify-email'])
 
