@@ -427,7 +427,8 @@ fields:
     expect(body).toContain('### Summary\n\nLogin crashes on Safari')
     expect(body).toContain('### Severity\n\nmedium')
     expect(body).toContain('- [x] On staging')
-    expect(body).toContain('- [ ] collect logs') // unchosen tasks stay OPEN
+    expect(body).toContain('- [x] In production') // chosen
+    expect(body).toContain('- [ ] check dashboards') // unchosen tasks stay OPEN
     expect(body).toContain('- [x] collect logs')
     expect(body).toMatch(/_Submitted via form `Bug report`\._/)
   })
