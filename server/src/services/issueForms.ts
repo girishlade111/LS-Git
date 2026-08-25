@@ -171,9 +171,12 @@ export class IssueFormsService {
       throw new AppError(400, `Invalid form template: ${parsed.error}`, 'form_schema_invalid')
     }
 
+    const verb = this.readTemplates(project).some((t) => t.name === name.toLowerCase())
+      ? 'update'
+      : 'add'
     const outcome = this.repos.commitChanges(actor, projectId, {
       branch: project.default_branch,
-      message: `chore(forms): ${this.readTemplates(project).some((t) => t.name === name.toLowerCase()) ? 'update' : 'add'} issue form '${name}'`,
+      message: `chore(forms): ${verb} issue form '${name}'`,
       changes: [{ path, content: yamlText }],
     })
     return { path, commit_sha: outcome.commit_sha, form: parsed.def }
