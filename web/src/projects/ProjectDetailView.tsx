@@ -62,6 +62,11 @@ export function ProjectDetailView({ owner, path }: { owner: string; path: string
 
       {/* Social + fork controls: star/watch on the source page; relationship panel on forks. */}
       <div className="ds-row" style={{ marginBottom: 12, alignItems: 'center' }}>
+        <nav className="ls-issues__projlinks" aria-label="Project collaboration" style={{ display: 'flex', gap: 14, marginRight: 12 }}>
+          <a href={`#/proj/${encodeURIComponent(owner)}/${encodeURIComponent(path)}/issues`}>Issues</a>
+          <a href={`#/proj/${encodeURIComponent(owner)}/${encodeURIComponent(path)}/milestones`}>Milestones</a>
+          <a href={`#/proj/${encodeURIComponent(owner)}/${encodeURIComponent(path)}/labels`}>Labels</a>
+        </nav>
         {!project.upstream_full_path && !project.archived && <ForkButton project={project} />}
         {project.upstream_full_path && (
           <ForkStatusPanel

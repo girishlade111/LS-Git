@@ -2073,7 +2073,7 @@ export class ReactionsRepo {
     me: boolean
   }> {
     const rows = this.db.all(
-      'SELECT name, user_id FROM reactions WHERE noteable_type = ? AND noteable_id = ? ORDER BY MIN(created_at)',
+      'SELECT name, user_id FROM reactions WHERE noteable_type = ? AND noteable_id = ? ORDER BY id',
       targetType,
       targetId,
     ) as Array<Row>

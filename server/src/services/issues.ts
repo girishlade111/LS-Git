@@ -87,7 +87,7 @@ function extractReferenceIids(text: string, excludeIid: number | null): number[]
 }
 
 export class IssuesService {
-  constructor(private s: IdentityServices, private cfg: AppConfig) {}
+  constructor(private s: IdentityServices, _cfg: AppConfig) {}
 
   // -- authorization helpers --------------------------------------------------
 
@@ -123,11 +123,16 @@ export class IssuesService {
     }
   }
 
-  /** Loads a project the actor may read, or throws 404/401/403. */
+  /** Loads a project the actor may read, or throws 404 (existence hidden — PERMISSIONS.md §2). */
   readableProject(actor: Actor | null, projectId: number): ProjectRow {
     const p = this.s.projects.byId(projectId)
     if (!p) throw new AppError(404, 'Project not found')
-    this.authorize(actor, 'project:read', p)
+    try {
+      this.authorize(actor, 'project:read', p)
+    } catch {
+      // Non-readers get the same answer as for a nonexistent project.
+      throw new AppError(404, 'Project not found')
+    }
     return p
   }
 
@@ -480,7 +485,7 @@ export class IssuesService {
     return created
   }
 
-  editComment(actor: Actor, projectId: number, iid: number, noteId: number, body: string): void {
+  editComment(actor: Actor, projectId: number, _iid: number, noteId: number, body: string): void {
     const project = this.readableProject(actor, projectId)
     const note = this.s.notes.byId(noteId)
     if (!note || note.noteable_type !== 'issue' || note.project_id !== projectId) {
@@ -494,7 +499,7 @@ export class IssuesService {
     this.s.notes.update(noteId, requireText(body, 'Comment', MAX_NOTE))
   }
 
-  deleteComment(actor: Actor, projectId: number, iid: number, noteId: number): void {
+  deleteComment(actor: Actor, projectId: number, _iid: number, noteId: number): void {
     const project = this.readableProject(actor, projectId)
     const note = this.s.notes.byId(noteId)
     if (!note || note.noteable_type !== 'issue' || note.project_id !== projectId) {
@@ -580,8 +585,7 @@ export class IssuesService {
     if (this.s.labels.byTitle(projectId, title)) {
       throw new AppError(409, 'Label has already been taken', 'taken')
     }
-    const colorRaw = typeof input.color === 'string' && input.color.trim() !== '' ? input.color : '#8a8a8a'
-    const color = normalizeHexColor(colorRaw)
+    const color = normalizeHexColor(input.color ?? '#8a8a8a')
     if (!color) throw new AppError(400, 'color must be a hex value like #rrggbb')
     const description = String(input.description ?? '').slice(0, 500)
     return this.s.labels.create({ project_id: projectId, title, description, color })

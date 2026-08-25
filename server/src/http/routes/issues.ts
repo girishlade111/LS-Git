@@ -187,7 +187,11 @@ export function registerIssueRoutes(app: FastifyInstance): void {
   app.post('/api/v1/projects/:id/milestones', { preHandler: auth }, async (req, reply) => {
     const projectId = numParam(req, 'id')
     const body = (req.body ?? {}) as Record<string, unknown>
-    const m = svc.createMilestone(req.actor!, projectId, body)
+    const m = svc.createMilestone(req.actor!, projectId, {
+      title: body.title,
+      description: body.description,
+      due_date: body.due_date,
+    })
     reply.code(201)
     return milestoneView(m)
   })
@@ -212,7 +216,12 @@ export function registerIssueRoutes(app: FastifyInstance): void {
     const projectId = numParam(req, 'id')
     const mid = numParam(req, 'milestone_id')
     const body = (req.body ?? {}) as Record<string, unknown>
-    const m = svc.updateMilestone(req.actor!, projectId, mid, body)
+    const m = svc.updateMilestone(req.actor!, projectId, mid, {
+      title: body.title,
+      description: body.description,
+      due_date: body.due_date,
+      state_event: body.state_event,
+    })
     return milestoneView(m)
   })
 

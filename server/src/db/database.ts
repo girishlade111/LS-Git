@@ -8,6 +8,8 @@ export type SqlParam = string | number | bigint | Buffer | null
 
 export class Database {
   readonly raw: DatabaseSync
+  /** Re-entrancy depth for transaction(); nested calls join the outer tx. */
+  private txDepth = 0
 
   constructor(file: string) {
     if (file !== ':memory:') {
@@ -61,7 +63,11 @@ export class Database {
   }
 
   transaction<T>(fn: () => T): T {
+    // SQLite has no nested BEGIN; a call inside an open transaction simply
+    // joins it (commit/rollback stay with the outermost frame).
+    if (this.txDepth > 0) return fn()
     this.raw.exec('BEGIN')
+    this.txDepth++
     try {
       const out = fn()
       this.raw.exec('COMMIT')
@@ -69,6 +75,8 @@ export class Database {
     } catch (err) {
       this.raw.exec('ROLLBACK')
       throw err
+    } finally {
+      this.txDepth--
     }
   }
 
