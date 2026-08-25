@@ -517,3 +517,244 @@ export class PrReviewService {
       }),
     }
   }
+
+  // ── reviews & drafts ──────────────────────────────────────────────────────
+
+  /**
+   * Approval bookkeeping sync: when the source tip moves past the sha the
+   * review machinery last saw AND policy requires it, accumulated approvals
+   * are reset exactly once. Called from refresh paths and merge.
+   */
+  syncSeenSourceSha(pr: PullRequestRow, actorForNote?: Actor): void {
+    const project = this.s.projects.byId(pr.project_id)!
+    if (pr.state !== 'opened') return
+    let srcTip: string | null = null
+    try {
+      const repo = this.engineFor(project)
+      srcTip = repo.resolveBranch(pr.source_branch)
+    } catch { return }
+    if (!srcTip || pr.seen_source_sha === srcTip) {
+      if (srcTip && pr.seen_source_sha !== srcTip) {
+        this.s.pullRequests.update(pr.id, { seen_source_sha: srcTip })
+      }
+      return
+    }
+    if (project.reset_approvals_on_push) {
+      this.s.db.transaction(() => {
+        this.s.pullRequests.setApprovalsReset(pr.id)
+        for (const r of this.s.pullRequests.reviewers(pr.id)) {
+          this.s.pullRequests.setReviewerState(pr.id, r.userId, 'unreviewed')
+        }
+        if (actorForNote) {
+          this.recordSystemNote(
+            { ...pr, seen_source_sha: null } as PullRequestRow,
+            actorForNote,
+            'approvals were reset because new commits were pushed',
+          )
+        }
+      })
+    }
+    this.s.pullRequests.update(pr.id, { seen_source_sha: srcTip })
+  }
+
+  submitReview(
+    actor: Actor,
+    projectId: number,
+    iid: number,
+    input: { state?: unknown; body?: unknown },
+  ): { review: ReturnType<IdentityServices['prReviews']['byId']>; published_drafts: number } {
+    const project = this.s.projects.byId(projectId)!
+    const pr = this.visiblePr(actor, projectId, iid)
+    this.commentGate(actor, project)
+
+    const state = String(input.state ?? '')
+    if (!['approved', 'changes_requested', 'commented'].includes(state)) {
+      throw new AppError(400, "state must be 'approved', 'changes_requested' or 'commented'")
+    }
+    if (state === 'approved' && pr.author_id === actor.userId) {
+      throw new AppError(422, 'Authors cannot approve their own pull requests', 'self_approval_denied')
+    }
+    if (pr.state !== 'opened') throw new AppError(422, 'Reviews can only be submitted on open pull requests')
+
+    const summaryBody = typeof input.body === 'string' && input.body.trim() !== ''
+      ? input.body.trim().slice(0, MAX_BODY)
+      : null
+
+    // Publish THIS user's draft comments: positioned ones become threads,
+    // unpositioned ones become plain timeline comments.
+    const drafts = this.s.prDrafts.listForAuthor(pr.id, actor.userId)
+    const headSha = (() => {
+      try { return this.tips(pr).srcTip } catch { return pr.seen_source_sha ?? '' }
+    })()
+
+    this.s.db.transaction(() => {
+      for (const d of drafts) {
+        const body = this.assertBody(d.body)
+        if (d.path && d.side && d.line_start !== null && d.line_end !== null) {
+          const existing = this.findOpenThreadAtPosition(pr.id, d.path, d.side, d.line_start, d.line_end, headSha)
+          if (existing) {
+            this.s.prThreadNotes.create({
+              thread_id: existing.id,
+              project_id: projectId,
+              author_id: actor.userId,
+              body,
+              suggestionLines: extractSuggestion(body),
+            })
+          } else {
+            // Position validated lazily by createThread-like checks; reuse raw
+            // insert to avoid re-reading tips inside the transaction.
+            const covered = this.coveredLinesAt(pr, d)
+            const t = this.s.prThreads.create({
+              pr_id: pr.id,
+              project_id: projectId,
+              path: d.path,
+              side: d.side as 'new' | 'old',
+              line_start: d.line_start!,
+              line_end: d.line_end!,
+              base_sha: covered.base,
+              head_sha: covered.head,
+              covered_lines: covered.lines,
+            })
+            this.s.prThreadNotes.create({
+              thread_id: t.id,
+              project_id: projectId,
+              author_id: actor.userId,
+              body,
+              suggestionLines: extractSuggestion(body),
+            })
+          }
+        } else {
+          this.s.notes.create({
+            noteable_type: 'pull_request',
+            noteable_id: pr.id,
+            project_id: projectId,
+            author_id: actor.userId,
+            note: body,
+          })
+        }
+      }
+
+      const review = this.s.prReviews.insert({
+        pr_id: pr.id,
+        project_id: projectId,
+        reviewer_id: actor.userId,
+        state: state as 'approved' | 'changes_requested' | 'commented',
+        head_sha: headSha,
+        body: summaryBody,
+      })
+
+      if (state === 'approved') {
+        this.s.pullRequests.approve(pr.id, actor.userId)
+        this.s.pullRequests.setReviewerState(pr.id, actor.userId, 'approved')
+        this.recordSystemNote(pr, actor, summaryBody ? 'approved this pull request' : 'approved this pull request')
+      } else if (state === 'changes_requested') {
+        this.s.pullRequests.unapprove(pr.id, actor.userId)
+        this.s.pullRequests.setReviewerState(pr.id, actor.userId, 'changes_requested')
+        this.recordSystemNote(pr, actor, 'requested changes')
+      }
+
+      this.s.prDrafts.deleteAllForAuthor(pr.id, actor.userId)
+      void review
+    })
+
+    const latest = this.s.prReviews.latestPerReviewer(pr.id).find((r) => r.reviewer_id === actor.userId) ?? null
+    return {
+      review: latest,
+      published_drafts: drafts.length,
+    }
+  }
+
+  private findOpenThreadAtPosition(prId: number, path: string, side: string, start: number, end: number, headSha: string): PrThreadRow | null {
+    for (const t of this.s.prThreads.listForPr(prId)) {
+      if (
+        t.path === path && t.side === side &&
+        t.line_start === start && t.line_end === end &&
+        t.head_sha === headSha && !t.resolved
+      ) return t
+    }
+    return null
+  }
+
+  private coveredLinesAt(pr: PullRequestRow, d: { path: string; side: string | null }): { base: string; head: string; lines: string[] } {
+    try {
+      const project = this.s.projects.byId(pr.project_id)!
+      const repo = this.engineFor(project)
+      const { srcTip, baseSha } = this.tips(pr)
+      const atSha = d.side === 'old' ? baseSha : srcTip
+      const sha = atSha ? repo.findEntryAt(repo.readCommit(atSha).tree, d.path)?.sha ?? null : null
+      if (!sha) throw new AppError(422, "Draft path '" + d.path + "' no longer exists in the diff", 'invalid_position')
+      const text = repo.readBlob(sha).toString('utf8')
+      const lines = text === '' ? [] : text.replace(/\n$/, '').split('\n')
+      if (d.line_start === null || d.line_end === null || d.line_start < 1 || d.line_end > lines.length) {
+        throw new AppError(422, 'Draft line range is now invalid — discard or edit it', 'invalid_position')
+      }
+      return {
+        base: baseSha,
+        head: srcTip,
+        lines: lines.slice(d.line_start - 1, d.line_end),
+      }
+    } catch (err) {
+      if (err instanceof AppError) throw err
+      throw new AppError(422, 'Draft position could not be validated', 'invalid_position')
+    }
+  }
+
+  listReviews(actor: Actor | null, projectId: number, iid: number) {
+    const pr = this.visiblePr(actor, projectId, iid)
+    const latest = this.s.prReviews.latestPerReviewer(pr.id)
+    return {
+      reviews: latest.map((r) => ({
+        id: r.id,
+        reviewer: this.userBrief(r.reviewer_id),
+        state: r.state,
+        head_sha: r.head_sha,
+        body: r.body,
+        submitted_at: r.submitted_at,
+      })),
+    }
+  }
+
+  // ── draft comments ────────────────────────────────────────────────────────
+
+  addDraft(actor: Actor, projectId: number, iid: number, input: Record<string, unknown>) {
+    const project = this.s.projects.byId(projectId)!
+    const pr = this.visiblePr(actor, projectId, iid)
+    this.commentGate(actor, project)
+    const body = this.assertBody(input.body)
+    return this.s.prDrafts.create({
+      pr_id: pr.id,
+      author_id: actor.userId,
+      body,
+      path: typeof input.path === 'string' ? input.path : null,
+      side: input.side === 'old' ? 'old' : input.side === 'new' ? 'new' : null,
+      line_start: input.line_start === undefined ? null : Number(input.line_start),
+      line_end: input.line_end === undefined ? null : Number(input.line_end),
+    })
+  }
+
+  listDrafts(actor: Actor, projectId: number, iid: number) {
+    const pr = this.visiblePr(actor, projectId, iid)
+    return { drafts: this.s.prDrafts.listForAuthor(pr.id, actor.userId) }
+  }
+
+  updateDraft(actor: Actor, projectId: number, iid: number, draftId: number, patch: Record<string, unknown>): void {
+    const pr = this.visiblePr(actor, projectId, iid)
+    const d = this.s.prDrafts.byId(draftId)
+    if (!d || d.pr_id !== pr.id || d.author_id !== actor.userId) throw new AppError(404, 'Draft not found')
+    const fields: Record<string, unknown> = {}
+    if (patch.body !== undefined) fields.body = this.assertBody(patch.body)
+    if (patch.path !== undefined) fields.path = typeof patch.path === 'string' ? patch.path : null
+    if (patch.line_start !== undefined) fields.line_start = patch.line_start === null ? null : Number(patch.line_start)
+    if (patch.line_end !== undefined) fields.line_end = patch.line_end === null ? null : Number(patch.line_end)
+    this.s.prDrafts.update(draftId, fields as never)
+  }
+
+  deleteDraft(actor: Actor, projectId: number, iid: number, draftId: number): void {
+    const pr = this.visiblePr(actor, projectId, iid)
+    if (!this.s.prDrafts.deleteOwn(draftId, actor.userId)) {
+      const d = this.s.prDrafts.byId(draftId)
+      if (!d || d.pr_id !== pr.id) throw new AppError(404, 'Draft not found')
+      throw new AppError(403, 'You can only delete your own drafts')
+    }
+  }
+}
