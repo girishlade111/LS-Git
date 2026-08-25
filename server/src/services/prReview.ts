@@ -130,7 +130,6 @@ export class PrReviewService {
     if (v.length > MAX_BODY) throw new AppError(400, 'body exceeds ' + MAX_BODY + ' characters')
     return v
   }
-}
   // ── threads ──────────────────────────────────────────────────────────────
 
   createThread(
