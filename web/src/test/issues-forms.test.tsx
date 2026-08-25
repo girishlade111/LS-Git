@@ -145,7 +145,7 @@ describe('form-driven issue creation', () => {
 
     // No POST was ever sent while invalid.
     const posts = fetchMock.mock.calls.filter(
-      (c) => String(c[0]).endsWith('/submissions') && ((c[1] as RequestInit | undefined)?.method === 'POST'),
+      (c) => String(c[0]).endsWith('/submissions') && ((c as unknown as [string, RequestInit])[1]?.method === 'POST'),
     )
     expect(posts.length).toBe(0)
   })
