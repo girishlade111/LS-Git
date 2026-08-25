@@ -51,14 +51,14 @@ beforeEach(() => {
 
 const NAV = (to: string) => void to
 
-const refsReply = jsonResponse({ branches: [{ name: 'main', sha: 'a', default: true, protected: false }, { name: 'feature/x', sha: 'b', default: false, protected: false }], tags: [] })
+const refsReply = () => jsonResponse({ branches: [{ name: 'main', sha: 'a', default: true, protected: false }, { name: 'feature/x', sha: 'b', default: false, protected: false }], tags: [] })
 
 describe('pull request list', () => {
   it('renders dense rows with branch direction and switches state tabs', async () => {
     const fetchMock = vi.fn((url: string) => {
       const u = String(url)
       if (u.includes('/pull_requests')) return Promise.resolve(jsonResponse({ pull_requests: [PR], pagination: { page: 1, per_page: 20, total: 1, total_pages: 1, has_more: false } }))
-      if (u.includes('/repository/refs')) return refsReply
+      if (u.includes('/repository/refs')) return refsReply()
       return Promise.resolve(jsonResponse({}))
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -85,7 +85,7 @@ describe('pull request list', () => {
         created = JSON.parse(String(init?.body)) as Record<string, unknown>
         return Promise.resolve(jsonResponse({ ...PR, web_path: '/proj/alice/web/pulls/8', iid: 8 }, 201))
       }
-      if (u.includes('/repository/refs')) return refsReply
+      if (u.includes('/repository/refs')) return refsReply()
       return Promise.resolve(jsonResponse({ pull_requests: [], pagination: { page: 1, per_page: 20, total: 0, total_pages: 1, has_more: false } }))
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -94,7 +94,7 @@ describe('pull request list', () => {
     render(<PullsListPage projectId={5} owner="alice" projectPath="web" navigate={NAV} />)
     await user.click(await screen.findByRole('button', { name: /New pull request/ }))
 
-    await user.selectOptions(await screen.findByRole('combobox', { name: 'Source branch' }), await screen.findByRole('option', { name: 'feature/x' }))
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Source branch' }), 'feature/x')
     await fireEvent.change(screen.getByLabelText(/^Title$/), { target: { value: 'New work' } })
     await user.click(screen.getByRole('button', { name: /Open pull request/ }))
 
