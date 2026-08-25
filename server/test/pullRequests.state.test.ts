@@ -227,9 +227,14 @@ describe('comments & activity timeline', () => {
       ).statusCode,
     ).toBe(200)
 
-    // …but not ALICE'S system notes.
+    // …but not ALICE'S system notes (generate one via a title change first).
+    await authed(h.app, 'PATCH', `/api/v1/projects/${h.projectId}/pull_requests/1`, {
+      session: h.alice,
+      payload: { title: 'Renamed PR' },
+    })
     const tl = await authed(h.app, 'GET', `/api/v1/projects/${h.projectId}/pull_requests/1/notes`, { session: h.bob })
     const sysNote = (tl.json().notes as Array<Record<string, unknown>>).find((n) => n.system === true)!
+    expect(sysNote).toBeTruthy()
     expect(
       (
         await authed(h.app, 'PATCH', `/api/v1/projects/${h.projectId}/pull_requests/1/notes/${sysNote.id}`, {

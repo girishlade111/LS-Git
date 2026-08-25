@@ -351,15 +351,22 @@ describe('gates: draft · nothing-to-merge · stale sha · permissions · protec
       payload: { name: 'main', push_access_level: 'no_one' },
     })
 
-    // PR author alice lost ownership AND is not admin → G5 fires.
-    const blocked = await merge(h, pr.iid as number)
+    // BOB (non-admin owner) attempts the merge → G5 fires for him.
+    const blocked = await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/pull_requests/${pr.iid}/merge`, {
+      session: h.bob,
+      payload: {},
+    })
     expect(blocked.statusCode).toBe(403)
     expect((blocked.json() as { code?: string }).code).toBe('protected_branch_rule')
 
-    // Granting admin bypasses the rule (audited elsewhere) — merge proceeds.
-    const aliceId = h.app.store.users.byUsername('alice')!.id
-    h.app.store.db.run('UPDATE users SET admin = 1 WHERE id = ?', aliceId)
-    expect((await merge(h, pr.iid as number)).statusCode).toBe(200)
+    // Granting BOB admin bypasses the rule (audited elsewhere) — proceeds.
+    const bobId = h.app.store.users.byUsername('bob')!.id
+    h.app.store.db.run('UPDATE users SET admin = 1 WHERE id = ?', bobId)
+    const ok = await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/pull_requests/${pr.iid}/merge`, {
+      session: h.bob,
+      payload: {},
+    })
+    expect(ok.statusCode).toBe(200)
   })
 
   it('enforces REQUIRED APPROVALS configured per project (G6)', async () => {
