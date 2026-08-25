@@ -591,4 +591,76 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
       CREATE INDEX idx_reactions_target ON reactions(noteable_type, noteable_id);
     `,
   },
+  {
+    version: 11,
+    sql: `
+      -- Code review: inline threads, suggestions, submitted reviews, drafts.
+      ALTER TABLE projects ADD COLUMN reset_approvals_on_push INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE pull_requests ADD COLUMN seen_source_sha TEXT;
+
+      -- A thread pins a diff position (path + new/old side + inclusive range)
+      -- against the EXACT diff version (base_sha..head_sha) it was written on.
+      -- covered_lines snapshots the file lines at creation so applicability
+      -- survives upstream shifts without mis-applying at the wrong spot.
+      CREATE TABLE pr_threads (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pr_id INTEGER NOT NULL REFERENCES pull_requests(id) ON DELETE CASCADE,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        path TEXT NOT NULL,
+        side TEXT NOT NULL CHECK (side IN ('new', 'old')),
+        line_start INTEGER NOT NULL,
+        line_end INTEGER NOT NULL,
+        base_sha TEXT NOT NULL,
+        head_sha TEXT NOT NULL,
+        covered_lines TEXT NOT NULL DEFAULT '[]',
+        resolved INTEGER NOT NULL DEFAULT 0,
+        resolved_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        resolved_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_pr_threads_pr ON pr_threads(pr_id);
+
+      CREATE TABLE pr_thread_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        thread_id INTEGER NOT NULL REFERENCES pr_threads(id) ON DELETE CASCADE,
+        project_id INTEGER NOT NULL,
+        author_id INTEGER NOT NULL REFERENCES users(id),
+        body TEXT NOT NULL,
+        suggestion_lines TEXT,
+        suggestion_status TEXT CHECK (suggestion_status IN ('pending', 'applied', 'rejected')),
+        applied_commit_sha TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_pr_tnotes_thread ON pr_thread_notes(thread_id);
+
+      -- Submitted reviews; latest row per reviewer defines their status.
+      CREATE TABLE pr_reviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pr_id INTEGER NOT NULL REFERENCES pull_requests(id) ON DELETE CASCADE,
+        project_id INTEGER NOT NULL,
+        reviewer_id INTEGER NOT NULL REFERENCES users(id),
+        state TEXT NOT NULL CHECK (state IN ('approved', 'changes_requested', 'commented')),
+        head_sha TEXT NOT NULL,
+        body TEXT,
+        submitted_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_pr_reviews ON pr_reviews(pr_id, reviewer_id);
+
+      CREATE TABLE pr_draft_comments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pr_id INTEGER NOT NULL REFERENCES pull_requests(id) ON DELETE CASCADE,
+        author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        body TEXT NOT NULL,
+        path TEXT,
+        side TEXT CHECK (side IS NULL OR side IN ('new', 'old')),
+        line_start INTEGER,
+        line_end INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_pr_drafts ON pr_draft_comments(pr_id, author_id);
+    `,
+  },
 ]
