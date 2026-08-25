@@ -51,14 +51,14 @@ beforeEach(() => {
 
 const NAV = (to: string) => void to
 
-const $refsReply = jsonResponse({ branches: [{ name: 'main', sha: 'a', default: true, protected: false }, { name: 'feature/x', sha: 'b', default: false, protected: false }], tags: [] })
+const refsReply = jsonResponse({ branches: [{ name: 'main', sha: 'a', default: true, protected: false }, { name: 'feature/x', sha: 'b', default: false, protected: false }], tags: [] })
 
 describe('pull request list', () => {
   it('renders dense rows with branch direction and switches state tabs', async () => {
     const fetchMock = vi.fn((url: string) => {
       const u = String(url)
       if (u.includes('/pull_requests')) return Promise.resolve(jsonResponse({ pull_requests: [PR], pagination: { page: 1, per_page: 20, total: 1, total_pages: 1, has_more: false } }))
-      if (u.includes('/repository/refs')) return $refsReply
+      if (u.includes('/repository/refs')) return refsReply
       return Promise.resolve(jsonResponse({}))
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -79,12 +79,13 @@ describe('pull request list', () => {
   it('opens the creation dialog with branch pickers and posts the create payload', async () => {
     let created: Record<string, unknown> | undefined
     const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+      const u = String(_url)
       const method = init?.method ?? 'GET'
       if (method === 'POST') {
         created = JSON.parse(String(init?.body)) as Record<string, unknown>
         return Promise.resolve(jsonResponse({ ...PR, web_path: '/proj/alice/web/pulls/8', iid: 8 }, 201))
       }
-      if (u.includes('/repository/refs')) return $refsReply
+      if (u.includes('/repository/refs')) return refsReply
       return Promise.resolve(jsonResponse({ pull_requests: [], pagination: { page: 1, per_page: 20, total: 0, total_pages: 1, has_more: false } }))
     })
     vi.stubGlobal('fetch', fetchMock)
