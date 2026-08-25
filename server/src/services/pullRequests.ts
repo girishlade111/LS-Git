@@ -524,17 +524,10 @@ export class PullRequestsService {
   unapprove(actor: Actor, projectId: number, iid: number): PullRequestRow {
     const project = this.readableProject(actor, projectId)
     const pr = this.visiblePr(actor, projectId, iid)
-    const isOwnerOrAdmin = actor.admin || project.owner_id === actor.userId
-    if (pr.author_id !== undefined && !isOwnerOrAdmin) {
-      // Users revoke their OWN approval; maintainers may revoke anyone's.
-      void pr.author_id
-    }
-    const hadOwn = this.s.pullRequests.hasApproved(pr.id, actor.userId)
-    const anyApprovalByUser = hadOwn
-    void anyApprovalByUser
 
-    if (!hadOwn && !isOwnerOrAdmin) {
-      throw new AppError(404, 'No approval to withdraw')
+    // Current-user semantics (GitLab parity): you withdraw YOUR approval.
+    if (!this.s.pullRequests.hasApproved(pr.id, actor.userId)) {
+      throw new AppError(404, 'You have no approval to withdraw')
     }
     this.s.db.transaction(() => {
       this.s.pullRequests.unapprove(pr.id, actor.userId)
