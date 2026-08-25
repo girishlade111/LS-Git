@@ -384,3 +384,95 @@ runners whose `access_level=ref_protected`.
 LSGit does **not** promise GitHub-API compatibility. It follows GitLab semantics where
 the reference defines them (payload shapes, state names, iid behavior) because that is
 our stated behavioral reference; deviations are documented in API changelog.
+
+### 3.10 Pull requests (IMPLEMENTED)
+
+Entity name is `pull_requests`; the workflow follows GitLab Merge Request
+semantics (source/target branch, reviewers, approvals, mergeability, three
+merge strategies). Same-project branch pairs only in this phase — cross-
+project (fork) sources arrive with the fork-MR phase and are the single
+documented deferral.
+
+**State machine (normative, enforced + tested).**
+
+```
+create ─▶ opened ──close──▶ closed ──reopen──▶ opened
+            │  ▲  mark_ready  (draft flag only; state stays opened)
+            └──merge──▶ locked ──finalize──▶ merged   (TERMINAL)
+                          └──rollback────▶ opened      (any git failure)
+```
+
+- `locked` is a transient CLAIM taken by an atomic
+  `UPDATE … WHERE state='opened' AND draft=0` — concurrent merges/closes
+  cannot double-fire, and any git failure rolls back to `opened`. It is never
+  a resting state.
+- `merged` is terminal: no edits, no close, no reopen, no second merge.
+- Every transition appends a SYSTEM note to the PR timeline and emits `mr.*`
+  domain events on the EVENTS.md bus.
+
+**Merge gates — evaluated in order, no bypass path.**
+
+| # | Gate | Failure |
+|---|------|---------|
+| G1 | `pr:merge` permission (maintainer-equivalent) | 403 |
+| G2 | PR exists | 404 |
+| G3 | state = opened (closed/merged/locked rejected) | 422/409 |
+| G4 | not draft | 422 `draft_blocked` |
+| G5 | target protected-branch rule permits actor | 403 `protected_branch_rule` |
+| G6 | approvals ≥ project.approvals_required | 422 `required_approvals_missing` |
+| G7 | required checks satisfied (CI Phase-3 hook; today returns no_checks_configured — never faked) | 422 |
+| G8 | expected_sha matches current source tip | 409 `sha_not_match` |
+| G9 | fresh conflict / nothing-to-merge evaluation UNDER the claim | 422 |
+
+**Merge strategies — real git results, verified against the object database.**
+
+| Method | Result |
+|---|---|
+| `merge`  | two-parent merge commit; tree = genuine three-way TREE merge (per-path add/delete/modify resolution + textual diff3 via lib/linemerge.ts for both-modified files; overlapping hunks ⇒ hard conflict, never markers-in-repo) |
+| `squash` | ONE single-parent commit of the combined tree; original source commits stay unreachable from target (linear history); squash sha recorded |
+| `rebase` | cherry-pick replay of every source commit onto the moving target head in topological order (parents first, oldest-committer tiebreak); original authorship preserved; empty picks skipped; any conflict aborts the whole rebase with 422 |
+
+Target ref updates are CAS (`updateRef(expectedOld=tip)`): a moved target
+aborts cleanly instead of fabricating success.
+
+```
+POST   /api/v1/projects/:id/pull_requests                     {title, source_branch, target_branch,
+                                                               description?, draft?, labels?, milestone_id?,
+                                                               assignee_ids?} → 201 (developer+)
+GET    /api/v1/projects/:id/pull_requests                      state · draft · source_branch · target_branch ·
+                                                               author_username · reviewer_username · search ·
+                                                               order_by/sort · page/per_page (+X-Total-Count)
+GET    /api/v1/projects/:id/pull_requests/:iid                 full view (reviewers w/ review_state, approvals
+                                                               {count,required}, linked_issue_iids, shas…)
+PATCH  /api/v1/projects/:id/pull_requests/:iid                 title/description/target_branch/labels/
+                                                               milestone_id/assignee_ids/draft · state_event:
+                                                               close|reopen (author or maintainer+)
+DELETE /api/v1/projects/:id/pull_requests/:iid                 owner/admin only
+GET    .../mergeability                                        {can_merge, blockers[{code,message}], approvals}
+POST   .../merge                                               {method: merge|squash|rebase,
+                                                               should_remove_source_branch?, expected_sha?}
+PUT    .../reviewers                                           {reviewer_ids} — author excluded silently;
+                                                               request/removal system notes
+POST   .../approve · .../unapprove                             one vote per user; author self-approval → 422
+                                                               self_approval_denied; withdrawal clears reviewer state
+GET    .../commits                                             source commits ahead of merge-base
+GET    .../changes[?with_patches=1]                            changed files (+unified patches), merge_base
+GET/POST .../notes · PATCH/DELETE .../notes/:note_id           comments + system-note timeline
+```
+
+Linked issues: closing keywords (`closes/fixes/resolves [#]N`, GitLab parity)
+in the description bind `pr_linked_issues`; merging closes those OPEN issues
+(via the normal issue-close path — timeline notes, closer attribution) and
+records `closed linked issue #N` on the PR timeline.
+
+Permissions: `pr:create`/`pr:merge` require developer-equivalent rights
+(owner/admin until membership tables land); `pr:update` = author or
+maintainer+; `pr:comment`/`pr:approve` extend to any authenticated reader,
+with authors barred from approving their own PRs.
+
+Web client (`web/src/pulls/`): dense list (Open/Draft/Merged/Closed tabs,
+branch-direction rows, search, pagination), detail view with the compact
+border-driven MERGE BOX (live blockers list, strategy select, remove-source
+toggle — disabled while any gate fails; no giant action panels, no unrelated
+cards), commits & unified diffs, reviewer/approval sidebar, linked-issue
+list, comment timeline.
