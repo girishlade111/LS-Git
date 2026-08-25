@@ -113,7 +113,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   )
   app.issues = new IssuesService(services, cfg)
   app.pullRequests = new PullRequestsService(services, cfg, app.repositories, app.issues, app.projects.storage)
-  app.prReview = new PrReviewService(services, cfg, app.projects.storage, app.repositories)
+  app.prReview = new PrReviewService(services, app.projects.storage, app.repositories)
   app.issueForms = new IssueFormsService(
     services,
     cfg,
