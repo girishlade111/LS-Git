@@ -1654,6 +1654,20 @@ export class IssuesRepo {
       params.push(like, like)
     }
 
+    // Confidential issues: hidden from anonymous viewers; visible to their
+    // author/assignees; unrestricted for reporter+ equivalents.
+    if (!f.unrestrictedConfidential) {
+      if (f.viewerId === null || f.viewerId === undefined) {
+        clauses.push('i.confidential = 0')
+      } else {
+        clauses.push(
+          `(i.confidential = 0 OR i.author_id = ? OR EXISTS (
+             SELECT 1 FROM issue_assignees cv WHERE cv.issue_id = i.id AND cv.user_id = ?))`,
+        )
+        params.push(f.viewerId, f.viewerId)
+      }
+    }
+
     const order = f.orderBy === 'created_at' ? 'i.created_at' : 'i.updated_at'
     const dir = f.sort === 'asc' ? 'ASC' : 'DESC'
     const page = Math.max(1, Math.floor(f.page ?? 1))
