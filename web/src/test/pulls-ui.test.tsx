@@ -141,7 +141,7 @@ describe('pull request detail — merge box contract', () => {
     await waitFor(() => expect(screen.getByText('Add export flow')).toBeTruthy())
     expect(screen.getByText('Merge conflicts block this merge')).toBeTruthy()
     expect(screen.getByText('1 more approval required')).toBeTruthy()
-    expect((screen.getByRole('button', { name: /^Merge$/ }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: /^Merge$/ }) as HTMLButtonElement).disabled).toBe(true).toBe(true)
   })
 
   it('enables Merge when clear and submits the chosen STRATEGY', async () => {
