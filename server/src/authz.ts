@@ -30,6 +30,21 @@ export type Permission =
   | 'project:delete'
   | 'project:transfer'
   | 'project:template'
+  // Issue domain (PERMISSIONS.md §6). Until membership tables land, Reporter+
+  // capabilities map to project owner/admin; Guest capabilities (create issues,
+  // comment) extend to any authenticated user who can read the project.
+  | 'issue:create'        // guest(10)+: any authenticated reader of the project
+  | 'issue:comment'       // guest(10)+
+  | 'issue:update'        // author OR reporter+(owner/admin today): title/desc/assign/label/milestone
+  | 'issue:set_metadata'  // assignees, labels, milestone, due date — reporter+ only
+  | 'issue:close'         // author OR owner/admin
+  | 'issue:reopen'        // closer OR author OR owner/admin
+  | 'issue:delete'        // owner/admin only
+  | 'labels:maintain'     // label CRUD — reporter+ (owner/admin today)
+  | 'milestones:maintain' // milestone CRUD — reporter+ (owner/admin today)
+
+/** Capabilities any authenticated READER of a project keeps (guest parity). */
+const ISSUE_GUEST_PERMISSIONS = new Set<Permission>(['issue:create', 'issue:comment'])
 
 export interface AuthzContext {
   /** For *_self permissions: the resource owner being accessed. */
@@ -39,7 +54,33 @@ export interface AuthzContext {
     ownerId: number
     visibility: 'private' | 'internal' | 'public'
     archived?: boolean
+    /** Who closed the issue — used by the reopen check. */
+    closerId?: number
   }
+}
+
+function canReadProject(
+  actor: Actor,
+  project: NonNullable<AuthzContext['resourceProject']>,
+): boolean {
+  return (
+    project.visibility !== 'private' || actor.userId === project.ownerId || actor.admin
+  )
+}
+
+/** Reporter-role equivalent until membership tables land: owner or admin. */
+function canReporterPlus(
+  actor: Actor,
+  project: NonNullable<AuthzContext['resourceProject']>,
+): boolean {
+  return actor.admin || actor.userId === project.ownerId
+}
+
+function canOwnerPlus(
+  actor: Actor,
+  project: NonNullable<AuthzContext['resourceProject']>,
+): boolean {
+  return actor.admin || actor.userId === project.ownerId
 }
 
 export function can(actor: Actor | null, permission: Permission, ctx: AuthzContext = {}): boolean {
@@ -95,6 +136,42 @@ export function can(actor: Actor | null, permission: Permission, ctx: AuthzConte
       // GitLab parity: Owner role or admin only (Maintainers cannot delete).
       if (!project) return false
       return actor.admin || actor.userId === project.ownerId
+    case 'issue:create':
+    case 'issue:comment': {
+      // Guests may create/comment on issues in any project they can read.
+      if (ISSUE_GUEST_PERMISSIONS.has(permission) && project && canReadProject(actor, project)) {
+        return true
+      }
+      return false
+    }
+    case 'issue:update': {
+      if (!project) return false
+      if (canReporterPlus(actor, project)) return true
+      return ctx.resourceUserId === actor.userId // the author's own issue
+    }
+    case 'issue:set_metadata':
+    case 'labels:maintain':
+    case 'milestones:maintain':
+      if (!project) return false
+      return canReporterPlus(actor, project)
+    case 'issue:close': {
+      if (!project) return false
+      if (canReporterPlus(actor, project)) return true
+      return ctx.resourceUserId === actor.userId
+    }
+    case 'issue:reopen': {
+      if (!project) return false
+      if (canReporterPlus(actor, project)) return true
+      // Author or the closing user may reopen their own thread.
+      return (
+        ctx.resourceUserId === actor.userId ||
+        (ctx.resourceProject?.closerId !== undefined && ctx.resourceProject.closerId === actor.userId)
+      )
+    }
+    case 'issue:delete':
+      // Deleting issues is an owner/admin action (GitLab restricts to Owner+).
+      if (!project) return false
+      return canOwnerPlus(actor, project)
     default: {
       const exhaustive: never = permission
       void exhaustive

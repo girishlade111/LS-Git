@@ -30,6 +30,12 @@ import {
   WatchSubscriptionsRepo,
   NotificationPreferencesRepo,
   NotificationsRepo,
+  IssuesRepo,
+  LabelsRepo,
+  MilestonesRepo,
+  NotesRepo,
+  ReactionsRepo,
+  InternalIdsRepo,
   type UserRow,
 } from '../db/store.js'
 import { notifyOnEvent } from './notifications.js'
@@ -74,6 +80,12 @@ export interface IdentityServices {
   watchSubscriptions: WatchSubscriptionsRepo
   notificationPreferences: NotificationPreferencesRepo
   notifications: NotificationsRepo
+  issues: IssuesRepo
+  labels: LabelsRepo
+  milestones: MilestonesRepo
+  notes: NotesRepo
+  reactions: ReactionsRepo
+  internalIds: InternalIdsRepo
 }
 
 export function makeServices(db: Database): IdentityServices {
@@ -99,6 +111,12 @@ export function makeServices(db: Database): IdentityServices {
     watchSubscriptions: new WatchSubscriptionsRepo(db),
     notificationPreferences: new NotificationPreferencesRepo(db),
     notifications: new NotificationsRepo(db),
+    issues: new IssuesRepo(db),
+    labels: new LabelsRepo(db),
+    milestones: new MilestonesRepo(db),
+    notes: new NotesRepo(db),
+    reactions: new ReactionsRepo(db),
+    internalIds: new InternalIdsRepo(db),
   }
   // Event-driven fanout: every durable domain event flows through this single
   // choke point after commit. Idempotent by dedupe key, so a future queue

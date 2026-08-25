@@ -368,6 +368,19 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
         PRIMARY KEY (project_id, usage_name)
       );
 
+      CREATE TABLE milestones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        title TEXT NOT NULL COLLATE NOCASE,
+        description TEXT NOT NULL DEFAULT '',
+        due_date TEXT,
+        state TEXT NOT NULL DEFAULT 'active' CHECK (state IN ('active', 'closed')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (project_id, title)
+      );
+      CREATE INDEX idx_milestones_project ON milestones(project_id);
+
       CREATE TABLE issues (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -383,9 +396,9 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
         closed_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         moved_to_id INTEGER,
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        UNIQUE (project_id, iid)
       );
-      UNIQUE(project_id, iid);
       -- DATABASE.md §4 hot path: filtered issue lists hit exactly this index.
       CREATE INDEX idx_issues_list ON issues(project_id, state, updated_at DESC);
       CREATE INDEX idx_issues_milestone ON issues(milestone_id);
