@@ -384,7 +384,7 @@ fields:
     expectFieldError({ summary: 'Aaa', details: 'd', severity: 'low', consent: true, hacker: 'x' }, 'hacker')
     expectFieldError({ summary: 42, details: 'd' }, 'summary')
     expectFieldError({ summary: 'Aaa', details: 'd', severity: ['low'], consent: true }, 'severity')
-    expectFieldError({ summary: 'Aaa', details: 'd', consent: 'yes' }, 'consent')
+    expectFieldError({ summary: 'Aaa', details: 'd', severity: 'low', consent: 'yes' }, 'consent')
   })
 
   it('enforces option membership for choices', () => {
