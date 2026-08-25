@@ -109,6 +109,7 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     defaultChunkSize: Number(process.env.LSGIT_DEFAULT_CHUNK_SIZE ?? 8 * 1024 * 1024),
     minChunkSize: Number(process.env.LSGIT_MIN_CHUNK_SIZE ?? 256 * 1024),
     maxAttemptsPerItem: Number(process.env.LSGIT_MAX_ATTEMPTS_PER_ITEM ?? 20),
+    maxIssueFormBytes: Number(process.env.LSGIT_MAX_FORM_BYTES ?? 32 * 1024),
     ...overrides,
   }
   return base
