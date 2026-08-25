@@ -680,11 +680,11 @@ export class PrReviewService {
       const repo = this.engineFor(project)
       const { srcTip, baseSha } = this.tips(pr)
       const atSha = d.side === 'old' ? baseSha : srcTip
-      const sha = atSha ? repo.findEntryAt(repo.readCommit(atSha).tree, d.path)?.sha ?? null : null
+      const sha = repo.findEntryAt(repo.readCommit(atSha).tree, d.path)?.sha ?? null
       if (!sha) throw new AppError(422, "Draft path '" + d.path + "' no longer exists in the diff", 'invalid_position')
       const text = repo.readBlob(sha).toString('utf8')
       const lines = text === '' ? [] : text.replace(/\n$/, '').split('\n')
-      if (d.line_start === null || d.line_end === null || d.line_start < 1 || d.line_end > lines.length) {
+      if (d.line_start < 1 || d.line_end > lines.length || d.line_end < d.line_start) {
         throw new AppError(422, 'Draft line range is now invalid — discard or edit it', 'invalid_position')
       }
       return {

@@ -278,6 +278,13 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   registerIssueFormRoutes(app)
   registerPullRequestRoutes(app)
 
+  app.get('/', async () => ({
+    name: 'LSGit API Server',
+    status: 'running',
+    version: 'v1',
+    ui: cfg.origin,
+    health: '/healthz',
+  }))
   app.get('/healthz', async () => ({ status: 'ok' }))
   return app
 }
