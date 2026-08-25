@@ -332,22 +332,31 @@ describe('gates: draft · nothing-to-merge · stale sha · permissions · protec
     ).toBe(200)
   })
 
-  it('enforces PROTECTED TARGET rules — no_one blocks everyone but admins (G5)', async () => {
+  it('enforces PROTECTED TARGET rules — no_one blocks non-admin owners (G5)', async () => {
     const h = await setup()
     await commitBranch(h, 'feature', { newBranch: true, message: 'feature commit' })
     const pr = await openPr(h)
 
-    // Protect main at the strictest level (collection route: name in body).
-    await authed(h.app, 'PUT', `/api/v1/projects/${h.projectId}/repository/protected_branches`, {
+    // Alice (the FIRST user) is an implicit instance admin — transfer
+    // ownership to bob so a genuinely NON-admin owner attempts the merge.
+    await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/transfer`, {
       session: h.alice,
+      payload: { new_owner: 'bob' },
+    })
+    expect(h.app.store.projects.byId(h.projectId)!.owner_id).toBe(h.app.store.users.byUsername('bob')!.id)
+
+    // Bob protects main at the strictest level.
+    await authed(h.app, 'PUT', `/api/v1/projects/${h.projectId}/repository/protected_branches`, {
+      session: h.bob,
       payload: { name: 'main', push_access_level: 'no_one' },
     })
 
+    // PR author alice lost ownership AND is not admin → G5 fires.
     const blocked = await merge(h, pr.iid as number)
     expect(blocked.statusCode).toBe(403)
     expect((blocked.json() as { code?: string }).code).toBe('protected_branch_rule')
 
-    // Admin bypasses the rule (audited elsewhere) — merge proceeds.
+    // Granting admin bypasses the rule (audited elsewhere) — merge proceeds.
     const aliceId = h.app.store.users.byUsername('alice')!.id
     h.app.store.db.run('UPDATE users SET admin = 1 WHERE id = ?', aliceId)
     expect((await merge(h, pr.iid as number)).statusCode).toBe(200)
@@ -421,9 +430,12 @@ describe('merge side effects', () => {
 
   it('never deletes the DEFAULT branch even when it is the source', async () => {
     const h = await setup()
+    // Target branches off main FIRST…
     await commitBranch(h, 'hotfix-target', { newBranch: true, file: 't.txt', content: 't\n', message: 'target work' })
-    // PR FROM main INTO the scratch branch — legal; merging back must not
-    // delete main regardless of should_remove_source_branch.
+    // …then MAIN gains commits the target does not have, so the backwards PR
+    // has real work to merge (otherwise nothing_to_merge fires first).
+    await commitBranch(h, 'main', { file: 'm.txt', content: 'm\n', message: 'main extra' })
+
     const res = await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/pull_requests`, {
       session: h.alice,
       payload: { title: 'Backwards PR', source_branch: 'main', target_branch: 'hotfix-target' },
@@ -431,6 +443,7 @@ describe('merge side effects', () => {
     expect(res.statusCode).toBe(201)
     const merged = await merge(h, res.json().iid as number, { should_remove_source_branch: true })
     expect(merged.statusCode).toBe(200)
+    // The default branch survives the cleanup flag.
     expect(engineOf(h).resolveBranch('main')).not.toBeNull()
   })
 
