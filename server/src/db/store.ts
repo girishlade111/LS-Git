@@ -1970,11 +1970,13 @@ export interface NoteRow {
   updated_at: string
 }
 
+export type NoteableType = 'issue' | 'pull_request'
+
 export class NotesRepo {
   constructor(private db: Database) {}
 
   create(data: {
-    noteable_type: 'issue'
+    noteable_type: NoteableType
     noteable_id: number
     project_id: number
     author_id: number | null
@@ -2002,7 +2004,7 @@ export class NotesRepo {
   }
 
   /** Full activity timeline: human comments + system events, chronological. */
-  timeline(noteableType: 'issue', noteableId: number, opts: { includeSystem?: boolean } = {}): Array<NoteRow> {
+  timeline(noteableType: NoteableType, noteableId: number, opts: { includeSystem?: boolean } = {}): Array<NoteRow> {
     const sysClause = opts.includeSystem === false ? 'AND system = 0' : ''
     return this.db.all(
       `SELECT * FROM notes WHERE noteable_type = ? AND noteable_id = ? ${sysClause} ORDER BY id`,
