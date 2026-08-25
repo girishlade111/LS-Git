@@ -262,6 +262,73 @@ Markdown task lists + activity timeline + reactions, label & milestone managers.
 Label chips composite user colors at low alpha over panel tokens so arbitrary/neon
 choices cannot violate the design palette (`web/src/issues/labelcolor.ts`).
 
+### 3.9 Configurable issue forms (IMPLEMENTED)
+
+Structured issue templates, LSGit-native by design (decision recorded below),
+stored as versioned repository files at `.lsgit/issues/forms/<name>.yml` on the
+default branch — the same storage plane as code, so forms inherit history,
+review and rollback.
+
+**Schema compatibility decision.** Recommended and adopted: an **LSGit-native
+schema with a documented compatibility mapping** to GitLab-style templates.
+Alternatives considered: (1) a GitLab-schema-compatible subset — rejected
+because it would couple our storage contract to an external product surface we
+only partially implement; (2) generic JSON-Schema-in-YAML — rejected as
+over-general for issue forms with a larger validation/attack surface for zero
+product gain. The mapping below lets tooling convert GitLab templates:
+
+| GitLab template | LSGit form |
+|---|---|
+| `.gitlab/issue_templates/<n>.md` | `.lsgit/issues/forms/<name>.yml` |
+| `body:` widget list | `fields:` list |
+| widget `input` | `type: text` |
+| widget `textarea` | `type: textarea` |
+| widget `dropdown` (+ `multiple`) | `type: dropdown` (+ `attributes.multiple`) |
+| widget `checkboxes` | `type: checkboxes`, or `type: tasklist` |
+| widget validations `required` | `validations.required` |
+| — (no equivalent) | `type: radio` · single `type: checkbox` · `title_prefix` · `title_field` · per-field `pattern`/lengths |
+
+Field types: `text · textarea · dropdown · radio · checkbox · checkboxes · tasklist`.
+Each field carries `id` ([a-z0-9_], unique), `attributes.label/description/
+placeholder/options/multiple/default` and `validations.required/min_length/
+max_length/pattern/pattern_message`. Task-list fields render ALL options as
+real `- [ ]`/`- [x]` markers, so submissions participate in issue progress.
+
+```
+GET    /api/v1/projects/:id/issue_forms                 list (project readers); invalid stored
+                                                        templates are flagged {valid:false,error},
+                                                        never crash the listing
+GET    /api/v1/projects/:id/issue_forms/:name            parsed definition → 422 if corrupted post-storage
+PUT    /api/v1/projects/:id/issue_forms/:name  {yaml}    maintainer gate; validated BEFORE commit → 400
+DELETE /api/v1/projects/:id/issue_forms/:name            removal commit (maintainer gate)
+POST   /api/v1/projects/:id/issue_forms/:name/submissions
+        {title?, answers} → 201 {issue}                  server re-validates every answer against the
+                                                        stored schema; unknown ids/wrong types/out-of-option
+                                                        choices/unconfirmed required options → 422 with
+                                                        extras.field; renders structured Markdown body
+                                                        (### <label> sections, task markers, provenance
+                                                        footer), applies existing configured labels
+                                                        (GitLab-lenient), resolves title via explicit >
+                                                        title_field > first text field, prepends title_prefix
+```
+
+**YAML safety model (`server/src/lib/yaml.ts`).** Templates are data; nothing is ever
+evaluated. An in-house strict-subset parser produces only null/bool/int/string/
+arrays/plain objects. Rejected outright (parse error): tags (`!!…`),
+anchors & aliases (&/* — billion-laughs vector), merge keys (`<<:`), flow
+collections (`{}`/`[]`), block scalars (`|`/`>`), multi-document streams
+(`---`/`...`), tab indentation, duplicate keys, unclosed quotes. Resource caps:
+32 KB byte limit enforced pre-parse, depth ≤ 10, ≤ 1024 nodes. Schemas are
+additionally bounded at validation time: ≤ 25 fields × ≤ 30 options, bounded
+string lengths, compiled-regex guard (≤ 200 chars). A hostile template that is
+corrupted after storage (e.g., pushed directly) is flagged invalid on read and
+submissions fail closed with 422 — defense in depth.
+
+Web client: creation dialog offers Blank issue vs. form mode (form picker →
+dynamic fields → client-side mirror validation → submit), plus a maintainer
+forms manager (`#/proj/<o>/<p>/issue_forms`) editing YAML with live validity
+badges (`web/src/issues/FormsManagerView.tsx`).
+
 ## 4. GraphQL principles
 
 - Schema-first, generated SDL committed to repo; deprecation via `@deprecated`.
