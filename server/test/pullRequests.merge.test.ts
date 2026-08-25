@@ -421,7 +421,7 @@ describe('merge side effects', () => {
 
   it('never deletes the DEFAULT branch even when it is the source', async () => {
     const h = await setup()
-    await commitBranch(h, 'hotfix-target', { newBranch: true, file: 't.txt', content: 't\n' })
+    await commitBranch(h, 'hotfix-target', { newBranch: true, file: 't.txt', content: 't\n', message: 'target work' })
     // PR FROM main INTO the scratch branch — legal; merging back must not
     // delete main regardless of should_remove_source_branch.
     const res = await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/pull_requests`, {
