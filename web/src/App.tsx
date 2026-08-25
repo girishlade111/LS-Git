@@ -110,7 +110,7 @@ export default function App() {
       if (action === 'pulls') {
         const prIid = Number(segments[4])
         return (
-          <AppShell sidebarCurrent="projects" onNavigate={(id) => navigate(\/\\)} repo={{ group: owner, project: projPath, visibility: 'Private', tabs: [], currentTab: '', onTab: () => undefined }}>
+          <AppShell sidebarCurrent="projects" onNavigate={(id) => navigate(`/${id}`)} repo={{ group: owner, project: projPath, visibility: 'Private', tabs: [], currentTab: '', onTab: () => undefined }}>
             {Number.isInteger(prIid) && prIid > 0 ? (
               <PullDetailRouteBridge owner={owner} projectPath={projPath} iid={prIid} />
             ) : (
