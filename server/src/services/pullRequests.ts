@@ -497,11 +497,13 @@ export class PullRequestsService {
   approve(actor: Actor, projectId: number, iid: number): PullRequestRow {
     const project = this.readableProject(actor, projectId)
     const pr = this.visiblePr(actor, projectId, iid)
-    this.authorize(actor, 'pr:approve', project, { resourceUserId: pr.author_id })
     if (pr.state !== 'opened') throw new AppError(422, 'Only open pull requests can receive approvals')
+    // Business rule BEFORE the permission gate so authors get the precise
+    // 422 self-approval denial rather than a generic 403.
     if (pr.author_id === actor.userId) {
       throw new AppError(422, 'Authors cannot approve their own pull requests', 'self_approval_denied')
     }
+    this.authorize(actor, 'pr:approve', project, { resourceUserId: pr.author_id })
 
     this.s.db.transaction(() => {
       this.s.pullRequests.approve(pr.id, actor.userId)
