@@ -59,6 +59,9 @@ export interface AppConfig {
   minChunkSize: number
   /** Checksum/size violations tolerated per item before it is terminal-failed. */
   maxAttemptsPerItem: number
+
+  /** Issue-form template byte cap (safe-YAML layer enforces this pre-parse). */
+  maxIssueFormBytes: number
 }
 
 export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
