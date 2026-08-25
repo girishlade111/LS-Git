@@ -465,4 +465,130 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
       CREATE INDEX idx_reactions_target ON reactions(noteable_type, noteable_id);
     `,
   },
+  {
+    version: 10,
+    sql: `
+      -- Pull requests (GitLab Merge Request workflow semantics; LSGit naming).
+      -- States: opened · closed · merged · locked(transient merge claim).
+      -- merged is terminal; closed cannot merge; draft ⊥ state.
+
+      ALTER TABLE projects ADD COLUMN approvals_required INTEGER NOT NULL DEFAULT 0;
+
+      -- Widen iid sequencing to a second usage. Tiny table → recreate.
+      CREATE TABLE internal_ids_new (
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        usage_name TEXT NOT NULL CHECK (usage_name IN ('issue', 'merge_request')),
+        last_value INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (project_id, usage_name)
+      );
+      INSERT INTO internal_ids_new (project_id, usage_name, last_value)
+        SELECT project_id, usage_name, last_value FROM internal_ids;
+      DROP TABLE internal_ids;
+      ALTER TABLE internal_ids_new RENAME TO internal_ids;
+
+      CREATE TABLE pull_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        iid INTEGER NOT NULL,
+        author_id INTEGER NOT NULL REFERENCES users(id),
+        title TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        state TEXT NOT NULL DEFAULT 'opened'
+          CHECK (state IN ('opened', 'closed', 'merged', 'locked')),
+        draft INTEGER NOT NULL DEFAULT 0,
+        source_branch TEXT NOT NULL,
+        target_branch TEXT NOT NULL,
+        milestone_id INTEGER REFERENCES milestones(id) ON DELETE SET NULL,
+        merge_status TEXT NOT NULL DEFAULT 'unchecked'
+          CHECK (merge_status IN ('unchecked', 'can_be_merged', 'cannot_be_merged')),
+        merge_status_reason TEXT,
+        merge_commit_sha TEXT,
+        squash_commit_sha TEXT,
+        closed_at TEXT,
+        closed_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        merged_at TEXT,
+        merged_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (project_id, iid)
+      );
+      -- DATABASE.md §4 hot-path parity with issues.
+      CREATE INDEX idx_prs_list ON pull_requests(project_id, state, updated_at DESC);
+      CREATE INDEX idx_prs_source ON pull_requests(project_id, source_branch);
+      CREATE INDEX idx_prs_target ON pull_requests(project_id, target_branch);
+      CREATE INDEX idx_prs_milestone ON pull_requests(milestone_id);
+
+      CREATE TABLE pr_assignees (
+        pr_id INTEGER NOT NULL REFERENCES pull_requests(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        PRIMARY KEY (pr_id, user_id)
+      );
+      CREATE INDEX idx_pr_assignees_user ON pr_assignees(user_id);
+
+      CREATE TABLE pr_reviewers (
+        pr_id INTEGER NOT NULL REFERENCES pull_requests(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        review_state TEXT NOT NULL DEFAULT 'unreviewed'
+          CHECK (review_state IN ('unreviewed', 'approved', 'changes_requested')),
+        PRIMARY KEY (pr_id, user_id)
+      );
+      CREATE INDEX idx_pr_reviewers_user ON pr_reviewers(user_id);
+
+      CREATE TABLE pr_labels (
+        pr_id INTEGER NOT NULL REFERENCES pull_requests(id) ON DELETE CASCADE,
+        label_id INTEGER NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
+        PRIMARY KEY (pr_id, label_id)
+      );
+      CREATE INDEX idx_pr_labels_label ON pr_labels(label_id);
+
+      -- Closing-keyword links ("closes #12") resolved at create/update;
+      -- consumed when the PR merges (linked open issues close).
+      CREATE TABLE pr_linked_issues (
+        pr_id INTEGER NOT NULL REFERENCES pull_requests(id) ON DELETE CASCADE,
+        issue_iid INTEGER NOT NULL,
+        PRIMARY KEY (pr_id, issue_iid)
+      );
+
+      CREATE TABLE pr_approvals (
+        pr_id INTEGER NOT NULL REFERENCES pull_requests(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (pr_id, user_id)
+      );
+
+      -- Notes become polymorphic across issues AND pull requests (rows kept).
+      CREATE TABLE notes_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        noteable_type TEXT NOT NULL CHECK (noteable_type IN ('issue', 'pull_request')),
+        noteable_id INTEGER NOT NULL,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        note TEXT NOT NULL,
+        system INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      INSERT INTO notes_new (id, noteable_type, noteable_id, project_id, author_id, note, system, created_at, updated_at)
+        SELECT id, noteable_type, noteable_id, project_id, author_id, note, system, created_at, updated_at FROM notes;
+      DROP TABLE notes;
+      ALTER TABLE notes_new RENAME TO notes;
+      CREATE INDEX idx_notes_timeline ON notes(noteable_type, noteable_id, id);
+
+      -- Reactions gain the pull_request target type (rows kept).
+      CREATE TABLE reactions_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        noteable_type TEXT NOT NULL CHECK (noteable_type IN ('issue', 'note', 'pull_request')),
+        noteable_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE (user_id, noteable_type, noteable_id, name)
+      );
+      INSERT INTO reactions_new (id, user_id, noteable_type, noteable_id, name, created_at)
+        SELECT id, user_id, noteable_type, noteable_id, name, created_at FROM reactions;
+      DROP TABLE reactions;
+      ALTER TABLE reactions_new RENAME TO reactions;
+      CREATE INDEX idx_reactions_target ON reactions(noteable_type, noteable_id);
+    `,
+  },
 ]
