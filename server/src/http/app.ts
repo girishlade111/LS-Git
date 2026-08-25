@@ -14,6 +14,7 @@ import { ForksService } from '../services/forks.js'
 import { UploadService } from '../services/uploads.js'
 import { ResumableUploadService } from '../services/resumable.js'
 import { IssuesService } from '../services/issues.js'
+import { IssueFormsService } from '../services/issueForms.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -31,6 +32,7 @@ declare module 'fastify' {
     uploads: UploadService
     uploadSessions: ResumableUploadService
     issues: IssuesService
+    issueForms: IssueFormsService
     authRateLimiter: RateLimiter
     store: ReturnType<typeof makeServices>
     requireAuth: (needed?: 'read_api' | 'write_api' | 'read_user') => PreHandlerFn
