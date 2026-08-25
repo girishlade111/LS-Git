@@ -144,6 +144,7 @@ export function IssuesListPage({
           ))}
         </nav>
         <div className="ls-rb__actions">
+          <Button size="sm" variant="secondary" onClick={() => navigate(`#${base}/pulls`)}>Pull requests</Button>
           <Button size="sm" variant="secondary" onClick={() => navigate(`#${base}/labels`)}>Manage labels</Button>
           <Button size="sm" variant="secondary" onClick={() => navigate(`#${base}/milestones`)}>Milestones</Button>
           <Button size="sm" variant="secondary" onClick={() => navigate(`#${base}/issue_forms`)}>Manage forms</Button>
