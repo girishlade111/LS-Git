@@ -25,6 +25,11 @@ const EVENT_TYPE_MAP: Record<string, NotificationType> = {
   'repository.file_committed': 'push',
   'repository.files_committed': 'push',
   'project.forked': 'fork',
+  // Issue domain (services/issues.ts). Deletions are silent (render returns null).
+  'issue.opened': 'issue',
+  'issue.updated': 'issue',
+  'issue.commented': 'discussion',
+  'issue.deleted': 'issue',
   // Direct catalog names pass through unchanged (future producers).
   issue: 'issue',
   merge_request: 'merge_request',
