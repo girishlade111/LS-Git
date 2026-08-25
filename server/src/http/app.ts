@@ -266,6 +266,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   registerUploadRoutes(app)
   registerUploadSessionRoutes(app)
   registerIssueRoutes(app)
+  registerIssueFormRoutes(app)
 
   app.get('/healthz', async () => ({ status: 'ok' }))
   return app
