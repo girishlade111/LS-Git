@@ -587,9 +587,10 @@ export class PrReviewService {
     })()
 
     this.s.db.transaction(() => {
-      for (const d of drafts) {
-        const body = this.assertBody(d.body)
-        if (d.path && d.side && d.line_start !== null && d.line_end !== null) {
+      for (const raw of drafts) {
+        const body = this.assertBody(raw.body)
+        if (raw.path !== null && (raw.side === 'new' || raw.side === 'old') && raw.line_start !== null && raw.line_end !== null && raw.line_start >= 1) {
+          const d = { path: raw.path, side: raw.side, line_start: raw.line_start, line_end: raw.line_end }
           const existing = this.findOpenThreadAtPosition(pr.id, d.path, d.side, d.line_start, d.line_end, headSha)
           if (existing) {
             this.s.prThreadNotes.create({
