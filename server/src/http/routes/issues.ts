@@ -31,7 +31,7 @@ function numParam(req: FastifyRequest, name: string): number {
   return n
 }
 
-function userBrief(
+export function userBrief(
   app: FastifyInstance,
   id: number | null,
 ): { id: number; username: string; name: string | null } | null {

@@ -15,6 +15,7 @@ import { UploadService } from '../services/uploads.js'
 import { ResumableUploadService } from '../services/resumable.js'
 import { IssuesService } from '../services/issues.js'
 import { IssueFormsService } from '../services/issueForms.js'
+import { PullRequestsService } from '../services/pullRequests.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -33,6 +34,7 @@ declare module 'fastify' {
     uploadSessions: ResumableUploadService
     issues: IssuesService
     issueForms: IssueFormsService
+    pullRequests: PullRequestsService
     authRateLimiter: RateLimiter
     store: ReturnType<typeof makeServices>
     requireAuth: (needed?: 'read_api' | 'write_api' | 'read_user') => PreHandlerFn
@@ -108,6 +110,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
     app.projects.storage,
   )
   app.issues = new IssuesService(services, cfg)
+  app.pullRequests = new PullRequestsService(services, cfg, app.repositories, app.issues, app.projects.storage)
   app.issueForms = new IssueFormsService(
     services,
     cfg,
@@ -273,6 +276,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   registerUploadSessionRoutes(app)
   registerIssueRoutes(app)
   registerIssueFormRoutes(app)
+  registerPullRequestRoutes(app)
 
   app.get('/healthz', async () => ({ status: 'ok' }))
   return app
@@ -328,3 +332,4 @@ import { registerUploadRoutes } from './routes/uploads.js'
 import { registerUploadSessionRoutes } from './routes/uploadsessions.js'
 import { registerIssueRoutes } from './routes/issues.js'
 import { registerIssueFormRoutes } from './routes/issueForms.js'
+import { registerPullRequestRoutes } from './routes/pullRequests.js'

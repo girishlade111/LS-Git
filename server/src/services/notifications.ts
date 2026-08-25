@@ -30,6 +30,13 @@ const EVENT_TYPE_MAP: Record<string, NotificationType> = {
   'issue.updated': 'issue',
   'issue.commented': 'discussion',
   'issue.deleted': 'issue',
+  // Pull request domain (services/pullRequests.ts).
+  'mr.opened': 'merge_request',
+  'mr.updated': 'merge_request',
+  'mr.closed': 'merge_request',
+  'mr.reopened': 'merge_request',
+  'mr.merged': 'merge_request',
+  'mr.commented': 'discussion',
   // Direct catalog names pass through unchanged (future producers).
   issue: 'issue',
   merge_request: 'merge_request',
@@ -110,8 +117,22 @@ export function renderNotification(
         }
       }
       return { type, title: truncate(`New discussion: ${String(p.title ?? '')}`, 140), body: truncate(projectPayloadLine(p), 200), url: null }
-    case 'merge_request':
-      return { type, title: truncate(`Merge request: ${String(p.title ?? 'updated')}`, 140), body: truncate(projectFullPath, 200), url: null }
+    case 'merge_request': {
+      const iid = p.iid !== undefined ? ` !${String(p.iid)}` : ''
+      const actor = readActorUsername(p)
+      const verb =
+        p.action === 'merged' ? 'merged pull request'
+        : p.action === 'closed' ? 'closed pull request'
+        : p.action === 'reopened' ? 'reopened pull request'
+        : p.action === 'opened' ? 'opened pull request'
+        : 'updated pull request'
+      return {
+        type,
+        title: truncate(`${actor ? `${actor} ${verb}` : `Pull request${iid} ${p.action ?? ''}`}: ${String(p.title ?? '')}`, 140),
+        body: truncate(projectFullPath, 200),
+        url: null,
+      }
+    }
     case 'mention':
       return { type, title: truncate(`You were mentioned: ${String(p.title ?? '')}`, 140), body: truncate(projectFullPath, 200), url: null }
     case 'review_request':

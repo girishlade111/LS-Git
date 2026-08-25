@@ -478,6 +478,8 @@ export interface ProjectRow {
   forked_from_project_id: number | null
   /** Id of the fork network's root project; null when not (or no longer) part of a network. */
   fork_network_id: number | null
+  /** Minimum approvals required to merge PRs targeting protected branches (0 = off). */
+  approvals_required: number
   last_activity_at: string
   created_at: string
   updated_at: string
@@ -1960,7 +1962,7 @@ export class MilestonesRepo {
 
 export interface NoteRow {
   id: number
-  noteable_type: 'issue'
+  noteable_type: NoteableType
   noteable_id: number
   project_id: number
   author_id: number | null

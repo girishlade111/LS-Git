@@ -67,17 +67,13 @@ export function parseClosingIssueIids(text: string): number[] {
   return [...out].sort((a, b) => a - b)
 }
 
-interface TreeEntryLite {
-  mode: string
-  sha: string
-}
-
 export class PullRequestsService {
   constructor(
     private s: IdentityServices,
-    private cfg: AppConfig,
+    _cfg: AppConfig,
     private repos: RepositoriesService,
     private issues: IssuesService,
+    private storage: import('../storage/local.js').LocalHashedStorage,
   ) {}
 
   // ── authorization ────────────────────────────────────────────────────────
@@ -135,7 +131,7 @@ export class PullRequestsService {
 
   private requireRepoEngine(project: ProjectRow): GitRepository {
     try {
-      return this.s.projects.storage.repository(project.disk_path)
+      return this.storage.repository(project.disk_path)
     } catch {
       throw new AppError(422, 'Repository has no commits yet', 'empty_repository')
     }
@@ -222,10 +218,6 @@ export class PullRequestsService {
   private identityOf(actor: Actor): CommitIdentity {
     const u = this.s.users.byId(actor.userId)
     return { name: u?.name || u?.username || actor.username, email: `${actor.username}@users.lsgit.local` }
-  }
-
-  private ownerUsernameOf(project: ProjectRow): string {
-    return this.s.users.byId(project.owner_id)?.username ?? ''
   }
 
   // ══ create ══════════════════════════════════════════════════════════════
@@ -520,7 +512,7 @@ export class PullRequestsService {
   }
 
   unapprove(actor: Actor, projectId: number, iid: number): PullRequestRow {
-    const project = this.readableProject(actor, projectId)
+    this.readableProject(actor, projectId)
     const pr = this.visiblePr(actor, projectId, iid)
 
     // Current-user semantics (GitLab parity): you withdraw YOUR approval.
@@ -813,6 +805,15 @@ export class PullRequestsService {
 
   // ══ listing / timeline passthroughs ══════════════════════════════════════
 
+  listPullRequests(
+    actor: Actor | null,
+    projectId: number,
+    filters: Parameters<IdentityServices['pullRequests']['listFiltered']>[1],
+  ) {
+    this.readableProject(actor, projectId)
+    return this.s.pullRequests.listFiltered(projectId, filters)
+  }
+
   comments(actor: Actor, projectId: number, iid: number, body: string): NoteRow {
     const project = this.readableProject(actor, projectId)
     const pr = this.visiblePr(actor, projectId, iid)
@@ -905,7 +906,7 @@ export class PullRequestsService {
           if (result.lines !== null) {
             const sha = repo.writeBlob(result.lines.join('\n') + '\n')
             const mode =
-              o.mode === t.mode ? o.mode : b && (o.mode === b.mode ? t.mode : o.mode)
+              o.mode === t.mode ? o.mode : b && o.mode === b.mode ? t.mode : b && t.mode === b.mode ? o.mode : o.mode
             entries.push({ path, mode: normMode(mode), sha })
             continue
           }
@@ -952,7 +953,7 @@ export class PullRequestsService {
       const parentSha = commit.parents[0] ?? baseSha
       const result = this.mergeTrees(repo, parentSha, head, commit.sha)
       if (result.conflictPaths.length > 0) {
-        throw new AppError(422, `Rebase hit conflicts at ${commit.sha.slice(0, 10)} (${result.conflictPaths[0]}…); rebase locally and push`, 'rebase_conflict', {
+        throw new AppError(422, `Rebase hit conflicts at ${commit.sha.slice(0, 10)} (${result.conflictPaths[0] ?? "?"}); rebase locally and push`, 'rebase_conflict', {
           conflicts: result.conflictPaths,
         })
       }
@@ -963,8 +964,8 @@ export class PullRequestsService {
         tree: result.treeSha,
         parents: [head],
         author: {
-          name: commit.author.name,
-          email: commit.author.email,
+          name: commit.author.identity.name,
+          email: commit.author.identity.email,
         },
         committer,
         message: commit.message,
