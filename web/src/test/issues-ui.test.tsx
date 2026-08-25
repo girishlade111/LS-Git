@@ -311,7 +311,7 @@ describe('milestones manager', () => {
       state: 'active' as const, merge_requests_count: 0,
       total_issues: 0, opened_issues: 0, closed_issues: 0, completion_percent: 0,
     }
-    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
       if ((init?.method ?? 'GET') === 'PATCH') {
         const body = JSON.parse(String(init?.body)) as Record<string, unknown>
         return Promise.resolve(jsonResponse({ ...ms, state: body.state_event === 'close' ? 'closed' : 'active' }))
