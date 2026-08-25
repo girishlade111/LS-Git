@@ -2,8 +2,8 @@
 
 Status: **PARTIALLY IMPLEMENTED** — identity, projects, uploads, protected branches, the
 repository code-browser (§3.5–3.7), the issues/labels/milestones collaboration surface
-(§3.8) and configurable issue forms (§3.9) are live in `server/src/http/routes/`; the
-remainder of this document stays the planned contract.
+(§3.8), configurable issue forms (§3.9) and pull requests (§3.10) are live in
+`server/src/http/routes/`; the remainder of this document stays the planned contract.
 
 Reference behavior: GitLab REST v4 + GraphQL + internal APIs
 (https://docs.gitlab.com/api/rest/, https://docs.gitlab.com/api/graphql/).
