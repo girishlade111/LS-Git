@@ -82,8 +82,34 @@ export function renderNotification(
         body: truncate(`${String(p.fork_full_path ?? '')} was forked from ${projectFullPath}`, 200),
         url: p.fork_full_path ? `/proj/${String(p.fork_full_path)}` : null,
       }
-    case 'issue':
-      return { type, title: truncate(`Issue: ${String(p.title ?? 'updated')}`, 140), body: truncate(projectFullPath, 200), url: null }
+    case 'issue': {
+      if (p.action === 'deleted') return null // deletions never notify
+      const iid = p.iid !== undefined ? ` #${String(p.iid)}` : ''
+      const verb =
+        p.action === 'opened' ? 'opened issue'
+        : p.action === 'closed' ? 'closed issue'
+        : p.action === 'reopened' ? 'reopened issue'
+        : 'updated issue'
+      const actor = readActorUsername(p)
+      return {
+        type,
+        title: truncate(`${actor ? `${actor} ${verb}` : `${verb}${iid}`}: ${String(p.title ?? '')}`, 140),
+        body: truncate(projectFullPath, 200),
+        url: null,
+      }
+    }
+    case 'discussion':
+      if (p.action === 'commented') {
+        const actor = readActorUsername(p)
+        const iid = p.iid !== undefined ? `#${String(p.iid)}` : String(p.title ?? '')
+        return {
+          type,
+          title: truncate(`${actor ? `${actor} commented on ${iid}` : `New comment on ${iid}`}`, 140),
+          body: truncate(projectPayloadLine(p), 200),
+          url: null,
+        }
+      }
+      return { type, title: truncate(`New discussion: ${String(p.title ?? '')}`, 140), body: truncate(projectPayloadLine(p), 200), url: null }
     case 'merge_request':
       return { type, title: truncate(`Merge request: ${String(p.title ?? 'updated')}`, 140), body: truncate(projectFullPath, 200), url: null }
     case 'mention':
@@ -98,14 +124,16 @@ export function renderNotification(
       return { type, title: truncate(`Workflow ${String(p.status ?? 'update')}`, 140), body: truncate(projectFullPath, 200), url: null }
     case 'security_alert':
       return { type, title: truncate(`Security alert: ${String(p.title ?? 'vulnerability reported')}`, 160), body: truncate(projectFullPath, 200), url: null }
-    case 'discussion':
-      return { type, title: truncate(`New discussion: ${String(p.title ?? '')}`, 140), body: truncate(projectPayloadLine(p), 200), url: null }
     default: return null
   }
 }
 
 function projectPayloadLine(p: Record<string, unknown>): string {
   return typeof p.project_path === 'string' ? p.project_path : ''
+}
+
+function readActorUsername(p: Record<string, unknown>): string | null {
+  return typeof p.actor_username === 'string' && p.actor_username !== '' ? p.actor_username : null
 }
 
 /**

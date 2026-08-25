@@ -412,8 +412,8 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
       );
       CREATE INDEX idx_issue_assignees_user ON issue_assignees(user_id);
 
-      -- Labels are project-scoped rows; `scope` leaves room for group labels
-      -- once groups exist (scope='group', project_id = owning namespace).
+      -- Labels are project-scoped rows; the 'scope' column leaves room for
+      -- group labels once groups exist (scope='group', project_id = namespace).
       CREATE TABLE labels (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

@@ -265,6 +265,7 @@ export class IssuesService {
       title,
       iid: issue.iid,
       actor_user_id: actor.userId,
+      actor_username: actor.username,
       participant_user_ids: [actor.userId, ...assigneeIds],
       mentioned_user_ids: resolveMentionIds(this.s, [title, description]),
     })
@@ -386,6 +387,7 @@ export class IssuesService {
         title: updated.title,
         iid: updated.iid,
         actor_user_id: actor.userId,
+        actor_username: actor.username,
         participant_user_ids: [
           updated.author_id,
           ...this.s.issues.assigneeIds(updated.id),
@@ -470,6 +472,7 @@ export class IssuesService {
       title: issue.title,
       iid: issue.iid,
       actor_user_id: actor.userId,
+      actor_username: actor.username,
       participant_user_ids: [actor.userId, issue.author_id, ...this.s.issues.assigneeIds(issue.id)],
       mentioned_user_ids: resolveMentionIds(this.s, [note]),
       project_path: `${this.ownerUsernameOf(project)}/${project.path}`,

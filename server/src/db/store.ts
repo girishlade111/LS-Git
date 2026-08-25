@@ -2053,7 +2053,7 @@ export class ReactionsRepo {
       name,
     ) as Row | undefined
     if (existing) {
-      this.db.run('DELETE FROM reactions WHERE id = ?', existing.id)
+      this.db.run('DELETE FROM reactions WHERE id = ?', Number(existing.id))
       return 'revoked'
     }
     this.db.run(

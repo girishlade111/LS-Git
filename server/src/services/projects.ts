@@ -156,6 +156,8 @@ export class ProjectsService {
       // PERMISSIONS.md §5: default branch is protected (Maintainer-push) from creation.
       this.s.protectedBranches.ensure(project.id, input.default_branch, 'maintainer')
       if (input.topics.length > 0) this.s.topics.setForProject(project.id, input.topics)
+      // GitLab parity: every project starts with the standard label set.
+      this.s.labels.seedDefaults(project.id)
       // Claiming a redirected path retires that redirect (GitLab parity).
       this.s.redirects.pruneSuperseded()
     })
