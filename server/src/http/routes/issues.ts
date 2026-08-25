@@ -75,7 +75,6 @@ export function noteView(app: FastifyInstance, n: NoteRow) {
   return {
     id: n.id,
     noteable_type: n.noteable_type,
-    noteable_iid: undefined as unknown as number, // patched by callers that have the issue row
     body: n.note,
     system: !!n.system,
     author,
