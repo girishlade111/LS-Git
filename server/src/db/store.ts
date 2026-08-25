@@ -1513,6 +1513,10 @@ export interface IssueFilterOptions {
   sort?: 'asc' | 'desc'
   page?: number
   perPage?: number
+  /** Confidentiality scope (PERMISSIONS.md §6). */
+  viewerId?: number | null
+  /** true ⇒ viewer sees every confidential issue (reporter+/admin/owner). */
+  unrestrictedConfidential?: boolean
 }
 
 export interface IssueListResult {
