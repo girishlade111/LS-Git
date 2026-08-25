@@ -145,7 +145,7 @@ describe('form-driven issue creation', () => {
 
     // No POST was ever sent while invalid.
     const posts = fetchMock.mock.calls.filter(
-      (c) => String(c[0]).endsWith('/submissions') && (c[1] as RequestInit).method === 'POST',
+      (c) => String(c[0]).endsWith('/submissions') && ((c[1] as RequestInit | undefined)?.method === 'POST'),
     )
     expect(posts.length).toBe(0)
   })
@@ -174,7 +174,7 @@ describe('forms manager view', () => {
 
     // Wait for the initial load before interacting.
     await user.click(await screen.findByRole('button', { name: /New form/ }))
-    const editor = await screen.findByLabelText(/Template YAML/)
+    const editor = await screen.findByLabelText(/Template YAML/) as HTMLTextAreaElement
     // The editor opens pre-seeded with an LSGit-native schema skeleton.
     expect(editor.value).toContain('fields:')
     expect(editor.value).toContain('- type: text')
