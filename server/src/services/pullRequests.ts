@@ -892,31 +892,20 @@ export class PullRequestsService {
       const t = theirsTree.get(path)
       const b = baseTree.get(path)
 
-      // Identical outcomes need no work.
-      if ((o?.sha ?? null) === (t?.sha ?? null)) {
-        if (o) entries.push({ path, mode: o.mode as '100644' | '100755', sha: o.sha })
-        continue
-      }
-      // One-sided change vs unchanged base.
-      if (t && (!b || o === undefined) && (b === undefined || (o && o.sha === b.sha))) {
-        entries.push({ path, mode: t.mode as '100644' | '100755', sha: t.sha })
-        continue
-      }
-      if (o && (!b || t === undefined) && (b === undefined || (t && t.sha === b.sha))) {
-        entries.push({ path, mode: o.mode as '100644' | '100755', sha: o.sha })
-        continue
-      }
-      if (o && t && b && o.sha === b.sha && t.sha !== b.sha) {
-        entries.push({ path, mode: t.mode as '100644' | '100755', sha: t.sha })
-        continue
-      }
-      if (o && t && b && t.sha === b.sha && o.sha !== b.sha) {
-        entries.push({ path, mode: o.mode as '100644' | '100755', sha: o.sha })
-        continue
-      }
-
-      // Both sides touched differently — attempt textual three-way merge.
       if (o && t) {
+        if (o.sha === t.sha) {
+          entries.push({ path, mode: normMode(o.mode), sha: o.sha })
+          continue
+        }
+        if (b && o.sha === b.sha) {
+          entries.push({ path, mode: normMode(t.mode), sha: t.sha }) // only theirs changed
+          continue
+        }
+        if (b && t.sha === b.sha) {
+          entries.push({ path, mode: normMode(o.mode), sha: o.sha }) // only ours changed
+          continue
+        }
+        // Both changed differently — genuine three-way content merge.
         const ourText = this.safeBlobText(repo, o.sha)
         const theirText = this.safeBlobText(repo, t.sha)
         const baseText = b ? this.safeBlobText(repo, b.sha) : ''
@@ -924,15 +913,29 @@ export class PullRequestsService {
           const result = threeWayMerge(baseText, ourText, theirText)
           if (result.lines !== null) {
             const sha = repo.writeBlob(result.lines.join('\n') + '\n')
-            const mode = o.mode === t.mode ? o.mode : b?.mode ?? o.mode
-            entries.push({ path, mode: mode as '100644' | '100755', sha })
+            const mode =
+              o.mode === t.mode ? o.mode : b && (o.mode === b.mode ? t.mode : o.mode)
+            entries.push({ path, mode: normMode(mode), sha })
             continue
           }
         }
-      } else if (b && (o || t)) {
-        // modify/delete conflict falls through below.
-        void b
+        conflictPaths.push(path) // textual merge failed (conflict/binary/oversized)
+        continue
       }
+
+      // Exactly one side has the file.
+      const present = (o ?? t)!
+      const otherDeletedIt = o ? false : true // !o ⇒ theirs deleted
+      void otherDeletedIt
+      if (b && present.sha === b.sha) {
+        continue // clean deletion (the side holding it never modified it)
+      }
+      if (!b) {
+        // add/delete race on a brand-new file — genuinely conflicting intent
+        conflictPaths.push(path)
+        continue
+      }
+      // modify/delete conflict
       conflictPaths.push(path)
     }
 
