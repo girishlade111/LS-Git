@@ -5,11 +5,11 @@ await registerUser(app)
 const s = extractSession((await loginRaw(app, 'alice')).cookies)
 await authed(app, 'POST', '/api/v1/projects', { session: s, payload: { name: 'P', path: 'p', visibility: 'public', description: '', website_url: '', default_branch: 'main', topics: [], initialize_with_readme: true } })
 const pid = app.store.projects.byOwnerPath('alice', 'p').id
-console.log('before:', JSON.stringify(app.store.protectedBranches.listForProject(pid)))
-const put = await authed(app, 'PUT', `/api/v1/projects/${pid}/repository/protected_branches`, {
-  session: s,
-  payload: { name: 'main', push_access_level: 'no_one' },
-})
-console.log('put:', put.statusCode, JSON.stringify(put.json()))
-console.log('after:', JSON.stringify(app.store.protectedBranches.listForProject(pid)))
-console.log('byName:', JSON.stringify(app.store.protectedBranches.byName(pid, 'main')))
+await authed(app, 'POST', `/api/v1/projects/${pid}/repository/commit`, { session: s, payload: { branch: 'feature', new_branch: 'feature', start_branch: 'main', commit_message: 'fc', changes: [{ path: 'f.txt', content: 'f\n' }] } })
+const pr = await authed(app, 'POST', `/api/v1/projects/${pid}/pull_requests`, { session: s, payload: { title: 'T', source_branch: 'feature', target_branch: 'main' } })
+console.log('pr iid:', pr.json().iid)
+const put = await authed(app, 'PUT', `/api/v1/projects/${pid}/repository/protected_branches`, { session: s, payload: { name: 'main', push_access_level: 'no_one' } })
+console.log('put:', put.statusCode)
+console.log('rules:', JSON.stringify(app.store.protectedBranches.listForProject(pid)))
+const m = await authed(app, 'POST', `/api/v1/projects/${pid}/pull_requests/${pr.json().iid}/merge`, { session: s, payload: {} })
+console.log('merge:', m.statusCode, JSON.stringify(m.json()).slice(0, 200))
