@@ -12,4 +12,12 @@ const put = await authed(app, 'PUT', `/api/v1/projects/${pid}/repository/protect
 console.log('put:', put.statusCode)
 console.log('rules:', JSON.stringify(app.store.protectedBranches.listForProject(pid)))
 const m = await authed(app, 'POST', `/api/v1/projects/${pid}/pull_requests/${pr.json().iid}/merge`, { session: s, payload: {} })
-console.log('merge:', m.statusCode, JSON.stringify(m.json()).slice(0, 200))
+try {
+  const actor = { userId: app.store.users.byUsername('alice').id, username: 'alice', admin: false, state: 'active', via: { kind: 'session' } }
+  const direct = app.pullRequests.merge(actor, pid, pr.json().iid, {})
+  console.log('direct merge OK tip:', direct.new_tip)
+} catch (e) {
+  console.log('direct merge threw:', e.status, e.code, e.message)
+}
+const m2 = await authed(app, 'POST', \/api/v1/projects/\11820/pull_requests/1/merge\, { session: s, payload: {} })
+console.log('http merge again:', m2.statusCode)
