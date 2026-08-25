@@ -45,7 +45,7 @@ async function commitBranch(
     session: opts.session ?? h.alice,
     payload: {
       branch,
-      ...(opts.newBranch ? { new_branch: true, start_branch: 'main' } : {}),
+      ...(opts.newBranch ? { new_branch: branch, start_branch: 'main' } : {}),
       commit_message: opts.message,
       changes: [{ path: opts.file ?? 'feature.txt', content: opts.content ?? `${opts.message}\n` }],
     },
@@ -201,14 +201,14 @@ describe('gate: unresolved conflicts block the merge', () => {
     await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/repository/commit`, {
       session: h.alice,
       payload: {
-        branch: 'conflict-a', new_branch: true, start_branch: 'main',
+        branch: 'conflict-a', new_branch: 'conflict-a', start_branch: 'main',
         commit_message: 'side a', changes: [{ path: 'shared.txt', content: 'version A\n' }],
       },
     })
     await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/repository/commit`, {
       session: h.alice,
       payload: {
-        branch: 'conflict-b', new_branch: true, start_branch: 'main',
+        branch: 'conflict-b', new_branch: 'conflict-b', start_branch: 'main',
         commit_message: 'side b', changes: [{ path: 'shared.txt', content: 'version B\n' }],
       },
     })
@@ -242,7 +242,7 @@ describe('gate: unresolved conflicts block the merge', () => {
     await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/repository/commit`, {
       session: h.alice,
       payload: {
-        branch: 'lines', new_branch: true, start_branch: 'main',
+        branch: 'lines', new_branch: 'lines', start_branch: 'main',
         commit_message: 'base lines',
         changes: [{ path: 'doc.txt', content: 'one\ntwo\nthree\nfour\nfive\n' }],
       },

@@ -40,7 +40,7 @@ export async function prSetup(): Promise<PrHarness> {
       session: alice,
       payload: {
         branch,
-        ...(newBranch ? { new_branch: true, start_branch: 'main' } : {}),
+        ...(newBranch ? { new_branch: branch, start_branch: 'main' } : {}),
         commit_message: message,
         changes: [{ path: 'feature.txt', content }],
       },
@@ -88,7 +88,7 @@ describe('PR creation', () => {
     await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/repository/commit`, {
       session: h.alice,
       payload: {
-        branch: 'feature2', new_branch: true, start_branch: 'main',
+        branch: 'feature2', new_branch: 'feature2', start_branch: 'main',
         commit_message: 'Second feature',
         changes: [{ path: 'other.txt', content: 'x\n' }],
       },
@@ -247,7 +247,7 @@ describe('listing, filters & pagination', () => {
     await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/repository/commit`, {
       session: h.alice,
       payload: {
-        branch: 'feature2', new_branch: true, start_branch: 'main',
+        branch: 'feature2', new_branch: 'feature2', start_branch: 'main',
         commit_message: 'second', changes: [{ path: 'b.txt', content: 'b\n' }],
       },
     })
