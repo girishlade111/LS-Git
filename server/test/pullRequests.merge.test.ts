@@ -288,7 +288,7 @@ describe('gate: unresolved conflicts block the merge', () => {
 describe('gates: draft · nothing-to-merge · stale sha · permissions · protection · approvals', () => {
   it('blocks DRAFT merges until marked ready (G4)', async () => {
     const h = await setup()
-    await commitBranch(h, 'feature', { newBranch: true })
+    await commitBranch(h, 'feature', { newBranch: true, message: 'feature commit' })
     const pr = await openPr(h, { draft: true })
     const blocked = await merge(h, pr.iid as number)
     expect(blocked.statusCode).toBe(422)
@@ -303,7 +303,7 @@ describe('gates: draft · nothing-to-merge · stale sha · permissions · protec
 
   it('blocks NOTHING-TO-MERGE when source is fully contained in target (G9)', async () => {
     const h = await setup()
-    const srcSha = await commitBranch(h, 'feature', { newBranch: true })
+    const srcSha = await commitBranch(h, 'feature', { newBranch: true, message: 'feature commit' })
     await commitBranch(h, 'main', { content: 'absorb\n', file: 'x.txt', message: 'x' })
     // Fast-forward main over the feature so nothing remains to merge.
     const repo = engineOf(h)
@@ -318,7 +318,7 @@ describe('gates: draft · nothing-to-merge · stale sha · permissions · protec
 
   it('rejects STALE expected_sha with 409 and details (G8)', async () => {
     const h = await setup()
-    await commitBranch(h, 'feature', { newBranch: true })
+    await commitBranch(h, 'feature', { newBranch: true, message: 'feature commit' })
     const pr = await openPr(h)
     const stale = await merge(h, pr.iid as number, { expected_sha: '0'.repeat(40) })
     expect(stale.statusCode).toBe(409)
@@ -333,7 +333,7 @@ describe('gates: draft · nothing-to-merge · stale sha · permissions · protec
 
   it('enforces PERMISSIONS: non-maintainers can neither create nor merge (G1)', async () => {
     const h = await setup()
-    await commitBranch(h, 'feature', { newBranch: true })
+    await commitBranch(h, 'feature', { newBranch: true, message: 'feature commit' })
     const created = await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/pull_requests`, {
       session: h.bob,
       payload: { title: 'bob pr', source_branch: 'feature', target_branch: 'main' },
@@ -359,7 +359,7 @@ describe('gates: draft · nothing-to-merge · stale sha · permissions · protec
 
   it('enforces PROTECTED TARGET rules — no_one blocks everyone but admins (G5)', async () => {
     const h = await setup()
-    await commitBranch(h, 'feature', { newBranch: true })
+    await commitBranch(h, 'feature', { newBranch: true, message: 'feature commit' })
     const pr = await openPr(h)
 
     // Protect main at the strictest level.
@@ -382,7 +382,7 @@ describe('gates: draft · nothing-to-merge · stale sha · permissions · protec
     const h = await setup()
     await registerUser(h.app, { username: 'carol', email: 'carol@example.com' })
     const carol = extractSession((await loginRaw(h.app, 'carol')).cookies)
-    await commitBranch(h, 'feature', { newBranch: true })
+    await commitBranch(h, 'feature', { newBranch: true, message: 'feature commit' })
     const pr = await openPr(h)
 
     h.app.store.db.run('UPDATE projects SET approvals_required = 2 WHERE id = ?', h.projectId)
@@ -417,7 +417,7 @@ describe('merge side effects', () => {
     })
     expect(issue.statusCode).toBe(201)
 
-    await commitBranch(h, 'feature', { newBranch: true })
+    await commitBranch(h, 'feature', { newBranch: true, message: 'feature commit' })
     const pr = await openPr(h, {
       description: `Fixes #${issue.json().iid as number} — finally.`,
       title: 'With linked issue',
@@ -461,7 +461,7 @@ describe('merge side effects', () => {
 
   it('reports live MERGEABILITY blockers through the dedicated endpoint', async () => {
     const h = await setup()
-    await commitBranch(h, 'feature', { newBranch: true })
+    await commitBranch(h, 'feature', { newBranch: true, message: 'feature commit' })
     const pr = await openPr(h, { draft: true })
     h.app.store.db.run('UPDATE projects SET approvals_required = 1 WHERE id = ?', h.projectId)
 
