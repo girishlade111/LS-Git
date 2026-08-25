@@ -189,4 +189,70 @@ export const issuesApi = {
     request<MilestoneFull>(`/api/v1/projects/${projectId}/milestones/${mid}`, 'PATCH', patch),
   deleteMilestone: (projectId: number, mid: number) =>
     request<{ ok: boolean }>(`/api/v1/projects/${projectId}/milestones/${mid}`, 'DELETE'),
+  // Issue forms (templates stored at .lsgit/issues/forms/*.yml in the repo).
+  listForms: (projectId: number) =>
+    request<{ forms: FormListEntry[] }>(`/api/v1/projects/${projectId}/issue_forms`),
+  getForm: (projectId: number, name: string) =>
+    request<{ form: IssueForm }>(`/api/v1/projects/${projectId}/issue_forms/${encodeURIComponent(name)}`),
+  saveForm: (projectId: number, name: string, yaml: string) =>
+    request<{ path: string; commit_sha: string; form: IssueForm }>(
+      `/api/v1/projects/${projectId}/issue_forms/${encodeURIComponent(name)}`, 'PUT', { yaml },
+    ),
+  deleteForm: (projectId: number, name: string) =>
+    request<{ commit_sha: string }>(`/api/v1/projects/${projectId}/issue_forms/${encodeURIComponent(name)}`, 'DELETE'),
+  submitForm: (
+    projectId: number,
+    name: string,
+    payload: { title?: string; answers: Record<string, unknown> },
+  ) =>
+    request<{ issue: Issue }>(
+      `/api/v1/projects/${projectId}/issue_forms/${encodeURIComponent(name)}/submissions`, 'POST', payload,
+    ),
+}
+
+// ---------------------------------------------------------------------------
+// Issue form types (mirrors server/src/lib/forms.ts)
+// ---------------------------------------------------------------------------
+
+export type FormFieldType = 'text' | 'textarea' | 'dropdown' | 'radio' | 'checkbox' | 'checkboxes' | 'tasklist'
+
+export interface FormOption {
+  label: string
+  description: string
+  required: boolean
+}
+
+export interface FormField {
+  type: FormFieldType
+  id: string
+  label: string
+  description: string
+  placeholder: string
+  multiple: boolean
+  default_value: string | boolean | null
+  options: FormOption[]
+  validations: {
+    required: boolean
+    min_length: number | null
+    max_length: number | null
+    pattern_message: string | null
+  }
+}
+
+export interface IssueForm {
+  name: string
+  description: string
+  title_prefix: string
+  title_field: string | null
+  labels: string[]
+  fields: FormField[]
+}
+
+export interface FormListEntry {
+  name: string
+  title: string
+  description: string
+  field_count: number
+  valid: boolean
+  error?: string
 }

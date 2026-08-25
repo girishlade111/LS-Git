@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseSafeYaml, YamlParseError } from '../src/lib/yaml.js'
+import { parseSafeYaml } from '../src/lib/yaml.js'
 import {
   validateFormSchema,
   validateAnswers,

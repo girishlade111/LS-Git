@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../design-system/Button'
 import { Dialog } from '../design-system/Dialog'
 import { EmptyState } from '../design-system/EmptyState'
@@ -7,8 +7,18 @@ import { Input } from '../design-system/Input'
 import { Pagination } from '../design-system/Pagination'
 import { Select } from '../design-system/Select'
 import { Textarea } from '../design-system/Textarea'
-import { issuesApi, type Issue, type IssueFilters, type IssueListResult, type LabelFull, type MilestoneFull } from './api'
+import {
+  issuesApi,
+  type Issue,
+  type IssueFilters,
+  type IssueListResult,
+  type IssueForm,
+  type FormListEntry,
+  type LabelFull,
+  type MilestoneFull,
+} from './api'
 import { LabelChip } from './LabelChip'
+import { FormFields, validateAnswersClient, type AnswersState } from './FormFields'
 import { timeAgo } from '../repository/widgets'
 
 /** Issues list: state tabs · search · filters (label/milestone/assignee) · sort · pages. */
@@ -30,10 +40,35 @@ export function IssuesListPage({
 
   const [filters, setFilters] = useState<IssueFilters>({ state: 'opened', order_by: 'updated_at', sort: 'desc' })
 
-  // New-issue dialog state.
+  // New-issue dialog state — blank issue OR form-driven creation.
   const [createOpen, setCreateOpen] = useState(false)
+  const [mode, setMode] = useState<'blank' | 'form'>('blank')
+  const [forms, setForms] = useState<FormListEntry[]>([])
+  const [selectedForm, setSelectedForm] = useState('')
+  const [formDef, setFormDef] = useState<IssueForm | null>(null)
+  const [answers, setAnswers] = useState<AnswersState>({ values: {}, errors: {} })
   const [newTitle, setNewTitle] = useState('')
   const [newDescription, setNewDescription] = useState('')
+
+  useEffect(() => {
+    void issuesApi.listForms(projectId).then((r) => setForms(r.forms.filter((f) => f.valid))).catch(() => setForms([]))
+  }, [projectId])
+
+  async function pickForm(name: string) {
+    setSelectedForm(name)
+    setFormDef(null)
+    setAnswers({ values: {}, errors: {} })
+    if (!name) return
+    try {
+      setFormDef((await issuesApi.getForm(projectId, name)).form)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load form')
+    }
+  }
+
+  function updateAnswer(id: string, value: unknown) {
+    setAnswers((s) => ({ ...s, values: { ...s.values, [id]: value } }))
+  }
 
   const load = useCallback(async () => {
     try {
@@ -55,14 +90,38 @@ export function IssuesListPage({
 
   async function createIssue() {
     try {
+      if (mode === 'form' && formDef) {
+        const errors = validateAnswersClient(formDef.fields, answers.values)
+        if (Object.values(errors).some(Boolean)) {
+          setAnswers((s) => ({ ...s, errors }))
+          return
+        }
+        const { issue } = await issuesApi.submitForm(projectId, selectedForm, { answers: answers.values })
+        resetCreateDialog()
+        navigate(`#${issue.web_path}`)
+        return
+      }
       const issue = await issuesApi.create(projectId, { title: newTitle.trim(), description: newDescription })
-      setCreateOpen(false)
-      setNewTitle(''); setNewDescription('')
+      resetCreateDialog()
       navigate(`#${issue.web_path}`)
     } catch (e) {
+      // Server-side validation errors surface per-field when possible.
       setError(e instanceof Error ? e.message : 'Failed to create issue')
     }
   }
+
+  function resetCreateDialog() {
+    setCreateOpen(false)
+    setSelectedForm('')
+    setFormDef(null)
+    setAnswers({ values: {}, errors: {} })
+    setNewTitle(''); setNewDescription('')
+  }
+
+  const canSubmitForm = useMemo(() => {
+    if (!formDef) return false
+    return !Object.values(validateAnswersClient(formDef.fields, answers.values)).some(Boolean)
+  }, [formDef, answers])
 
   const base = `/proj/${encodeURIComponent(owner)}/${encodeURIComponent(projectPath)}`
   const openCount = result?.pagination.total ?? 0
@@ -175,25 +234,92 @@ export function IssuesListPage({
 
       <Dialog
         open={createOpen}
-        onClose={() => setCreateOpen(false)}
+        onClose={resetCreateDialog}
         title="New issue"
         footer={
           <>
-            <Button onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button variant="primary" data-autofocus disabled={!newTitle.trim()} onClick={() => void createIssue()}>
-              Create issue
-            </Button>
+            <Button onClick={resetCreateDialog}>Cancel</Button>
+            {mode === 'blank' ? (
+              <Button variant="primary" data-autofocus disabled={!newTitle.trim()} onClick={() => void createIssue()}>
+                Create issue
+              </Button>
+            ) : (
+              <Button variant="primary" data-autofocus disabled={!formDef || !canSubmitForm} onClick={() => void createIssue()}>
+                Submit form
+              </Button>
+            )}
           </>
         }
       >
         <div className="ds-stack">
-          <Input label="Title" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Something is broken…" />
-          <Textarea
-            label="Description"
-            value={newDescription}
-            onChange={(e) => setNewDescription(e.target.value)}
-            placeholder={'Markdown supported. Mention people with @username.\nTask lists: - [ ] step'}
-          />
+          {/* Creation mode: blank markdown issue OR structured form. */}
+          <div className="ls-createmode" role="radiogroup" aria-label="Creation mode">
+            <button
+              type="button"
+              className={`ls-createmode__opt${mode === 'blank' ? ' ls-createmode__opt--current' : ''}`}
+              aria-checked={mode === 'blank'}
+              role="radio"
+              onClick={() => setMode('blank')}
+            >
+              Blank issue
+            </button>
+            <button
+              type="button"
+              className={`ls-createmode__opt${mode === 'form' ? ' ls-createmode__opt--current' : ''}`}
+              aria-checked={mode === 'form'}
+              role="radio"
+              disabled={forms.length === 0}
+              onClick={() => setMode('form')}
+            >
+              Use a form{forms.length > 0 ? ` (${forms.length})` : ''}
+            </button>
+          </div>
+
+          {mode === 'blank' && (
+            <>
+              <Input label="Title" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Something is broken…" />
+              <Textarea
+                label="Description"
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                placeholder={'Markdown supported. Mention people with @username.\nTask lists: - [ ] step'}
+              />
+            </>
+          )}
+
+          {mode === 'form' && (
+            <>
+              <Select
+                label="Form"
+                value={selectedForm}
+                onChange={(e) => void pickForm(e.target.value)}
+                options={[
+                  { value: '', label: 'Choose a form…' },
+                  ...forms.map((f) => ({ value: f.name, label: f.title })),
+                ]}
+              />
+              {selectedForm && !formDef && (
+                <p className="ls-rb__muted" role="status">Loading form…</p>
+              )}
+              {formDef && (
+                <>
+                  {formDef.description && <p className="ls-formintro">{formDef.description}</p>}
+                  {formDef.title_prefix && (
+                    <Input
+                      label={`Title (prefixed automatically with “${formDef.title_prefix}”)`}
+                      value={newTitle}
+                      onChange={(e) => setNewTitle(e.target.value)}
+                    />
+                  )}
+                  <FormFields
+                    fields={formDef.fields}
+                    state={answers}
+                    onChange={updateAnswer}
+                  />
+                </>
+              )}
+            </>
+          )}
         </div>
       </Dialog>
     </section>
