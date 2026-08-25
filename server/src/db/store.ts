@@ -480,6 +480,8 @@ export interface ProjectRow {
   fork_network_id: number | null
   /** Minimum approvals required to merge PRs targeting protected branches (0 = off). */
   approvals_required: number
+  /** Policy: reset accumulated approvals when the source branch moves. */
+  reset_approvals_on_push: number
   last_activity_at: string
   created_at: string
   updated_at: string
@@ -2180,6 +2182,8 @@ export interface PullRequestRow {
   closed_by_id: number | null
   merged_at: string | null
   merged_by_id: number | null
+  /** Last source-tip sha the approval bookkeeping has seen (reset-policy input). */
+  seen_source_sha: string | null
   created_at: string
   updated_at: string
 }
