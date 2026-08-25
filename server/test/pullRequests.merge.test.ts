@@ -39,14 +39,14 @@ async function setup(): Promise<Harness> {
 async function commitBranch(
   h: Harness,
   branch: string,
-  opts: { newBranch?: boolean; content?: string; file?: string; message: string; session?: ReturnType<typeof extractSession> } = {},
+  opts: { newBranch?: boolean; content?: string; file?: string; message?: string; session?: ReturnType<typeof extractSession> } = {},
 ): Promise<string> {
   const r = await authed(h.app, 'POST', `/api/v1/projects/${h.projectId}/repository/commit`, {
     session: opts.session ?? h.alice,
     payload: {
       branch,
       ...(opts.newBranch ? { new_branch: branch, start_branch: 'main' } : {}),
-      commit_message: opts.message,
+      commit_message: opts.message ?? 'branch commit',
       changes: [{ path: opts.file ?? 'feature.txt', content: opts.content ?? `${opts.message}\n` }],
     },
   })
