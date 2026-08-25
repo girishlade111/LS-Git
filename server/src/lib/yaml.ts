@@ -296,10 +296,21 @@ function parseMapping(
 
     const rest = line.text.slice(sep + 1).trim()
     if (rest === '') {
-      // Nested block or explicit null.
-      const [value, next] = parseBlock(lines, i + 1, indent + 1, depth + 1, lim, state)
+      // Nested block OR a sequence at the SAME indent as its key (both legal).
+      const next = lines[i + 1]
+      if (
+        next &&
+        next.indent === indent &&
+        (next.text.startsWith('- ') || next.text === '-')
+      ) {
+        const [value, consumed] = parseSequence(lines, i + 1, indent, depth + 1, lim, state)
+        map[key] = value
+        i = consumed
+        continue
+      }
+      const [value, consumed2] = parseBlock(lines, i + 1, indent + 1, depth + 1, lim, state)
       map[key] = value
-      i = next
+      i = consumed2
       continue
     }
     chargeNode(state, lim, line.number)
