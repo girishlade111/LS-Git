@@ -133,11 +133,14 @@ describe('form-driven issue creation', () => {
     const submit = await screen.findByRole('button', { name: 'Submit form' })
     await waitFor(() => expect(submit).toBeTruthy())
 
-    // Fill only SOME required fields; submission stays blocked + error shows.
+    // Fill only SOME required fields; submission stays blocked.
     await fireEvent.change(await screen.findByRole('textbox', { name: 'Summary' }), { target: { value: 'Crash on save' } })
     expect(submit).toHaveProperty('disabled', true)
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Severity' }), 'low')
+    // Still blocked: the checkboxes group demands its individually-required option.
+    expect(submit).toHaveProperty('disabled', true)
+    await user.click(screen.getByRole('checkbox', { name: /^On staging/ }))
     expect(submit).toHaveProperty('disabled', false)
 
     // No POST was ever sent while invalid.
