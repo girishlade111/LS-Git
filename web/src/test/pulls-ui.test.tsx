@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PullsListPage } from '../pulls/PullsListPage'
 import { PullDetailPage } from '../pulls/PullDetailPage'
@@ -104,7 +104,7 @@ describe('pull request detail — merge box contract', () => {
     return vi.fn((url: string, init?: RequestInit) => {
       const u = String(url)
       const method = init?.method ?? 'GET'
-      if (u.endsWith('/mergeability')) {
+      if (u.includes('/mergeability')) {
         return Promise.resolve(jsonResponse({
           state: 'opened', draft: false, merge_status: opts.canMerge ? 'can_be_merged' : 'cannot_be_merged',
           merge_status_reason: null,
@@ -114,8 +114,8 @@ describe('pull request detail — merge box contract', () => {
         }))
       }
       if (u.endsWith('/notes')) return Promise.resolve(jsonResponse({ notes: [] }))
-      if (u.endsWith('/commits')) return Promise.resolve(jsonResponse({ commits: [], count: 0 }))
-      if (u.endsWith('/changes')) return Promise.resolve(jsonResponse({ files: [] }))
+      if (u.includes('/commits')) return Promise.resolve(jsonResponse({ commits: [], count: 0 }))
+      if (u.includes('/changes')) return Promise.resolve(jsonResponse({ files: [] }))
       if (method === 'POST' && u.endsWith('/merge')) {
         return Promise.resolve(jsonResponse({ ...PR, state: 'merged' }))
       }
@@ -160,7 +160,7 @@ describe('pull request detail — merge box contract', () => {
 
     await waitFor(() => {
       const merges = fetchMock.mock.calls.filter(
-        (c) => String(c[0]).endsWith('/merge') && (c[1] as RequestInit).method === 'POST',
+        (c) => String(c[0]).includes('/merge') && !(String(c[0]).includes('mergeability')) && (c[1] as RequestInit).method === 'POST',
       )
       expect(merges.length).toBe(1)
       expect(JSON.parse(String((merges[0]![1] as RequestInit).body))).toEqual({
@@ -191,4 +191,3 @@ describe('pull request detail — merge box contract', () => {
   })
 })
 
-import { fireEvent } from '@testing-library/react'
