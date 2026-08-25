@@ -320,7 +320,7 @@ describe('code suggestions', () => {
       session: h.alice,
       payload: {
         branch: 'feature', commit_message: 'shift lines',
-        changes: [{ path: 'src.txt', content: FILE_V1.replace('GAMMA-EDITED', 'GAMMA-REWITTEN-ELSEWHERE') }],
+        changes: [{ path: 'src.txt', content: FILE_V1.replace('gamma', 'GAMMA-REWITTEN-ELSEWHERE') }],
       },
     })
     const outdated = await authed(
@@ -398,7 +398,8 @@ describe('reviews: draft → submit → approve / request changes / comment-only
     expect((submit.json().pull_request as Record<string, unknown>).approvals).toMatchObject({ count: 1, required: 0 })
 
     // Drafts cleared after publishing; threads created from positioned drafts.
-    expect((mine ? (await authed(h.app, 'GET', `/api/v1/projects/${h.projectId}/pull_requests/1/draft_comments`, { session: h.bob })).json().drafts : []).length).toBe(0)
+    const afterPublish = await authed(h.app, 'GET', `/api/v1/projects/${h.projectId}/pull_requests/1/draft_comments`, { session: h.bob })
+    expect((afterPublish.json().drafts as unknown[]).length).toBe(0)
     const tl = await authed(h.app, 'GET', `/api/v1/projects/${h.projectId}/pull_requests/1/threads`, {})
     expect((tl.json().threads as unknown[]).length).toBe(1)
 
@@ -509,7 +510,7 @@ describe('CODEOWNERS foundation', () => {
       session: h.alice,
       payload: {
         branch: 'main', commit_message: 'add codeowners',
-        changes: [{ path: 'CODEOWNERS', content: '# comment\n* @alice\nsrc/ @bob @legacy-team\n' }],
+        changes: [{ path: 'CODEOWNERS', content: '# comment\n* @alice\nsrc.txt @bob @legacy-team\n' }],
       },
     })
     const cov = await authed(h.app, 'GET', `/api/v1/projects/${h.projectId}/pull_requests/1/codeowners`, {})
