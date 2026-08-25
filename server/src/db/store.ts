@@ -2432,3 +2432,264 @@ export class PullRequestsRepo {
     )
   }
 }
+
+// ---------------------------------------------------------------------------
+// Code review: diff threads, thread notes (with suggestions), submitted
+// reviews, and per-user draft comments. See services/prReview.ts.
+// ---------------------------------------------------------------------------
+
+export interface PrThreadRow {
+  id: number
+  pr_id: number
+  project_id: number
+  path: string
+  side: 'new' | 'old'
+  line_start: number
+  line_end: number
+  base_sha: string
+  head_sha: string
+  covered_lines: string // JSON array<string>
+  resolved: number
+  resolved_by_id: number | null
+  resolved_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type SuggestionStatus = 'pending' | 'applied' | 'rejected'
+
+export interface PrThreadNoteRow {
+  id: number
+  thread_id: number
+  project_id: number
+  author_id: number
+  body: string
+  suggestion_lines: string | null // JSON array<string>
+  suggestion_status: SuggestionStatus | null
+  applied_commit_sha: string | null
+  created_at: string
+  updated_at: string
+}
+
+export class PrThreadsRepo {
+  constructor(private db: Database) {}
+
+  create(data: {
+    pr_id: number
+    project_id: number
+    path: string
+    side: 'new' | 'old'
+    line_start: number
+    line_end: number
+    base_sha: string
+    head_sha: string
+    covered_lines: string[]
+  }): PrThreadRow {
+    const now = nowIso()
+    const res = this.db.run(
+      `INSERT INTO pr_threads (pr_id, project_id, path, side, line_start, line_end, base_sha, head_sha, covered_lines, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      data.pr_id,
+      data.project_id,
+      data.path,
+      data.side,
+      data.line_start,
+      data.line_end,
+      data.base_sha,
+      data.head_sha,
+      JSON.stringify(data.covered_lines),
+      now,
+      now,
+    )
+    return this.byId(res.lastInsertRowid)!
+  }
+
+  byId(id: number): PrThreadRow | undefined {
+    return this.db.get('SELECT * FROM pr_threads WHERE id = ?', id) as PrThreadRow | undefined
+  }
+
+  listForPr(prId: number): Array<PrThreadRow> {
+    return this.db.all('SELECT * FROM pr_threads WHERE pr_id = ? ORDER BY path, line_start, id', prId) as
+      unknown as Array<PrThreadRow>
+  }
+
+  setResolved(id: number, resolved: boolean, userId: number | null): void {
+    this.db.run(
+      'UPDATE pr_threads SET resolved = ?, resolved_by_id = ?, resolved_at = ?, updated_at = ? WHERE id = ?',
+      resolved ? 1 : 0,
+      resolved ? userId : null,
+      resolved ? nowIso() : null,
+      nowIso(),
+      id,
+    )
+  }
+}
+
+export class PrThreadNotesRepo {
+  constructor(private db: Database) {}
+
+  create(data: {
+    thread_id: number
+    project_id: number
+    author_id: number
+    body: string
+    suggestionLines?: string[] | null
+  }): PrThreadNoteRow {
+    const now = nowIso()
+    const res = this.db.run(
+      `INSERT INTO pr_thread_notes (thread_id, project_id, author_id, body, suggestion_lines, suggestion_status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      data.thread_id,
+      data.project_id,
+      data.author_id,
+      data.body,
+      data.suggestionLines ? JSON.stringify(data.suggestionLines) : null,
+      data.suggestionLines ? 'pending' : null,
+      now,
+      now,
+    )
+    return this.byId(res.lastInsertRowid)!
+  }
+
+  byId(id: number): PrThreadNoteRow | undefined {
+    return this.db.get('SELECT * FROM pr_thread_notes WHERE id = ?', id) as PrThreadNoteRow | undefined
+  }
+
+  listForThread(threadId: number): Array<PrThreadNoteRow> {
+    return this.db.all('SELECT * FROM pr_thread_notes WHERE thread_id = ? ORDER BY id', threadId) as
+      unknown as Array<PrThreadNoteRow>
+  }
+
+  setStatus(id: number, status: SuggestionStatus, appliedCommitSha?: string): void {
+    this.db.run(
+      'UPDATE pr_thread_notes SET suggestion_status = ?, applied_commit_sha = COALESCE(?, applied_commit_sha), updated_at = ? WHERE id = ?',
+      status,
+      appliedCommitSha ?? null,
+      nowIso(),
+      id,
+    )
+  }
+}
+
+export interface PrReviewRow {
+  id: number
+  pr_id: number
+  project_id: number
+  reviewer_id: number
+  state: 'approved' | 'changes_requested' | 'commented'
+  head_sha: string
+  body: string | null
+  submitted_at: string
+}
+
+export class PrReviewsRepo {
+  constructor(private db: Database) {}
+
+  insert(data: { pr_id: number; project_id: number; reviewer_id: number; state: PrReviewRow['state']; head_sha: string; body?: string }): PrReviewRow {
+    const submitted = nowIso()
+    const res = this.db.run(
+      `INSERT INTO pr_reviews (pr_id, project_id, reviewer_id, state, head_sha, body, submitted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      data.pr_id,
+      data.project_id,
+      data.reviewer_id,
+      data.state,
+      data.head_sha,
+      data.body ?? null,
+      submitted,
+    )
+    return this.byId(res.lastInsertRowid)!
+  }
+
+  byId(id: number): PrReviewRow | undefined {
+    return this.db.get('SELECT * FROM pr_reviews WHERE id = ?', id) as PrReviewRow | undefined
+  }
+
+  latestPerReviewer(prId: number): Array<PrReviewRow> {
+    return this.db.all(
+      `SELECT r.* FROM pr_reviews r
+       JOIN (SELECT reviewer_id, MAX(id) AS max_id FROM pr_reviews WHERE pr_id = ? GROUP BY reviewer_id) m
+         ON m.max_id = r.id
+       ORDER BY r.submitted_at`,
+      prId,
+    ) as unknown as Array<PrReviewRow>
+  }
+
+  countForHead(prId: number, state: PrReviewRow['state'], headSha: string): number {
+    const row = this.db.get(
+      `SELECT COUNT(DISTINCT reviewer_id) AS c FROM pr_reviews
+       WHERE pr_id = ? AND state = ? AND head_sha = ?`,
+      prId,
+      state,
+      headSha,
+    ) as Row
+    return Number(row.c)
+  }
+}
+
+export interface PrDraftCommentRow {
+  id: number
+  pr_id: number
+  author_id: number
+  body: string
+  path: string | null
+  side: 'new' | 'old' | null
+  line_start: number | null
+  line_end: number | null
+  created_at: string
+  updated_at: string
+}
+
+export class PrDraftCommentsRepo {
+  constructor(private db: Database) {}
+
+  create(data: { pr_id: number; author_id: number; body: string; path?: string | null; side?: 'new' | 'old' | null; line_start?: number | null; line_end?: number | null }): PrDraftCommentRow {
+    const now = nowIso()
+    const res = this.db.run(
+      `INSERT INTO pr_draft_comments (pr_id, author_id, body, path, side, line_start, line_end, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      data.pr_id,
+      data.author_id,
+      data.body,
+      data.path ?? null,
+      data.side ?? null,
+      data.line_start ?? null,
+      data.line_end ?? null,
+      now,
+      now,
+    )
+    return this.byId(res.lastInsertRowid)!
+  }
+
+  byId(id: number): PrDraftCommentRow | undefined {
+    return this.db.get('SELECT * FROM pr_draft_comments WHERE id = ?', id) as PrDraftCommentRow | undefined
+  }
+
+  listForAuthor(prId: number, authorId: number): Array<PrDraftCommentRow> {
+    return this.db.all(
+      'SELECT * FROM pr_draft_comments WHERE pr_id = ? AND author_id = ? ORDER BY id',
+      prId,
+      authorId,
+    ) as unknown as Array<PrDraftCommentRow>
+  }
+
+  update(id: number, fields: Partial<Pick<PrDraftCommentRow, 'body' | 'path' | 'side' | 'line_start' | 'line_end'>>): void {
+    const sets: string[] = []
+    const values: SqlParam[] = []
+    for (const key of ['body', 'path', 'side', 'line_start', 'line_end'] as const) {
+      if (fields[key] !== undefined) { sets.push(`${key} = ?`); values.push(fields[key] as SqlParam) }
+    }
+    if (sets.length === 0) return
+    sets.push('updated_at = ?')
+    values.push(nowIso(), id)
+    this.db.run(`UPDATE pr_draft_comments SET ${sets.join(', ')} WHERE id = ?`, ...values)
+  }
+
+  deleteOwn(id: number, authorId: number): boolean {
+    return this.db.run('DELETE FROM pr_draft_comments WHERE id = ? AND author_id = ?', id, authorId).changes > 0
+  }
+
+  deleteAllForAuthor(prId: number, authorId: number): number {
+    return this.db.run('DELETE FROM pr_draft_comments WHERE pr_id = ? AND author_id = ?', prId, authorId).changes
+  }
+}
