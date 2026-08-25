@@ -292,3 +292,228 @@ export class PrReviewService {
       created_at: t.created_at,
     }
   }
+
+  // ── suggestions ──────────────────────────────────────────────────────────
+
+  /**
+   * Applicability at the CURRENT tip: file exists AND the covered range still
+   * contains exactly the lines snapshotted at creation. Stale suggestions
+   * REFUSE instead of editing the wrong region after upstream shifts.
+   */
+  private threadApplicability(pr: PullRequestRow, thread: PrThreadRow, srcTip: string): {
+    outdated: boolean
+    reason?: string
+  } {
+    const project = this.s.projects.byId(pr.project_id)!
+    if (thread.side !== 'new') return { outdated: true, reason: 'old-side threads cannot carry suggestions' }
+    const repo = this.engineFor(project)
+    const blobSha = repo.findEntryAt(repo.readCommit(srcTip).tree, thread.path)?.sha ?? null
+    if (!blobSha) return { outdated: true, reason: 'file missing at source tip' }
+    const text = repo.readBlob(blobSha).toString('utf8')
+    const lines = text === '' ? [] : text.replace(/\n$/, '').split('\n')
+    if (thread.line_end > lines.length) return { outdated: true, reason: 'range out of bounds after update' }
+    const current = lines.slice(thread.line_start - 1, thread.line_end).join('\n')
+    let covered: string[] = []
+    try { covered = JSON.parse(thread.covered_lines) as string[] } catch { covered = [] }
+    if (current !== covered.join('\n')) return { outdated: true, reason: 'covered lines changed since review' }
+    return { outdated: false }
+  }
+
+  /** Applies ONE suggestion as its own commit on the PR source branch. */
+  applySuggestion(actor: Actor, projectId: number, iid: number, threadNoteId: number): { commit_sha: string } {
+    const project = this.s.projects.byId(projectId)!
+    const pr = this.visiblePr(actor, projectId, iid)
+    this.authorizePushLevel(actor, project)
+    if (pr.state === 'merged') throw new AppError(422, 'Merged pull requests are immutable', 'merged_immutable')
+
+    const plan = this.validateSuggestionsForApply(pr, [threadNoteId])
+    const entry = plan.entries[0]!
+    const commit = this.commitChangesToSource(
+      pr,
+      actor,
+      [{ path: entry.path, content: entry.content }],
+      'Apply suggestion from !' + pr.iid + ' (' + entry.path + ')',
+    )
+
+    this.s.db.transaction(() => {
+      for (const n of plan.notes) this.s.prThreadNotes.setStatus(n.id, 'applied', commit)
+      this.recordSystemNote(pr, actor, 'applied a suggestion to ' + entry.path + ' (' + commit.slice(0, 10) + ')')
+    })
+    return { commit_sha: commit }
+  }
+
+  /**
+   * Batch apply: ALL suggestions validate first (against evolving file state,
+   * composed bottom-up per path), then land as ONE atomic commit. Any failure
+   * means 422 with per-item reasons and NOTHING is committed.
+   */
+  batchApplySuggestions(actor: Actor, projectId: number, iid: number, rawIds: unknown): { commit_sha: string; applied: number } {
+    const project = this.s.projects.byId(projectId)!
+    const pr = this.visiblePr(actor, projectId, iid)
+    this.authorizePushLevel(actor, project)
+    if (pr.state === 'merged') throw new AppError(422, 'Merged pull requests are immutable', 'merged_immutable')
+
+    if (!Array.isArray(rawIds) || rawIds.length === 0) {
+      throw new AppError(400, 'suggestion_note_ids must be a non-empty array')
+    }
+    const ids = [...new Set(rawIds.map(Number))]
+    if (ids.some((n) => !Number.isInteger(n) || n <= 0)) {
+      throw new AppError(400, 'suggestion_note_ids must contain positive integers')
+    }
+
+    const plan = this.validateSuggestionsForApply(pr, ids)
+    const message =
+      plan.entries.length === 1
+        ? 'Apply suggestion from !' + pr.iid + ' (' + plan.entries[0]!.path + ')'
+        : 'Apply ' + plan.entries.length + ' suggestions from !' + pr.iid
+    const commit = this.commitChangesToSource(
+      pr,
+      actor,
+      plan.entries.map((e) => ({ path: e.path, content: e.content })),
+      message,
+    )
+
+    this.s.db.transaction(() => {
+      for (const n of plan.notes) this.s.prThreadNotes.setStatus(n.id, 'applied', commit)
+      this.recordSystemNote(pr, actor, 'applied ' + plan.entries.length + ' suggestion' + (plan.entries.length === 1 ? '' : 's') + ' (' + commit.slice(0, 10) + ')')
+    })
+    return { commit_sha: commit, applied: plan.entries.length }
+  }
+
+  rejectSuggestion(actor: Actor, projectId: number, iid: number, threadNoteId: number): void {
+    const project = this.s.projects.byId(projectId)!
+    const pr = this.visiblePr(actor, projectId, iid)
+    const note = this.s.prThreadNotes.byId(threadNoteId)
+    const thread = note ? this.s.prThreads.byId(note.thread_id) : undefined
+    if (!note || !thread || thread.pr_id !== pr.id) throw new AppError(404, 'Suggestion not found')
+    if (note.suggestion_status !== 'pending') throw new AppError(422, 'Only pending suggestions can be rejected')
+
+    const maintainer = can(actor, 'issue:set_metadata', {
+      resourceProject: { ownerId: project.owner_id, visibility: project.visibility },
+    })
+    if (note.author_id !== actor.userId && !maintainer) {
+      throw new AppError(403, 'Only the suggestion author or a maintainer can reject it')
+    }
+    this.s.prThreadNotes.setStatus(threadNoteId, 'rejected')
+    this.recordSystemNote(pr, actor, 'rejected a suggestion')
+  }
+
+  private validateSuggestionsForApply(pr: PullRequestRow, noteIds: number[]): {
+    entries: Array<{ path: string; content: string }>
+    notes: Array<{ id: number }>
+  } {
+    const project = this.s.projects.byId(pr.project_id)!
+    const repo = this.engineFor(project)
+    const srcTip = repo.resolveBranch(pr.source_branch)
+    if (!srcTip) throw new AppError(422, 'Source branch no longer exists', 'source_branch_missing')
+
+    const jobs: Job[] = []
+    const failures: Array<{ id: number; reason: string }> = []
+
+    for (const noteId of noteIds) {
+      const note = this.s.prThreadNotes.byId(noteId)
+      const thread = note ? this.s.prThreads.byId(note.thread_id) : undefined
+      if (!note || !thread || thread.pr_id !== pr.id) {
+        failures.push({ id: noteId, reason: 'not found' }); continue
+      }
+      if (note.suggestion_status !== 'pending' || !note.suggestion_lines) {
+        failures.push({ id: noteId, reason: 'suggestion is not pending' }); continue
+      }
+      const applicability = this.threadApplicability(pr, thread, srcTip)
+      if (applicability.outdated) {
+        failures.push({ id: noteId, reason: 'outdated: ' + applicability.reason }); continue
+      }
+      let replacement: string[]
+      try { replacement = JSON.parse(note.suggestion_lines) as string[] } catch {
+        failures.push({ id: noteId, reason: 'corrupt suggestion payload' }); continue
+      }
+      let covered: string[] = []
+      try { covered = JSON.parse(thread.covered_lines) as string[] } catch { covered = [] }
+      jobs.push({ noteId, path: thread.path, start: thread.line_start, end: thread.line_end, covered, replacement })
+    }
+    if (failures.length > 0) {
+      throw new AppError(422, 'Some suggestions cannot be applied', 'suggestions_not_applicable', { failures })
+    }
+
+    // Compose per path bottom-up so overlapping ranges stay consistent.
+    const byPath = new Map<string, Job[]>()
+    for (const j of jobs) {
+      const list = byPath.get(j.path) ?? []
+      list.push(j)
+      byPath.set(j.path, list)
+    }
+    const entries: Array<{ path: string; content: string }> = []
+    for (const [path, list] of byPath) {
+      const blobSha = repo.findEntryAt(repo.readCommit(srcTip).tree, path)?.sha ?? null
+      if (!blobSha) throw new AppError(422, "'" + path + "' disappeared while applying suggestions", 'suggestions_not_applicable')
+      let lines = repo.readBlob(blobSha).toString('utf8').replace(/\n$/, '').split('\n')
+      for (const job of [...list].sort((a, b) => b.start - a.start)) {
+        const r = applyRange(lines, job)
+        if (!r.ok) {
+          throw new AppError(422, "Cannot apply suggestion to '" + path + "': " + r.reason, 'suggestions_not_applicable', {
+            failures: [{ id: job.noteId, reason: r.reason }],
+          })
+        }
+        lines = r.lines
+      }
+      entries.push({ path, content: lines.length > 0 ? lines.join('\n') + '\n' : '' })
+    }
+    return { entries, notes: jobs.map((j) => ({ id: j.noteId })) }
+  }
+
+  /** REAL git commit onto the PR source branch via the core engine. */
+  private commitChangesToSource(
+    pr: PullRequestRow,
+    actor: Actor,
+    changes: Array<{ path: string; content: string }>,
+    message: string,
+  ): string {
+    const project = this.s.projects.byId(pr.project_id)!
+    const repo = this.engineFor(project)
+    const result = repo.applyChangesToBranch({
+      baseBranch: pr.source_branch,
+      targetBranch: pr.source_branch,
+      message,
+      identity: (() => {
+        const u = this.s.users.byId(actor.userId)
+        return { name: u?.name || u?.username || actor.username, email: actor.username + '@users.lsgit.local' }
+      })(),
+      changes: changes.map((c) => ({ path: c.path, content: c.content, mode: '100644' as const })),
+    })
+    // Keep the PR's seen-sha bookkeeping in lockstep with this push.
+    this.s.pullRequests.update(pr.id, { seen_source_sha: result.commitSha })
+    return result.commitSha
+  }
+
+  private loadCodeOwnerRules(project: ProjectRow): CodeOwnerRule[] {
+    try {
+      const repo = this.engineFor(project)
+      const tip = repo.resolveBranch(project.default_branch)
+      if (!tip) return []
+      const sha = repo.findEntryAt(repo.readCommit(tip).tree, 'CODEOWNERS')?.sha
+        ?? repo.findEntryAt(repo.readCommit(tip).tree, '.lsgit/CODEOWNERS')?.sha
+      if (!sha) return []
+      const parsed = parseCodeOwners(repo.readBlob(sha).toString('utf8'))
+      return parsed.rules
+    } catch {
+      return []
+    }
+  }
+
+  codeownersCoverage(actor: Actor | null, projectId: number, iid: number) {
+    const pr = this.visiblePr(actor, projectId, iid)
+    const project = this.s.projects.byId(projectId)!
+    const rules = this.loadCodeOwnerRules(project)
+    const repo = this.engineFor(project)
+    const srcTip = repo.resolveBranch(pr.source_branch)
+    const files = srcTip
+      ? [...repo.flattenTree(repo.readCommit(srcTip).tree).keys()].filter((p) => !p.startsWith('.lsgit/') && p !== 'CODEOWNERS')
+      : []
+    return {
+      rules,
+      coverage: files.map((p) => {
+        const o = ownersForPath(rules, p)
+        return { path: p, owner_users: o.users, owner_unresolved: o.unresolved }
+      }),
+    }
+  }
