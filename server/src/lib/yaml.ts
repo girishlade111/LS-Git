@@ -237,7 +237,9 @@ function parseSequence(
     }
 
     const rest = line.text.slice(2).trimStart()
-    const itemInlineIndent = line.indent + (line.text.length - line.text.slice(2).trimStart().length - '-'.length) + 2
+    // Absolute column where the item content starts (virtual indent for
+    // `- key: value` mappings).
+    const itemInlineIndent = line.indent + (line.text.length - rest.length)
     // `- key: value` starts a mapping whose virtual indent is where rest begins.
     if (/^[^:'"]+:(\s|$)/.test(rest) || /^(['"]).*?\1\s*:/.test(rest)) {
       const virtual: Line = { indent: itemInlineIndent, text: rest, number: line.number }
