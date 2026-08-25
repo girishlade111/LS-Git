@@ -182,8 +182,9 @@ describe('form submissions create structured issues', () => {
     expect(body).toContain('### Details\n\nOpen /login')
     expect(body).toContain('_Submitted via form `Bug report`._')
 
-    // Task-list fields integrate with issue progress (3 tasks, 1 done).
-    expect(issue.task_progress).toEqual({ total: 3, completed: 1 })
+    // Task-list integration: consent checkbox [x] + triage tasks (1 of 2 done)
+    // ⇒ 3 checkbox lines in total, 2 already complete.
+    expect(issue.task_progress).toEqual({ total: 3, completed: 2 })
 
     // The created issue participates in normal lifecycle endpoints.
     const iid = issue.iid as number
