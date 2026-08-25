@@ -102,49 +102,41 @@ export function threeWayMerge(baseText: string, oursText: string, theirsText: st
   let ti = 0
   let pos = 0 // consumed base coordinate
 
-  while (oi < O.length || ti < T.length) {
-    const o = O[oi]
-    const t = T[ti]
+  const emitBase = (from: number, to: number) => {
+    for (let i = from; i < to; i++) out.push(base[i]!)
+  }
 
-    // Advance pure-equal segments cheaply when only one side has them here.
-    if (o && t && o.baseStart === t.baseStart && !o.isEdit && !t.isEdit && o.baseEnd === t.baseEnd) {
-      for (let i = o.baseStart; i < o.baseEnd; i++) out.push(base[i]!)
-      pos = o.baseEnd
-      oi++
-      ti++
-      continue
+  while (oi < O.length && ti < T.length) {
+    const o = O[oi]!
+    const t = T[ti]!
+
+    if (o.baseStart > pos) {
+      emitBase(pos, Math.min(o.baseStart, t.baseStart))
     }
-
-    // Determine the next event boundary across both lists.
-    const nextStart = Math.min(
-      o ? o.baseStart : Number.MAX_SAFE_INTEGER,
-      t ? t.baseStart : Number.MAX_SAFE_INTEGER,
-    )
-
-    // Emit untouched base region up to the boundary from whichever segment covers it.
-    if (nextStart > pos) {
-      // Copy base[pos..nextStart) — guaranteed equal on both sides.
-      for (let i = pos; i < nextStart; i++) out.push(base[i]!)
-      pos = nextStart
-      // Skip/trim leading equal segments that cover this copied region.
-      if (o && o.baseStart < nextStart && !o.isEdit) {
-        oi++ // fully inside copied region by construction of boundaries below
-      } else if (t && t.baseStart < nextStart && !t.isEdit) {
+    if (o.baseStart !== t.baseStart) {
+      // Only one side has an event at this coordinate; the other side keeps
+      // the base here by construction of its own segmentation.
+      if (o.baseStart < t.baseStart) {
+        if (o.isEdit) out.push(...o.lines)
+        else emitBase(o.baseStart, o.baseEnd)
+        pos = o.baseEnd
+        oi++
+        ti = advanceThrough(T, ti, pos)
+      } else {
+        if (t.isEdit) out.push(...t.lines)
+        else emitBase(t.baseStart, t.baseEnd)
+        pos = t.baseEnd
         ti++
+        oi = advanceThrough(O, oi, pos)
       }
       continue
     }
 
-    if (!o || !t) break // defensive; lists are padded by construction
-
-    // Both pointers sit at the same boundary — compare the pair.
-    const end = Math.min(o.baseEnd, t.baseEnd === o.baseStart ? t.baseEnd : Math.max(o.baseEnd, t.baseEnd))
-    void end
-
-    const overlapEnd = Math.max(o.baseEnd, t.baseEnd)
+    // Both sides align at this boundary.
     if (!o.isEdit && !t.isEdit) {
-      for (let i = o.baseStart; i < Math.max(o.baseEnd, t.baseEnd); i++) out.push(base[i]!)
-      pos = Math.max(o.baseEnd, t.baseEnd)
+      const end = Math.max(o.baseEnd, t.baseEnd)
+      emitBase(pos, end)
+      pos = end
       oi++
       ti++
       continue
@@ -152,7 +144,7 @@ export function threeWayMerge(baseText: string, oursText: string, theirsText: st
     if (!o.isEdit && t.isEdit) {
       out.push(...t.lines)
       pos = t.baseEnd
-      oi = advanceThrough(O, oi, t.baseEnd)
+      oi++
       ti++
       continue
     }
@@ -160,10 +152,12 @@ export function threeWayMerge(baseText: string, oursText: string, theirsText: st
       out.push(...o.lines)
       pos = o.baseEnd
       oi++
-      ti = advanceThrough(T, ti, o.baseEnd)
+      ti++
       continue
     }
+
     // edit × edit
+    const overlapEnd = Math.max(o.baseEnd, t.baseEnd)
     const identical =
       o.baseStart === t.baseStart &&
       o.baseEnd === t.baseEnd &&
@@ -172,16 +166,28 @@ export function threeWayMerge(baseText: string, oursText: string, theirsText: st
     if (identical) {
       out.push(...o.lines)
     } else {
-      conflicts.push({ start: o.baseStart, end: overlapEnd, ourLines: o.lines, theirLines: t.lines })
+      conflicts.push({
+        start: Math.min(o.baseStart, t.baseStart),
+        end: overlapEnd,
+        ourLines: o.lines,
+        theirLines: t.lines,
+      })
     }
     pos = overlapEnd
     oi = advanceThrough(O, oi, overlapEnd)
     ti = advanceThrough(T, ti, overlapEnd)
   }
 
-  // Trailing base tail beyond the last aligned segment (both sides kept it).
-  if (conflicts.length === 0) {
-    while (pos < base.length) out.push(base[pos++]!)
+  // A list that ended early leaves pure-base regions the other side kept.
+  while (oi < O.length && conflicts.length === 0) {
+    const seg = O[oi++]!
+    if (seg.isEdit) out.push(...seg.lines)
+    else emitBase(seg.baseStart, seg.baseEnd)
+  }
+  while (ti < T.length && conflicts.length === 0) {
+    const seg = T[ti++]!
+    if (seg.isEdit) out.push(...seg.lines)
+    else emitBase(seg.baseStart, seg.baseEnd)
   }
 
   return { lines: conflicts.length === 0 ? out : null, conflicts }
