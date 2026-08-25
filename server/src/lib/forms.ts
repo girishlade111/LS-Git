@@ -112,7 +112,16 @@ export function validateFormSchema(doc: unknown): IssueFormDef {
   const name = requireString(root.name, 'name', 1, 80)
 
   const description = optionalString(root.description, 'description', FORM_LIMITS.maxDescriptionLength)
-  const title_prefix = optionalString(root.title_prefix, 'title_prefix', FORM_LIMITS.maxTitlePrefixLength)
+  // title_prefix keeps its exact spelling INCLUDING trailing spaces —
+  // '[bug] ' relies on that space between prefix and title.
+  let title_prefix = ''
+  if (root.title_prefix !== undefined && root.title_prefix !== null) {
+    if (typeof root.title_prefix !== 'string') fail('title_prefix must be a string')
+    if (root.title_prefix.length > FORM_LIMITS.maxTitlePrefixLength) {
+      fail(`title_prefix exceeds ${FORM_LIMITS.maxTitlePrefixLength} characters`)
+    }
+    title_prefix = root.title_prefix
+  }
   const labels = parseLabels(root.labels)
   const fields = parseFields(root.fields)
 
@@ -369,7 +378,7 @@ export function validateAnswers(form: IssueFormDef, raw: unknown): NormalizedAns
   const known = new Set(form.fields.map((f) => f.id))
   for (const id of Object.keys(answers)) {
     if (!known.has(id)) {
-      throw new AppError(422, `'${id}' is not a field of form '${form.name}'`, 'validation_failed')
+      throw new AppError(422, `'${id}' is not a field of form '${form.name}'`, 'validation_failed', { field: id })
     }
   }
 

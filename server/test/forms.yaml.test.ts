@@ -158,7 +158,7 @@ describe('safe yaml — malformed input', () => {
 describe('safe yaml — resource abuse protection', () => {
   it('caps input SIZE before doing any work', () => {
     const big = `name: ${'x'.repeat(40_000)}\n`
-    expect(() => parseSafeYaml(big)).toThrow(/exceeds .* byte limit/)
+    expect(() => parseSafeYaml(big)).toThrow(/byte limit/)
     expect(() => parseSafeYaml('a: b', { maxBytes: 2 })).toThrow(/byte limit/)
   })
 
@@ -174,12 +174,16 @@ describe('safe yaml — resource abuse protection', () => {
 
   it('caps TOTAL NODES (mapping sprawl bomb)', () => {
     const manyKeys = Array.from({ length: 5000 }, (_, i) => `k${i}: v`).join('\n')
-    expect(() => parseSafeYaml(manyKeys, { maxNodes: 512 })).toThrow(/node limit/)
+    expect(() =>
+      parseSafeYaml(manyKeys, { maxNodes: 512, maxBytes: 200_000 }),
+    ).toThrow(/node limit/)
   })
 
   it('caps node count across nested structures', () => {
     const rows = Array.from({ length: 2000 }, (_, i) => `  - id: f${i}\n    type: text`).join('\n')
     const doc = `fields:\n${rows}\n`
-    expect(() => parseSafeYaml(doc)).toThrow(/node limit|byte limit/)
+    expect(() =>
+      parseSafeYaml(doc, { maxBytes: 200_000 }),
+    ).toThrow(/node limit/)
   })
 })

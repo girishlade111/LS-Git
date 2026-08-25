@@ -123,7 +123,7 @@ fields:
 // -- malformed schemas ---------------------------------------------------------
 
 describe('form schema — malformed documents are rejected', () => {
-  const invalid = (yaml: string, messagePart?: string) => {
+  const invalid = (yaml: string, messagePart?: RegExp | string) => {
     let err: unknown
     try {
       schemaOf(yaml)
@@ -132,7 +132,7 @@ describe('form schema — malformed documents are rejected', () => {
     }
     // Either a schema error or a YAML error is acceptable rejection.
     const message = (err as Error | undefined)?.message ?? ''
-    if (messagePart) expect(message).toContain(messagePart)
+    if (messagePart !== undefined) expect(message).toMatch(messagePart)
     else expect(err).toBeDefined()
     return message
   }
@@ -145,7 +145,10 @@ describe('form schema — malformed documents are rejected', () => {
   })
 
   it('rejects unknown top-level keys (strict shape)', () => {
-    invalid(`${VALID_MINIMAL}\nassignee_ids: [1]\n`, "Unknown top-level key 'assignee_ids'")
+    invalid(
+      `${VALID_MINIMAL}\nassignee_ids:\n  - 1\n`,
+      "Unknown top-level key 'assignee_ids'",
+    )
   })
 
   it('rejects unknown field types', () => {

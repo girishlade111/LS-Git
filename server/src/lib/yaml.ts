@@ -127,15 +127,22 @@ function toLogicalLines(text: string): Line[] {
 /**
  * Removes a trailing comment (" # …") outside of quotes. A '#' starts a
  * comment only at the beginning of the token stream or after whitespace.
+ * Single-quoted '' escapes are honored so they cannot open a fake quote.
  */
 function stripComment(line: string): string {
   let inSingle = false
   let inDouble = false
   for (let i = 0; i < line.length; i++) {
     const c = line[i]!
-    if (c === "'" && !inDouble) inSingle = !inSingle
-    else if (c === '"' && !inSingle && (i === 0 || line[i - 1] !== '\\')) inDouble = !inDouble
-    else if (c === '#' && !inSingle && !inDouble && (i === 0 || /\s/.test(line[i - 1]!))) {
+    if (c === "'" && !inDouble) {
+      if (inSingle && line[i + 1] === "'") {
+        i++ // escaped '' — skip both
+        continue
+      }
+      inSingle = !inSingle
+    } else if (c === '"' && !inSingle && (i === 0 || line[i - 1] !== '\\')) {
+      inDouble = !inDouble
+    } else if (c === '#' && !inSingle && !inDouble && (i === 0 || /\s/.test(line[i - 1]!))) {
       return line.slice(0, i).trimEnd()
     }
   }
@@ -188,24 +195,26 @@ function hasFlowOpenerOutsideQuotes(content: string): boolean {
 function parseBlock(
   lines: Line[],
   start: number,
-  indent: number,
+  minIndent: number,
   depth: number,
   lim: Required<SafeYamlLimits>,
   state: { nodes: number },
 ): [YamlValue, number] {
+  if (start >= lines.length || lines[start]!.indent < minIndent) {
+    return [null, start] // empty block value
+  }
   if (depth > lim.maxDepth) {
     throw new YamlParseError(
       `YAML nesting exceeds the depth limit of ${lim.maxDepth}`, lines[start]!.number,
     )
   }
-  if (start >= lines.length || lines[start]!.indent < indent) {
-    return [null, start] // empty block value
-  }
   const first = lines[start]!
+  // The block's OWN indent is whatever the next line actually uses — YAML
+  // allows any deeper indentation for children, not exactly parent+1.
   if (first.text.startsWith('- ') || first.text === '-') {
-    return parseSequence(lines, start, indent, depth, lim, state)
+    return parseSequence(lines, start, first.indent, depth, lim, state)
   }
-  return parseMapping(lines, start, indent, depth, lim, state)
+  return parseMapping(lines, start, first.indent, depth, lim, state)
 }
 
 function parseSequence(
