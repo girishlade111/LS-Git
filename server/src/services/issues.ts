@@ -534,6 +534,14 @@ export class IssuesService {
     if (!note || note.project_id !== projectId) throw new AppError(404, 'Comment not found')
   }
 
+  /** Route-level guard: a note reaction must address a note ON this issue. */
+  assertNoteInIssue(projectId: number, issueId: number, noteId: number): void {
+    const note = this.s.notes.byId(noteId)
+    if (!note || note.noteable_type !== 'issue' || note.project_id !== projectId || note.noteable_id !== issueId) {
+      throw new AppError(404, 'Comment not found on this issue')
+    }
+  }
+
   // -- listing ---------------------------------------------------------------------------
 
   listIssues(
