@@ -96,7 +96,7 @@ describe('inline diff comments', () => {
     expect(thread.path).toBe('src.txt')
     expect(thread.line_start).toBe(3)
     expect(thread.line_end).toBe(3)
-    expect(thread.outdated).toBe(false)
+    // Outdated-ness is computed at read time, not stored — verified via list.
 
     const list = await authed(h.app, 'GET', `/api/v1/projects/${h.projectId}/pull_requests/${iid}/threads`, {})
     const threads = list.json().threads as Array<Record<string, unknown>>
