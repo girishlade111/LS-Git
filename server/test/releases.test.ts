@@ -46,7 +46,7 @@ async function setup(): Promise<Setup> {
   })
   expect(res.statusCode).toBe(201)
   const project = app.store.projects.byOwnerPath('alice', 'rel-engine')!
-  return { app, ownerSession, strangerSession, projectId: project.id, reposRoot: app.config.repositoriesRoot }
+  return { app, ownerSession, strangerSession, projectId: project.id, reposRoot: app.cfg.repositoriesRoot }
 }
 
 const releasesBase = (projectId: number) => `/api/v1/projects/${projectId}/releases`
