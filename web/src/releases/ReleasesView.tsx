@@ -80,7 +80,8 @@ export function ReleasesView({ projectId, isMaintainer }: { projectId: number; i
     setExpanded(tag)
     if (!assets[tag]) {
       try {
-        setAssets((m) => ({ ...m, [tag]: (await releasesApi.get(projectId, tag)).release.assets }))
+        const detail = await releasesApi.get(projectId, tag)
+        setAssets((m) => ({ ...m, [tag]: detail.release.assets }))
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load assets')
       }
