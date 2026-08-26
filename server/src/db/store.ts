@@ -2911,3 +2911,319 @@ export class DiscussionPollVotesRepo {
     return row ? Number(row.option_index) : null
   }
 }
+
+// ---------------------------------------------------------------------------
+// Project management: boards, typed fields, items, saved views, workflows.
+// ---------------------------------------------------------------------------
+
+export const PM_FIELD_TYPES = ['text', 'number', 'date', 'status', 'single_select', 'multi_select'] as const
+export type PmFieldType = (typeof PM_FIELD_TYPES)[number]
+
+export const DEFAULT_STATUS_OPTIONS = ['Backlog', 'Todo', 'In progress', 'In review', 'Done']
+export const DEFAULT_PRIORITY_OPTIONS = ['Critical', 'High', 'Medium', 'Low']
+
+export interface PmBoardRow {
+  id: number
+  project_id: number
+  name: string
+  description: string
+  created_by_id: number
+  created_at: string
+  updated_at: string
+}
+
+export interface PmFieldRow {
+  id: number
+  board_id: number
+  key: string
+  label: string
+  type: PmFieldType
+  config: string // JSON {options?: string[]}
+  position: number
+}
+
+export interface PmItemRow {
+  id: number
+  board_id: number
+  kind: 'issue' | 'pull_request' | 'draft'
+  issue_iid: number | null
+  pr_iid: number | null
+  title: string
+  body: string
+  created_by_id: number
+  created_at: string
+  updated_at: string
+}
+
+export class PmBoardsRepo {
+  constructor(private db: Database) {}
+
+  create(data: { project_id: number; name: string; description: string; created_by_id: number }): PmBoardRow {
+    const now = nowIso()
+    const res = this.db.run(
+      `INSERT INTO pm_boards (project_id, name, description, created_by_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      data.project_id,
+      data.name,
+      data.description,
+      data.created_by_id,
+      now,
+      now,
+    )
+    return this.byId(res.lastInsertRowid)!
+  }
+
+  byId(id: number): PmBoardRow | undefined {
+    return this.db.get('SELECT * FROM pm_boards WHERE id = ?', id) as PmBoardRow | undefined
+  }
+
+  listForProject(projectId: number): Array<PmBoardRow> {
+    return this.db.all('SELECT * FROM pm_boards WHERE project_id = ? ORDER BY id', projectId) as unknown as Array<PmBoardRow>
+  }
+
+  update(id: number, fields: Partial<Pick<PmBoardRow, 'name' | 'description'>>): void {
+    const sets: string[] = []
+    const values: SqlParam[] = []
+    if (fields.name !== undefined) { sets.push('name = ?'); values.push(fields.name) }
+    if (fields.description !== undefined) { sets.push('description = ?'); values.push(fields.description) }
+    if (sets.length === 0) return
+    sets.push('updated_at = ?')
+    values.push(nowIso(), id)
+    this.db.run(`UPDATE pm_boards SET ${sets.join(', ')} WHERE id = ?`, ...values)
+  }
+
+  delete(id: number): boolean {
+    return this.db.run('DELETE FROM pm_boards WHERE id = ?', id).changes > 0
+  }
+}
+
+export class PmFieldsRepo {
+  constructor(private db: Database) {}
+
+  create(data: { board_id: number; key: string; label: string; type: PmFieldType; config?: Record<string, unknown>; position: number }): PmFieldRow {
+    const res = this.db.run(
+      `INSERT INTO pm_fields (board_id, key, label, type, config, position)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      data.board_id,
+      data.key,
+      data.label,
+      data.type,
+      JSON.stringify(data.config ?? {}),
+      data.position,
+    )
+    return this.byId(res.lastInsertRowid)!
+  }
+
+  byId(id: number): PmFieldRow | undefined {
+    return this.db.get('SELECT * FROM pm_fields WHERE id = ?', id) as PmFieldRow | undefined
+  }
+
+  byKey(boardId: number, key: string): PmFieldRow | undefined {
+    return this.db.get('SELECT * FROM pm_fields WHERE board_id = ? AND key = ?', boardId, key) as PmFieldRow | undefined
+  }
+
+  listForBoard(boardId: number): Array<PmFieldRow> {
+    return this.db.all('SELECT * FROM pm_fields WHERE board_id = ? ORDER BY position, id', boardId) as unknown as Array<PmFieldRow>
+  }
+
+  update(id: number, fields: Partial<Pick<PmFieldRow, 'label' | 'config' | 'position'>>): void {
+    const sets: string[] = []
+    const values: SqlParam[] = []
+    if (fields.label !== undefined) { sets.push('label = ?'); values.push(fields.label) }
+    if (fields.config !== undefined) { sets.push('config = ?'); values.push(JSON.stringify(fields.config)) }
+    if (fields.position !== undefined) { sets.push('position = ?'); values.push(fields.position) }
+    if (sets.length === 0) return
+    this.db.run(`UPDATE pm_fields SET ${sets.join(', ')} WHERE id = ?`, ...values)
+  }
+
+  delete(id: number): boolean {
+    return this.db.run('DELETE FROM pm_fields WHERE id = ?', id).changes > 0
+  }
+}
+
+export interface PmItemListResult {
+  rows: Array<PmItemRow>
+  total: number
+}
+
+export class PmItemsRepo {
+  constructor(private db: Database) {}
+
+  create(data: {
+    board_id: number
+    kind: PmItemRow['kind']
+    issue_iid?: number | null
+    pr_iid?: number | null
+    title?: string
+    body?: string
+    created_by_id: number
+  }): PmItemRow {
+    const now = nowIso()
+    const res = this.db.run(
+      `INSERT INTO pm_items (board_id, kind, issue_iid, pr_iid, title, body, created_by_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      data.board_id,
+      data.kind,
+      data.issue_iid ?? null,
+      data.pr_iid ?? null,
+      data.title ?? '',
+      data.body ?? '',
+      data.created_by_id,
+      now,
+      now,
+    )
+    return this.byId(res.lastInsertRowid)!
+  }
+
+  byId(id: number): PmItemRow | undefined {
+    return this.db.get('SELECT * FROM pm_items WHERE id = ?', id) as PmItemRow | undefined
+  }
+
+  /** Finds the item linking an issue/PR on ANY board of the project. */
+  findLinked(projectId: number, kind: 'issue' | 'pull_request', iid: number): Array<PmItemRow> {
+    const col = kind === 'issue' ? 'issue_iid' : 'pr_iid'
+    return this.db.all(
+      `SELECT i.* FROM pm_items i JOIN pm_boards b ON b.id = i.board_id
+       WHERE b.project_id = ? AND i.kind = ? AND i.${col} = ?
+       ORDER BY i.id`,
+      projectId,
+      kind,
+      iid,
+    ) as unknown as Array<PmItemRow>
+  }
+
+  touch(id: number): void {
+    this.db.run('UPDATE pm_items SET updated_at = ? WHERE id = ?', nowIso(), id)
+  }
+
+  delete(id: number): boolean {
+    return this.db.run('DELETE FROM pm_items WHERE id = ?', id).changes > 0
+  }
+
+  /**
+   * Filtered listing with typed value filters. All filtering stays on
+   * indexed columns plus small per-board value probes.
+   */
+  listFiltered(
+    boardId: number,
+    f: {
+      status?: string
+      kind?: PmItemRow['kind']
+      q?: string
+      sort?: 'updated_at' | 'title' | 'status'
+      dir?: 'asc' | 'desc'
+    },
+  ): PmItemListResult {
+    const clauses: string[] = ['i.board_id = ?']
+    const params: SqlParam[] = [boardId]
+    if (f.kind) { clauses.push('i.kind = ?'); params.push(f.kind) }
+    if (f.q) {
+      clauses.push('(i.title LIKE ? OR i.body LIKE ?)')
+      const like = `%${f.q}%`
+      params.push(like, like)
+    }
+    if (f.status !== undefined && f.status !== '') {
+      clauses.push(
+        `EXISTS (SELECT 1 FROM pm_item_values v JOIN pm_fields fl ON fl.id = v.field_id
+          WHERE v.item_id = i.id AND fl.key = 'status' AND v.value = ?)`,
+      )
+      params.push(f.status)
+    }
+    const dir = f.dir === 'asc' ? 'ASC' : 'DESC'
+    let orderSql: string
+    if (f.sort === 'title') orderSql = `LOWER(i.title) ${dir}`
+    else if (f.sort === 'status') {
+      orderSql = `(SELECT v.value FROM pm_item_values v JOIN pm_fields fl ON fl.id = v.field_id
+        WHERE v.item_id = i.id AND fl.key = 'status') COLLATE NOCASE ${dir}, i.updated_at DESC`
+    } else orderSql = `i.updated_at ${dir}`
+
+    const rows = this.db.all(
+      `SELECT i.* FROM pm_items i WHERE ${clauses.join(' AND ')} ORDER BY ${orderSql}`,
+      ...params,
+    ) as unknown as Array<PmItemRow>
+    return { rows, total: rows.length }
+  }
+}
+
+export class PmItemValuesRepo {
+  constructor(private db: Database) {}
+
+  get(itemId: number, fieldId: number): string | null | undefined {
+    const row = this.db.get('SELECT value FROM pm_item_values WHERE item_id = ? AND field_id = ?', itemId, fieldId) as Row | undefined
+    if (!row) return undefined
+    return row.value === null ? null : String(row.value)
+  }
+
+  set(itemId: number, fieldId: number, value: string | null): void {
+    this.db.run(
+      `INSERT INTO pm_item_values (item_id, field_id, value) VALUES (?, ?, ?)
+       ON CONFLICT(item_id, field_id) DO UPDATE SET value = excluded.value`,
+      itemId,
+      fieldId,
+      value,
+    )
+  }
+
+  allForItem(itemId: number): Array<{ field_id: number; value: string | null }> {
+    return this.db.all('SELECT field_id, value FROM pm_item_values WHERE item_id = ?', itemId) as never
+  }
+}
+
+export class PmSavedViewsRepo {
+  constructor(private db: Database) {}
+
+  create(data: { board_id: number; name: string; filters: object; groupBy?: string | null; sort?: object; owner_id: number }) {
+    const res = this.db.run(
+      `INSERT INTO pm_saved_views (board_id, name, filters, group_by, sort, owner_id)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      data.board_id,
+      data.name,
+      JSON.stringify(data.filters),
+      data.groupBy ?? null,
+      JSON.stringify(data.sort ?? {}),
+      data.owner_id,
+    )
+    return this.byId(res.lastInsertRowid)!
+  }
+
+  byId(id: number) {
+    return this.db.get('SELECT * FROM pm_saved_views WHERE id = ?', id) as
+      | (Omit<Row, never> & { id: number; board_id: number; name: string; filters: string; group_by: string | null; sort: string; owner_id: number })
+      | undefined
+  }
+
+  listForBoard(boardId: number) {
+    return this.db.all('SELECT * FROM pm_saved_views WHERE board_id = ? ORDER BY name', boardId)
+  }
+
+  deleteOwn(id: number, ownerId: number): boolean {
+    return this.db.run('DELETE FROM pm_saved_views WHERE id = ? AND owner_id = ?', id, ownerId).changes > 0
+  }
+}
+
+export class PmWorkflowRulesRepo {
+  constructor(private db: Database) {}
+
+  upsert(boardId: number, event: string, targetStatus: string): void {
+    this.db.run(
+      `INSERT INTO pm_workflow_rules (board_id, event, target_status) VALUES (?, ?, ?)
+       ON CONFLICT(board_id, event) DO UPDATE SET target_status = excluded.target_status`,
+      boardId,
+      event,
+      targetStatus,
+    )
+  }
+
+  remove(boardId: number, event: string): boolean {
+    return this.db.run('DELETE FROM pm_workflow_rules WHERE board_id = ? AND event = ?', boardId, event).changes > 0
+  }
+
+  listForBoard(boardId: number): Array<{ id: number; event: string; target_status: string }> {
+    return this.db.all('SELECT id, event, target_status FROM pm_workflow_rules WHERE board_id = ? ORDER BY event', boardId) as never
+  }
+
+  targetFor(boardId: number, event: string): string | null {
+    const row = this.db.get('SELECT target_status FROM pm_workflow_rules WHERE board_id = ? AND event = ?', boardId, event) as Row | undefined
+    return row ? String(row.target_status) : null
+  }
+}
