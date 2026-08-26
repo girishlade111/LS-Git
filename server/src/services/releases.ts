@@ -140,7 +140,7 @@ export class ReleaseService {
       author_id: actor.userId,
     })
     // Consistent serialized view everywhere (booleans, asset_count, paths).
-    return { ...this.releaseView(row), draft: state === 'draft', assets: [] }
+    return { ...this.releaseView(row), assets: [] }
   }
 
   // ── read / history / latest ────────────────────────────────────────────────
