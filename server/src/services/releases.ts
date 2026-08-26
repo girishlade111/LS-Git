@@ -40,7 +40,7 @@ export interface ReleaseView {
   state: 'draft' | 'published'
   is_prerelease: boolean
   released_at: string | null
-  author: { id: number; username: string; name: string } | null
+  author: { id: number; username: string; name: string | null } | null
   created_at: string
   updated_at: string
   asset_count: number
