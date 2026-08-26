@@ -248,6 +248,7 @@ describe('asset upload', () => {
     const dl = await s.app.inject({
       method: 'GET',
       url: `${releasesBase(s.projectId)}/v1.0.0/assets/payload.zip/download`,
+      headers: { cookie: s.ownerSession.cookie },
     })
     expect(dl.statusCode).toBe(200)
     expect(Buffer.compare(dl.rawPayload, bytes)).toBe(0)
@@ -264,6 +265,7 @@ describe('asset upload', () => {
     const miss = await s.app.inject({
       method: 'GET',
       url: `${releasesBase(s.projectId)}/v1.0.0/assets/nope.bin/download`,
+      headers: { cookie: s.ownerSession.cookie },
     })
     expect(miss.statusCode).toBe(404)
   })
