@@ -44,6 +44,13 @@ import {
   DiscussionsRepo,
   DiscussionCommentsRepo,
   DiscussionPollVotesRepo,
+  PmBoardsRepo,
+  PmFieldsRepo,
+  PmItemsRepo,
+  PmItemValuesRepo,
+  PmSavedViewsRepo,
+  PmWorkflowRulesRepo,
+  PmItemStatusLogRepo,
   type UserRow,
 } from '../db/store.js'
 import { notifyOnEvent } from './notifications.js'
@@ -102,6 +109,13 @@ export interface IdentityServices {
   discussions: DiscussionsRepo
   discussionComments: DiscussionCommentsRepo
   pollVotes: DiscussionPollVotesRepo
+  pmBoards: PmBoardsRepo
+  pmFields: PmFieldsRepo
+  pmItems: PmItemsRepo
+  pmItemValues: PmItemValuesRepo
+  pmSavedViews: PmSavedViewsRepo
+  pmWorkflows: PmWorkflowRulesRepo
+  pmStatusLog: PmItemStatusLogRepo
 }
 
 export function makeServices(db: Database): IdentityServices {
@@ -141,6 +155,13 @@ export function makeServices(db: Database): IdentityServices {
     discussions: new DiscussionsRepo(db),
     discussionComments: new DiscussionCommentsRepo(db),
     pollVotes: new DiscussionPollVotesRepo(db),
+    pmBoards: new PmBoardsRepo(db),
+    pmFields: new PmFieldsRepo(db),
+    pmItems: new PmItemsRepo(db),
+    pmItemValues: new PmItemValuesRepo(db),
+    pmSavedViews: new PmSavedViewsRepo(db),
+    pmWorkflows: new PmWorkflowRulesRepo(db),
+    pmStatusLog: new PmItemStatusLogRepo(db),
   }
   // Event-driven fanout: every durable domain event flows through this single
   // choke point after commit. Idempotent by dedupe key, so a future queue

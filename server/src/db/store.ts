@@ -3201,6 +3201,32 @@ export class PmSavedViewsRepo {
   }
 }
 
+
+export class PmItemStatusLogRepo {
+  constructor(private db: Database) {}
+
+  insert(itemId: number, fromStatus: string | null, toStatus: string, actorId: number | null): void {
+    this.db.run(
+      'INSERT INTO pm_item_status_log (item_id, from_status, to_status, actor_id, at) VALUES (?, ?, ?, ?, ?)',
+      itemId,
+      fromStatus,
+      toStatus,
+      actorId,
+      nowIso(),
+    )
+  }
+
+  countToStatusSince(boardId: number, toStatus: string, sinceIso: string): number {
+    const row = this.db.get(
+      `SELECT COUNT(*) AS c FROM pm_item_status_log l JOIN pm_items i ON i.id = l.item_id
+       WHERE i.board_id = ? AND l.to_status = ? AND l.at >= ?`,
+      boardId,
+      toStatus,
+      sinceIso,
+    ) as Row
+    return Number(row.c)
+  }
+}
 export class PmWorkflowRulesRepo {
   constructor(private db: Database) {}
 
