@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdirSync, writeFileSync, readFileSync, unlinkSync, existsSync } from 'node:fs'
+import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import { AppError } from './identity.js'
 import type { IdentityServices } from './identity.js'
@@ -56,12 +56,6 @@ export class ReleaseService {
     if (!can(actor, 'release:maintain', this.projectCtx(project))) {
       throw new AppError(actor ? 403 : 401, 'Only maintainers can manage releases', 'forbidden')
     }
-  }
-
-  private requirePr(actorOrProjectId: number, projectId: number, tag: string): ReleaseRow {
-    const r = this.s.releases.byTag(projectId, tag)
-    if (!r || r.project_id !== actorOrProjectId) throw new AppError(404, 'Release not found')
-    return r
   }
 
   private visibleRelease(actor: Actor | null, projectId: number, tag: string): { release: ReleaseRow; project: ProjectRow } {
@@ -168,6 +162,8 @@ export class ReleaseService {
    * prefer stable over prerelease; within each class order by released_at.
    */
   latest(actor: Actor | null, projectId: number) {
+    // Actor only gates visibility upstream; kept for API symmetry.
+    void actor
     const published = this.s.releases.listForProject(projectId, false).filter((r) => r.state === 'published')
     if (published.length === 0) throw new AppError(404, 'No published releases', 'no_releases')
     const stable = published.filter((r) => !r.is_prerelease)
