@@ -63,6 +63,9 @@ export type Permission =
   | 'pm:read'      // viewer+ — read boards, items, insights
   | 'pm:write'     // member+ — link/unlink items, set field values, save views
   | 'pm:maintain'  // maintainer+ — manage fields, workflows, delete board
+  // Releases (GitLab parity): publishing/uploading/deleting releases requires
+  // maintainer-equivalent rights; read follows project visibility.
+  | 'release:maintain' // create/publish/delete releases and assets — owner/admin today
 
 /** Capabilities any authenticated READER of a project keeps (guest parity). */
 const ISSUE_GUEST_PERMISSIONS = new Set<Permission>(['issue:create', 'issue:comment'])
@@ -224,6 +227,9 @@ export function can(actor: Actor | null, permission: Permission, ctx: AuthzConte
       if (!project) return false
       return canPushCode(actor, project)
     case 'pm:maintain':
+      if (!project) return false
+      return canReporterPlus(actor, project)
+    case 'release:maintain':
       if (!project) return false
       return canReporterPlus(actor, project)
     case 'issue:close': {

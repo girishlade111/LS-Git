@@ -51,6 +51,8 @@ import {
   PmSavedViewsRepo,
   PmWorkflowRulesRepo,
   PmItemStatusLogRepo,
+  ReleasesRepo,
+  ReleaseAssetsRepo,
   type UserRow,
 } from '../db/store.js'
 import { notifyOnEvent } from './notifications.js'
@@ -117,6 +119,8 @@ export interface IdentityServices {
   pmSavedViews: PmSavedViewsRepo
   pmWorkflows: PmWorkflowRulesRepo
   pmStatusLog: PmItemStatusLogRepo
+  releases: ReleasesRepo
+  releaseAssets: ReleaseAssetsRepo
 }
 
 export function makeServices(db: Database): IdentityServices {
@@ -163,6 +167,8 @@ export function makeServices(db: Database): IdentityServices {
     pmSavedViews: new PmSavedViewsRepo(db),
     pmWorkflows: new PmWorkflowRulesRepo(db),
     pmStatusLog: new PmItemStatusLogRepo(db),
+    releases: new ReleasesRepo(db),
+    releaseAssets: new ReleaseAssetsRepo(db),
   }
   // Event-driven fanout: every durable domain event flows through this single
   // choke point after commit. Idempotent by dedupe key, so a future queue

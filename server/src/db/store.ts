@@ -3254,3 +3254,157 @@ export class PmWorkflowRulesRepo {
     return row ? String(row.target_status) : null
   }
 }
+
+// ---------------------------------------------------------------------------
+// Releases: metadata bound to a git tag, draft->published lifecycle, assets.
+// ---------------------------------------------------------------------------
+
+export interface ReleaseRow {
+  id: number
+  project_id: number
+  tag_name: string
+  name: string | null
+  description: string
+  state: 'draft' | 'published'
+  is_prerelease: number
+  released_at: string | null
+  author_id: number
+  created_at: string
+  updated_at: string
+}
+
+export class ReleasesRepo {
+  constructor(private db: Database) {}
+
+  create(data: {
+    project_id: number
+    tag_name: string
+    name?: string | null
+    description?: string
+    state?: 'draft' | 'published'
+    is_prerelease?: boolean
+    released_at?: string | null
+    author_id: number
+  }): ReleaseRow {
+    const now = nowIso()
+    const res = this.db.run(
+      `INSERT INTO releases (project_id, tag_name, name, description, state, is_prerelease, released_at, author_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      data.project_id,
+      data.tag_name,
+      data.name ?? null,
+      data.description ?? '',
+      data.state ?? 'draft',
+      data.is_prerelease ? 1 : 0,
+      data.released_at ?? null,
+      data.author_id,
+      now,
+      now,
+    )
+    return this.byId(res.lastInsertRowid)!
+  }
+
+  byId(id: number): ReleaseRow | undefined {
+    return this.db.get('SELECT * FROM releases WHERE id = ?', id) as ReleaseRow | undefined
+  }
+
+  byTag(projectId: number, tagName: string): ReleaseRow | undefined {
+    return this.db.get('SELECT * FROM releases WHERE project_id = ? AND tag_name = ?', projectId, tagName) as
+      | ReleaseRow
+      | undefined
+  }
+
+  /** History for viewers (published only) or maintainers (drafts included). */
+  listForProject(projectId: number, includeDrafts: boolean): Array<ReleaseRow> {
+    if (includeDrafts) {
+      return this.db.all(
+        `SELECT * FROM releases WHERE project_id = ?
+         ORDER BY (state = 'published') DESC, COALESCE(released_at, created_at) DESC, id DESC`,
+        projectId,
+      ) as unknown as Array<ReleaseRow>
+    }
+    return this.db.all(
+      `SELECT * FROM releases WHERE project_id = ? AND state = 'published'
+       ORDER BY COALESCE(released_at, created_at) DESC, id DESC`,
+      projectId,
+    ) as unknown as Array<ReleaseRow>
+  }
+
+  update(id: number, fields: Partial<Pick<ReleaseRow, 'name' | 'description' | 'state' | 'is_prerelease' | 'released_at'>>): void {
+    const allowed = ['name', 'description', 'state', 'is_prerelease', 'released_at'] as const
+    const sets: string[] = []
+    const values: SqlParam[] = []
+    for (const key of allowed) {
+      if (fields[key] !== undefined) { sets.push(`${key} = ?`); values.push(fields[key] as SqlParam) }
+    }
+    if (sets.length === 0) return
+    sets.push('updated_at = ?')
+    values.push(nowIso(), id)
+    this.db.run(`UPDATE releases SET ${sets.join(', ')} WHERE id = ?`, ...values)
+  }
+
+  delete(id: number): boolean {
+    return this.db.run('DELETE FROM releases WHERE id = ?', id).changes > 0
+  }
+}
+
+export interface ReleaseAssetRow {
+  id: number
+  release_id: number
+  filename: string
+  size: number
+  sha256: string
+  content_type: string
+  stored_path: string
+  uploaded_by_id: number | null
+  created_at: string
+}
+
+export class ReleaseAssetsRepo {
+  constructor(private db: Database) {}
+
+  create(data: {
+    release_id: number
+    filename: string
+    size: number
+    sha256: string
+    content_type: string
+    stored_path: string
+    uploaded_by_id: number | null
+  }): ReleaseAssetRow {
+    const res = this.db.run(
+      `INSERT INTO release_assets (release_id, filename, size, sha256, content_type, stored_path, uploaded_by_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      data.release_id,
+      data.filename,
+      data.size,
+      data.sha256,
+      data.content_type,
+      data.stored_path,
+      data.uploaded_by_id,
+      nowIso(),
+    )
+    return this.byId(res.lastInsertRowid)!
+  }
+
+  byId(id: number): ReleaseAssetRow | undefined {
+    return this.db.get('SELECT * FROM release_assets WHERE id = ?', id) as ReleaseAssetRow | undefined
+  }
+
+  byName(releaseId: number, filename: string): ReleaseAssetRow | undefined {
+    return this.db.get('SELECT * FROM release_assets WHERE release_id = ? AND filename = ?', releaseId, filename) as
+      | ReleaseAssetRow
+      | undefined
+  }
+
+  listForRelease(releaseId: number): Array<ReleaseAssetRow> {
+    return this.db.all('SELECT * FROM release_assets WHERE release_id = ? ORDER BY filename', releaseId) as
+      unknown as Array<ReleaseAssetRow>
+  }
+
+  delete(id: number): ReleaseAssetRow | undefined {
+    const row = this.byId(id)
+    this.db.run('DELETE FROM release_assets WHERE id = ?', id)
+    return row
+  }
+}
