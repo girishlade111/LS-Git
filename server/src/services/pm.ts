@@ -62,10 +62,11 @@ export class ProjectManagementService {
   }
 
   visibleBoard(actor: Actor | null, projectId: number, boardId: number): { board: PmBoardRow; project: ProjectRow } {
+    // Viewer-level read follows project visibility (PERMISSIONS.md §2) — the
+    // same gate every read surface uses.
     const project = this.readableProject(actor, projectId)
     const board = this.s.pmBoards.byId(boardId)
     if (!board || board.project_id !== projectId) throw new AppError(404, 'Board not found')
-    this.authorize(actor, 'pm:read', project)
     return { board, project }
   }
 
@@ -134,7 +135,7 @@ export class ProjectManagementService {
     const { board } = this.visibleBoard(actor, projectId, boardId)
     return {
       board,
-      fields: this.s.pmFields.listForBoard(boardId),
+      fields: this.s.pmFields.listForBoard(boardId).map(serializeField),
       workflows: this.s.pmWorkflows.listForBoard(boardId),
     }
   }
@@ -166,12 +167,12 @@ export class ProjectManagementService {
 
   // ── fields ─────────────────────────────────────────────────────────────────
 
-  listFields(actor: Actor | null, projectId: number, boardId: number): Array<PmFieldRow> {
+  listFields(actor: Actor | null, projectId: number, boardId: number) {
     const { board } = this.visibleBoard(actor, projectId, boardId)
-    return this.s.pmFields.listForBoard(board.id)
+    return this.s.pmFields.listForBoard(board.id).map(serializeField)
   }
 
-  createField(actor: Actor, projectId: number, boardId: number, input: Record<string, unknown>): PmFieldRow {
+  createField(actor: Actor, projectId: number, boardId: number, input: Record<string, unknown>): ReturnType<ProjectManagementService['listFields']>[number] {
     const { board, project } = this.visibleBoard(actor, projectId, boardId)
     this.authorize(actor, 'pm:maintain', project)
 
@@ -193,10 +194,10 @@ export class ProjectManagementService {
     }
 
     const position = Math.max(0, Number(input.position ?? this.s.pmFields.listForBoard(board.id).length))
-    return this.s.pmFields.create({ board_id: board.id, key, label, type, config, position })
+    return serializeField(this.s.pmFields.create({ board_id: board.id, key, label, type, config, position }))
   }
 
-  updateField(actor: Actor, projectId: number, boardId: number, fieldId: number, patch: Record<string, unknown>): PmFieldRow {
+  updateField(actor: Actor, projectId: number, boardId: number, fieldId: number, patch: Record<string, unknown>): ReturnType<ProjectManagementService['listFields']>[number] {
     const { project } = this.visibleBoard(actor, projectId, boardId)
     this.authorize(actor, 'pm:maintain', project)
     const field = this.s.pmFields.byId(fieldId)
@@ -218,7 +219,7 @@ export class ProjectManagementService {
     }
     if (patch.position !== undefined) updates.position = Number(patch.position)
     this.s.pmFields.update(fieldId, updates as never)
-    return this.s.pmFields.byId(fieldId)!
+    return serializeField(this.s.pmFields.byId(fieldId)!)
   }
 
   deleteField(actor: Actor, projectId: number, boardId: number, fieldId: number): void {
@@ -487,6 +488,7 @@ export class ProjectManagementService {
       if (sv) {
         const parsed = JSON.parse(sv.filters as string) as { status?: string; kinds?: string[]; q?: string }
         if (parsed.status) filters.status = parsed.status
+        if (parsed.kinds && parsed.kinds.length > 0) filters.kind = parsed.kinds[0] as PmItemRow['kind']
         if (parsed.q) (filters as { q?: string }).q = parsed.q
       }
     }
@@ -630,7 +632,7 @@ export class ProjectManagementService {
         pull_requests: rows.filter((r) => r.kind === 'pull_request').length,
         drafts: rows.filter((r) => r.kind === 'draft').length,
       },
-      status_distribution: [...distribution.entries()].map(([status, count]) => ({ status, count })),
+      status_distribution: this.statusOptions(statusField!).map((status) => ({ status, count: distribution.get(status) ?? 0 })).filter((s) => s.count > 0),
       progress: {
         done_status: doneTarget,
         done_count: distribution.get(doneTarget) ?? 0,
@@ -643,4 +645,11 @@ export class ProjectManagementService {
 
 function safeParse<T>(json: string, fallback: T): T {
   try { return JSON.parse(json) as T } catch { return fallback }
+}
+
+function serializeField(f: PmFieldRow) {
+  let config: Record<string, unknown> = {}
+  try { config = JSON.parse(f.config) as Record<string, unknown> } catch { /* empty */ }
+  void f.board_id
+  return { id: f.id, key: f.key, label: f.label, type: f.type, options: (config.options as string[] | undefined) ?? [], position: f.position }
 }

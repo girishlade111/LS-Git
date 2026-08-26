@@ -1,0 +1,63 @@
+/* Project-management views. Dense, border-driven; terracotta only for the
+   active view toggle; insights are a quiet numeric strip. */
+
+.ls-pm { display: flex; flex-direction: column; gap: 12px; }
+
+.ls-pm__viewtoggle {
+  display: inline-flex; gap: 2px;
+  border: 1px solid var(--ls-border); border-radius: var(--ls-radius-sm); padding: 2px;
+}
+.ls-pm__toggle {
+  height: 24px; padding: 0 10px; border: none; border-radius: var(--ls-radius-sm);
+  background: none; font-size: var(--ls-fs-label); font-weight: 500;
+  color: var(--ls-text-secondary); cursor: pointer;
+}
+.ls-pm__toggle--on { background: var(--ls-tint-accent); color: var(--ls-accent); }
+
+.ls-pm__table {
+  width: 100%; border-collapse: collapse;
+  border: 1px solid var(--ls-border);
+  font-size: var(--ls-fs-table);
+}
+.ls-pm__table th, .ls-pm__table td {
+  padding: 6px 10px; text-align: left;
+  border-bottom: 1px solid var(--ls-border);
+}
+.ls-pm__table th { color: var(--ls-text-secondary); font-weight: 500; }
+.ls-pm__table tr:hover td { background: var(--ls-hover); }
+
+.ls-pm__kind {
+  display: inline-block; padding: 0 6px; margin-right: 4px;
+  border: 1px solid var(--ls-border); border-radius: var(--ls-radius-sm);
+  font-family: var(--ls-font-mono); font-size: var(--ls-fs-label);
+  color: var(--ls-text-secondary);
+}
+.ls-pm__val { color: var(--ls-text); }
+
+.ls-pm__inline {
+  height: 22px; padding: 0 6px; max-width: 130px;
+  background: var(--ls-surface-1); color: var(--ls-text);
+  border: 1px solid var(--ls-border); border-radius: var(--ls-radius-sm);
+  font-size: var(--ls-fs-label);
+}
+
+/* Kanban — columns as bordered sections, not floating cards. */
+.ls-kanban { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+.ls-kanban__col {
+  flex: 1 1 220px; min-width: 200px; max-width: 280px;
+  border: 1px solid var(--ls-border); border-radius: var(--ls-radius);
+  background: var(--ls-panel);
+}
+.ls-kanban__colhead {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--ls-border);
+  font-size: var(--ls-fs-label); font-weight: 500; color: var(--ls-text);
+}
+.ls-kanban__cards { margin: 0; padding: 6px; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.ls-kanban__card {
+  display: flex; align-items: baseline; gap: 6px;
+  border: 1px solid var(--ls-border); border-radius: var(--ls-radius-sm);
+  padding: 6px 8px; font-size: var(--ls-fs-body); color: var(--ls-text);
+  background: var(--ls-bg);
+}
+.ls-kanban__cardtitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

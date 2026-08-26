@@ -23,10 +23,12 @@ import { LabelsView } from './issues/LabelsView'
 import { MilestonesView } from './issues/MilestonesView'
 import { FormsManagerView } from './issues/FormsManagerView'
 import { DiscussionsListPage, DiscussionsDetailPage } from './discussions/DiscussionsPages'
+import { BoardsPage } from './pm/BoardsPage'
 import { PullsListRouteBridge, PullDetailRouteBridge } from './pulls/PullsRouter'
 import './repository/repository.css'
 import './issues/issues.css'
 import './discussions/discussions.css'
+import './pm/pm.css'
 import './pulls/pulls.css'
 import './pulls/review.css'
 
@@ -118,6 +120,18 @@ export default function App() {
                 <DiscussionsDetailPage projectId={project.id} did={did} isMaintainer={project.owner?.id === user?.id || user?.admin === true} viewerId={user?.id ?? null} />
               ) : (
                 <DiscussionsListPage projectId={project.id} />
+              )}
+            </ProjectContextRoute>
+          </AppShell>
+        )
+      }
+
+      if (action === 'pm') {
+        return (
+          <AppShell sidebarCurrent="projects" onNavigate={(id) => navigate(`/${id}`)} repo={{ group: owner, project: projPath, visibility: 'Private', tabs: [], currentTab: '', onTab: () => undefined }}>
+            <ProjectContextRoute owner={owner} projectPath={projPath}>
+              {(project) => (
+                <BoardsPage projectId={project.id} isMaintainer={project.owner?.id === user?.id || user?.admin === true} />
               )}
             </ProjectContextRoute>
           </AppShell>

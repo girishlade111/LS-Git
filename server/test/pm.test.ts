@@ -66,7 +66,7 @@ describe('board CRUD', () => {
     expect(keys).toEqual(['status', 'priority', 'iteration', 'assignee', 'labels', 'milestone'])
     const status = fields.find((f) => f.key === 'status')!
     expect(status.type).toBe('status')
-    expect(((status.config as Record<string, unknown>).options as string[])).toEqual([
+    expect(status.options).toEqual([
       'Backlog', 'Todo', 'In progress', 'In review', 'Done',
     ])
 
@@ -188,12 +188,11 @@ describe('custom fields', () => {
     })
     const itemId = ((itemRes.json() as { item: Record<string, unknown> }).item.id) as number
 
+    const pointsRes = await authed(h.app, 'PATCH', `${B(h)}/1/items/${itemId}`, {
+      session: h.alice, payload: { field_key: 'story_points', value: 8 },
+    })
     expect(
-      (
-        await authed(h.app, 'PATCH', `${B(h)}/1/items/${itemId}`, {
-          session: h.alice, payload: { field_key: 'story_points', value: 8 },
-        }).json() as { item: { field_values: Record<string, string | null> } }
-      ).item.field_values.story_points,
+      ((pointsRes.json() as { item: { field_values: Record<string, string | null> } }).item.field_values.story_points),
     ).toBe('8')
 
     // Invalid number → 400
@@ -224,13 +223,10 @@ describe('custom fields', () => {
     ).toBe(400)
 
     // Multi select valid + invalid
-    expect(
-      (
-        await authed(h.app, 'PATCH', `${B(h)}/1/items/${itemId}`, {
-          session: h.alice, payload: { field_key: 'platforms', value: ['web', 'ios'] },
-        }).statusCode
-      ),
-    ).toBe(200)
+    const multiOk = await authed(h.app, 'PATCH', `${B(h)}/1/items/${itemId}`, {
+      session: h.alice, payload: { field_key: 'platforms', value: ['web', 'ios'] },
+    })
+    expect(multiOk.statusCode).toBe(200)
     expect(
       (
         await authed(h.app, 'PATCH', `${B(h)}/1/items/${itemId}`, {
@@ -373,6 +369,7 @@ describe('saved views', () => {
     })
     expect(created.statusCode).toBe(201)
     const viewName = ((created.json() as { view: Record<string, unknown> }).view.name) as string
+    const viewId = ((created.json() as { view: { id: number } }).view.id) as number
 
     const dup = await authed(h.app, 'POST', `${B(h)}/1/views`, {
       session: h.alice, payload: { name: 'issues only' },
@@ -387,12 +384,12 @@ describe('saved views', () => {
     // Only the creator can delete their own view.
     expect(
       (
-        await authed(h.app, 'DELETE', `${B(h)}/1/views/${created.json().view.id}`, { session: h.bob })
+        await authed(h.app, 'DELETE', `${B(h)}/1/views/${viewId}`, { session: h.bob })
       ).statusCode,
     ).toBe(403)
     expect(
       (
-        await authed(h.app, 'DELETE', `${B(h)}/1/views/${created.json().view.id}`, { session: h.alice })
+        await authed(h.app, 'DELETE', `${B(h)}/1/views/${viewId}`, { session: h.alice })
       ).statusCode,
     ).toBe(200)
   })
@@ -472,7 +469,13 @@ describe('insights foundation', () => {
       session: h.alice, payload: { field_key: 'status', value: 'Done' },
     })
 
-    const ins = await authed(h.app, 'GET', `${B(h)}/1/insights`, {}).then((r) => r.json())
+    const ins = await authed(h.app, 'GET', `${B(h)}/1/insights`, {}).then((r) => r.json()) as {
+      total_items: number
+      by_kind: Record<string, number>
+      status_distribution: Array<{ status: string; count: number }>
+      progress: { done_status: string; done_count: number; percent: number }
+      throughput_last_30_days: number
+    }
     expect(ins.total_items).toBe(2)
     expect(ins.by_kind.issues).toBe(2)
     expect(ins.status_distribution).toEqual([

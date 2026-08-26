@@ -476,3 +476,60 @@ border-driven MERGE BOX (live blockers list, strategy select, remove-source
 toggle — disabled while any gate fails; no giant action panels, no unrelated
 cards), commits & unified diffs, reviewer/approval sidebar, linked-issue
 list, comment timeline.
+
+### 3.12 Project management (IMPLEMENTED)
+
+GitHub Projects / GitLab boards inspiration, LSGit-native schema. Boards live
+inside a code project and organize issues, pull requests and draft items
+under typed custom fields.
+
+**Entities**
+- `pm_boards` — one project, many boards.
+- `pm_fields` — typed columns: `text · number · date · status · single_select · multi_select`.
+  New boards seed builtin fields: status (Backlog/Todo/In progress/In review/Done),
+  priority, iteration, plus mirrored assignee/labels/milestone text fields that
+  sync from the linked issue or PR. The builtin status/priority fields cannot be deleted.
+- `pm_items` — link (`kind=issue|pull_request`) or standalone drafts. The DB
+  enforces kind/pointer coherence via CHECK constraints.
+- `pm_item_values` — per-item field values; canonical serialization per type
+  (number as decimal string, date as YYYY-MM-DD, selects as option labels,
+  multi_select as a JSON label array). Values are validated server-side:
+  select/status membership, number/date format, multi-select subset checks.
+- `pm_saved_views` — named filter/group/sort presets (unique name per board).
+- `pm_workflow_rules` — event→status automation, one rule per event
+  (`issue_opened · issue_closed · issue_reopened · pr_opened · pr_merged`).
+- `pm_item_status_log` — every status transition is recorded; this history is
+  the honest input for throughput metrics.
+
+**Event-based workflows.** The service subscribes to the same domain-event
+outbox as notifications: closing an issue moves its linked items to Done,
+merging a PR does the same, opening either applies the configured entry
+status. Failures are contained per-board and never break the emitter.
+
+**Insights foundation** (`GET .../insights`): total + by-kind counts, status
+distribution ordered by configured status options, progress percent against
+the final status, and throughput = real status-transition log entries into
+the done status over the last 30 days.
+
+```
+POST  GET                /api/v1/projects/:id/pm/boards                 create/list (member+)
+GET  PATCH DELETE        /api/v1/projects/:id/pm/boards/:bid            detail incl. fields+workflows
+GET  POST                /api/v1/projects/:id/pm/boards/:bid/fields     typed field CRUD (maintainer)
+PATCH DELETE             /api/v1/projects/:id/pm/boards/:bid/fields/:fid
+GET  POST                /api/v1/projects/:id/pm/boards/:bid/items      list (?view=&status=&kind=&search=&sort=&dir=) / link-or-draft
+PATCH DELETE             /api/v1/projects/:id/pm/boards/:bid/items/:iid {field_key,value} typed validation; delete unlinks only
+GET  POST DELETE         /api/v1/projects/:id/pm/boards/:bid/views[/:vid] saved views
+GET  PUT                 /api/v1/projects/:id/pm/boards/:bid/workflows  rules (maintainer)
+GET                      /api/v1/projects/:id/pm/boards/:bid/insights   counts/distribution/progress/throughput
+```
+
+Permissions: `pm:read` follows project visibility (viewer+); `pm:write`
+(member-equivalent — owner/admin until membership tables land) gates item
+linking/unlinking, value updates and view creation; `pm:maintain` gates
+field/workflow management and board deletion. Anonymous users get public-read
+only; private projects 404 everywhere for non-members.
+
+Web client (`web/src/pm/BoardsPage.tsx`, route `/proj/:o/:p/pm`): board
+picker, Table ⇄ Board toggle, saved-view selector, inline status/single-select
+dropdowns in the table, kanban columns grouped by configured status options,
+and a quiet new-draft dialog — dense LSGit language throughout.

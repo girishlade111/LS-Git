@@ -3174,14 +3174,15 @@ export class PmSavedViewsRepo {
 
   create(data: { board_id: number; name: string; filters: object; groupBy?: string | null; sort?: object; owner_id: number }) {
     const res = this.db.run(
-      `INSERT INTO pm_saved_views (board_id, name, filters, group_by, sort, owner_id)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO pm_saved_views (board_id, name, filters, group_by, sort, owner_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       data.board_id,
       data.name,
       JSON.stringify(data.filters),
       data.groupBy ?? null,
       JSON.stringify(data.sort ?? {}),
       data.owner_id,
+      nowIso(),
     )
     return this.byId(res.lastInsertRowid)!
   }

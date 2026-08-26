@@ -1,0 +1,11 @@
+process.env.LSGIT_SCRYPT_N = '512'
+const { makeApp, registerUser, loginRaw, extractSession, authed } = await import('./test/helpers.js')
+const app = makeApp()
+app.addHook('onError', async (_r, _p, e) => { console.error('ERR:', e.message) })
+await registerUser(app)
+const s = extractSession((await loginRaw(app, 'alice')).cookies)
+await authed(app, 'POST', '/api/v1/projects', { session: s, payload: { name: 'C', path: 'c', visibility: 'public', description: '', website_url: '', default_branch: 'main', topics: [] } })
+const b = await authed(app, 'POST', '/api/v1/projects/1/pm/boards', { session: s, payload: { name: 'B' } })
+console.log('create:', b.statusCode, JSON.stringify(b.json()).slice(0, 150))
+const g = await authed(app, 'GET', '/api/v1/projects/1/pm/boards/1', {})
+console.log('get:', g.statusCode, JSON.stringify(g.json()).slice(0, 300))
