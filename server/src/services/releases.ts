@@ -3,6 +3,8 @@ import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import { AppError } from './identity.js'
 import type { IdentityServices } from './identity.js'
+import type { LocalHashedStorage } from '../storage/local.js'
+import type { GitRepository } from '../storage/repository.js'
 import type { ProjectRow, ReleaseRow, ReleaseAssetRow } from '../db/store.js'
 import type { Actor } from '../authz.js'
 import { can } from '../authz.js'
@@ -30,7 +32,11 @@ const MAX_ASSET_BYTES = 100 * 1024 * 1024
 const MAX_FILENAME = 120
 
 export class ReleaseService {
-  constructor(private s: IdentityServices, private assetsRoot: string) {}
+  constructor(
+    private s: IdentityServices,
+    private storage: LocalHashedStorage,
+    private assetsRoot: string,
+  ) {}
 
   // ── gates ───────────────────────────────────────────────────────────────
 
@@ -68,9 +74,9 @@ export class ReleaseService {
     return { release, project }
   }
 
-  private engineFor(project: ProjectRow) {
+  private engineFor(project: ProjectRow): GitRepository {
     try {
-      return (this.s as unknown as { projects: { storage: { repository(p: string): import('../storage/repository.js').GitRepository } } }).projects.storage.repository(project.disk_path)
+      return this.storage.repository(project.disk_path)
     } catch {
       throw new AppError(422, 'Repository unavailable', 'repository_missing')
     }
@@ -93,8 +99,8 @@ export class ReleaseService {
     const name = typeof input.name === 'string' && input.name.trim() !== '' ? input.name.trim().slice(0, 200) : null
     const description = typeof input.description === 'string' ? input.description.slice(0, 50_000) : ''
     const prerelease = input.prerelease === true
-    const draft = input.draft !== false // default draft? GitLab creates released immediately;
-    // LSGit: explicit. Default = published unless draft:true requested.
+    // GitLab parity: releases are PUBLISHED unless an explicit draft is requested.
+    const draft = input.draft === true
 
     if (this.s.releases.byTag(projectId, tagName)) {
       throw new AppError(409, `A release for tag '${tagName}' already exists`, 'taken')
@@ -359,11 +365,14 @@ export class ReleaseService {
   }
 
   private safeFilename(raw: unknown): string {
-    const name = basename(String(raw ?? '').replace(/\\/g, '/')).trim()
-    if (!name || name.startsWith('.')) throw new AppError(400, 'filename is required and cannot start with a dot')
-    if (name.includes('/') || name.includes('\\') || name.includes('..')) {
+    const rawName = String(raw ?? '')
+    // Reject separators/dot-segments on the RAW value first — basename() would
+    // silently neutralize them and mask client mistakes.
+    if (rawName.includes('/') || rawName.includes('\\') || rawName.includes('..')) {
       throw new AppError(400, 'filename must not contain path separators')
     }
+    const name = rawName.trim()
+    if (!name || name.startsWith('.')) throw new AppError(400, 'filename is required and cannot start with a dot')
     if (name.length > MAX_FILENAME) throw new AppError(400, `filename exceeds ${MAX_FILENAME} characters`)
     return name
   }
