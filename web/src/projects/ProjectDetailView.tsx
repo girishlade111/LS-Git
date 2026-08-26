@@ -65,6 +65,7 @@ export function ProjectDetailView({ owner, path }: { owner: string; path: string
         <nav className="ls-issues__projlinks" aria-label="Project collaboration" style={{ display: 'flex', gap: 14, marginRight: 12 }}>
           <a href={`#/proj/${encodeURIComponent(owner)}/${encodeURIComponent(path)}/pulls`}>Pull requests</a>
           <a href={`#/proj/${encodeURIComponent(owner)}/${encodeURIComponent(path)}/issues`}>Issues</a>
+          <a href={`#/proj/${encodeURIComponent(owner)}/${encodeURIComponent(path)}/releases`}>Releases</a>
           <a href={`#/proj/${encodeURIComponent(owner)}/${encodeURIComponent(path)}/milestones`}>Milestones</a>
           <a href={`#/proj/${encodeURIComponent(owner)}/${encodeURIComponent(path)}/labels`}>Labels</a>
         </nav>

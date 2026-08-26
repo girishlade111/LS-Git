@@ -25,12 +25,14 @@ import { FormsManagerView } from './issues/FormsManagerView'
 import { DiscussionsListPage, DiscussionsDetailPage } from './discussions/DiscussionsPages'
 import { BoardsPage } from './pm/BoardsPage'
 import { PullsListRouteBridge, PullDetailRouteBridge } from './pulls/PullsRouter'
+import { ReleasesView } from './releases/ReleasesView'
 import './repository/repository.css'
 import './issues/issues.css'
 import './discussions/discussions.css'
 import './pm/pm.css'
 import './pulls/pulls.css'
 import './pulls/review.css'
+import './releases/releases.css'
 
 const PUBLIC_ROUTES = new Set(['/login', '/register', '/forgot', '/reset', '/verify-email'])
 
@@ -163,6 +165,18 @@ export default function App() {
           </AppShell>
         )
       }
+      if (action === 'releases') {
+        return (
+          <AppShell sidebarCurrent="projects" onNavigate={(id) => navigate(`/${id}`)} repo={{ group: owner, project: projPath, visibility: 'Private', tabs: [], currentTab: '', onTab: () => undefined }}>
+            <ProjectContextRoute owner={owner} projectPath={projPath}>
+              {(project) => (
+                <ReleasesView projectId={project.id} isMaintainer={project.owner?.id === user?.id || user?.admin === true} />
+              )}
+            </ProjectContextRoute>
+          </AppShell>
+        )
+      }
+
       if (action === 'labels' || action === 'milestones' || action === 'issue_forms') {
         return (
           <AppShell sidebarCurrent="projects" onNavigate={(id) => navigate(`/${id}`)} repo={{ group: owner, project: projPath, visibility: 'Private', tabs: [], currentTab: '', onTab: () => undefined }}>
