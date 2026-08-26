@@ -104,7 +104,7 @@ export class ReleaseService {
     actor: Actor,
     projectId: number,
     input: Record<string, unknown>,
-  ): ReleaseRow & { assets: ReleaseAssetRow[] } {
+  ): ReleaseView & { assets: ReturnType<ReleaseService['assetViews']> } {
     const project = this.s.projects.byId(projectId)
     if (!project) throw new AppError(404, 'Project not found')
     this.requireMaintainer(actor, project)
