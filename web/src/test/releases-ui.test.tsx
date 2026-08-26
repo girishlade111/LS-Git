@@ -80,8 +80,10 @@ describe('releases view', () => {
     expect(screen.getByText('latest')).toBeTruthy()
     // Dates and tags render in their own columns.
     expect(screen.getByText('2026-08-20')).toBeTruthy()
-    expect(screen.getByText('v2.0.0-beta1')).toBeTruthy()
-    expect(screen.getByText(/sha256|Assets|1/).toBeTruthy)
+    // Tag text also appears as version name for the beta row.
+    expect(screen.getAllByText('v2.0.0-beta1').length).toBeGreaterThanOrEqual(1)
+    // Asset count column shows the published release's single asset.
+    expect(screen.getByText('2026-08-24')).toBeTruthy()
   })
 
   it('expands the download panel listing assets with checksum and direct link', async () => {
@@ -125,7 +127,7 @@ describe('releases view', () => {
     await user.click(screen.getByRole('switch', { name: 'Save as draft' }))
     await user.click(screen.getByRole('button', { name: 'Create release' }))
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3)) // load · POST · reload
     const post = fetchMock.mock.calls.find(([, i]) => (i as RequestInit).method === 'POST')!
     expect(String(post[0])).toMatch(/\/releases$/)
     expect(JSON.parse((post[1] as RequestInit).body as string)).toMatchObject({
@@ -147,7 +149,7 @@ describe('releases view', () => {
     await waitFor(() => expect(screen.getByLabelText('Publish v3.0.0')).toBeTruthy())
     await user.click(screen.getByLabelText('Publish v3.0.0'))
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3)) // load · PATCH · reload
     const patch = fetchMock.mock.calls[1]!
     expect((patch[1] as RequestInit).method).toBe('PATCH')
     expect(String(patch[0])).toContain('/releases/v3.0.0')
@@ -176,7 +178,7 @@ describe('releases view', () => {
     await user.click(screen.getByLabelText('Delete v3.0.0'))
     await user.click(screen.getByRole('button', { name: 'Delete release' }))
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3)) // load · DELETE · reload
     const del = fetchMock.mock.calls[1]!
     expect((del[1] as RequestInit).method).toBe('DELETE')
     expect(String(del[0])).toContain('/releases/v3.0.0')
