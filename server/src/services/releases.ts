@@ -31,6 +31,22 @@ import { can } from '../authz.js'
 const MAX_ASSET_BYTES = 100 * 1024 * 1024
 const MAX_FILENAME = 120
 
+/** Serialized release shape shared by every endpoint (see releaseView). */
+export interface ReleaseView {
+  id: number
+  tag_name: string
+  name: string
+  description: string
+  state: 'draft' | 'published'
+  is_prerelease: boolean
+  released_at: string | null
+  author: { id: number; username: string; name: string } | null
+  created_at: string
+  updated_at: string
+  asset_count: number
+  assets_path: string
+}
+
 export class ReleaseService {
   constructor(
     private s: IdentityServices,
