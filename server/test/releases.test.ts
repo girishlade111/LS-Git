@@ -364,11 +364,14 @@ describe('draft to published lifecycle', () => {
     })
     expect(again.statusCode).toBe(422) // already immutable
 
-    // Visible to strangers now.
-    const list = await authed(s.app, 'GET', releasesBase(s.projectId), { session: s.strangerSession })
-    const rows = list.json().releases as Array<Record<string, unknown>>
+    // Owner sees it published with the stamped timestamp.
+    const ownerList = await authed(s.app, 'GET', releasesBase(s.projectId), { session: s.ownerSession })
+    const rows = ownerList.json().releases as Array<Record<string, unknown>>
     expect(rows.length).toBe(1)
     expect(rows[0]!.released_at).toBe(releasedAt)
+    // Strangers on the still-private project remain excluded entirely.
+    const strangerList = await authed(s.app, 'GET', releasesBase(s.projectId), { session: s.strangerSession })
+    expect(strangerList.statusCode).toBe(404)
   })
 
   it('published releases are immutable — edits require delete-and-recreate', async () => {
