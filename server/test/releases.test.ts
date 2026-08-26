@@ -61,23 +61,27 @@ function commit(setup: Setup, message: string, path: string, content: string): v
   expect(res).toBeTruthy()
 }
 
-/** PUT a binary asset body (octet-stream) and return status + json. */
+/** PUT a binary asset body (octet-stream transport) and return status + json.
+ *  `logicalType` sets the asset's MIME via ?content_type= (transport is always
+ *  octet-stream because that is the only registered raw-body parser). */
 async function putAsset(
   s: Setup,
   session: Session,
   tag: string,
   filename: string,
   content: Buffer | string,
-  contentType = 'application/octet-stream',
+  logicalType?: string,
 ): Promise<{ statusCode: number; json(): Record<string, unknown> }> {
   const buf = Buffer.isBuffer(content) ? content : Buffer.from(content, 'utf8')
+  const qs = new URLSearchParams({ filename })
+  if (logicalType) qs.set('content_type', logicalType)
   const res = await s.app.inject({
     method: 'PUT',
-    url: `${releasesBase(s.projectId)}/${encodeURIComponent(tag)}/assets?filename=${encodeURIComponent(filename)}`,
+    url: `${releasesBase(s.projectId)}/${encodeURIComponent(tag)}/assets?${qs.toString()}`,
     headers: {
       cookie: session.cookie,
       'x-csrf-token': session.csrf,
-      'content-type': contentType,
+      'content-type': 'application/octet-stream',
     },
     payload: buf,
   })
@@ -331,10 +335,9 @@ describe('draft to published lifecycle', () => {
     expect(ownerRows[0]!.draft).toBe(true)
     expect(ownerRows[0]!.state).toBe('draft')
 
-    // Strangers see nothing (existence not leaked).
+    // Strangers cannot even list a private project (existence not leaked).
     const strangerList = await authed(s.app, 'GET', releasesBase(s.projectId), { session: s.strangerSession })
-    expect(strangerList.statusCode).toBe(200)
-    expect(((strangerList.json().releases ?? []) as unknown[]).length).toBe(0)
+    expect(strangerList.statusCode).toBe(404)
     const strangerGet = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/v1.0.0-rc1`, { session: s.strangerSession })
     expect(strangerGet.statusCode).toBe(404)
   })
@@ -500,7 +503,7 @@ describe('release permissions', () => {
     await authed(s.app, 'POST', releasesBase(s.projectId), {
       session: s.ownerSession, payload: { tag_name: 'v1.0.0', draft: false },
     })
-    await authed(s.app, 'PUT', `/api/v1/projects/${s.projectId}`, {
+    await authed(s.app, 'PATCH', `/api/v1/projects/${s.projectId}`, {
       session: s.ownerSession, payload: { visibility: 'public' },
     })
 
