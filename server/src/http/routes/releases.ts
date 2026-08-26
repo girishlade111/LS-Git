@@ -74,11 +74,9 @@ export function registerReleaseRoutes(app: FastifyInstance): void {
 
   // ── assets ────────────────────────────────────────────────────────────────
 
-  app.addContentTypeParser('application/octet-stream-release', { parseAs: 'buffer' }, (_req, _body, done) => done(null))
-
   app.put('/api/v1/projects/:id/releases/:tag/assets', { preHandler: auth }, async (req, reply) => {
     const q = req.query as Record<string, string | undefined>
-    if (typeof req.body === 'string' || req.body === undefined || Buffer.isBuffer(req.body) === false) {
+    if (!Buffer.isBuffer(req.body)) {
       throw new AppError(415, 'Asset uploads must use application/octet-stream bodies')
     }
     const contentType = req.headers['content-type']

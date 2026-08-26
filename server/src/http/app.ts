@@ -18,6 +18,7 @@ import { IssueFormsService } from '../services/issueForms.js'
 import { PullRequestsService } from '../services/pullRequests.js'
 import { PrReviewService } from '../services/prReview.js'
 import { DiscussionsService } from '../services/discussions.js'
+import { ReleaseService } from '../services/releases.js'
 import { ProjectManagementService } from '../services/pm.js'
 
 declare module 'fastify' {
@@ -40,6 +41,7 @@ declare module 'fastify' {
     pullRequests: PullRequestsService
     prReview: PrReviewService
     discussions: DiscussionsService
+    releases: ReleaseService
     pm: ProjectManagementService
     authRateLimiter: RateLimiter
     store: ReturnType<typeof makeServices>
@@ -119,6 +121,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   app.pullRequests = new PullRequestsService(services, cfg, app.repositories, app.issues, app.projects.storage)
   app.prReview = new PrReviewService(services, app.projects.storage, app.repositories)
   app.discussions = new DiscussionsService(services)
+  app.releases = new ReleaseService(services, cfg.repositoriesRoot)
   app.pm = new ProjectManagementService(services)
   app.issueForms = new IssueFormsService(
     services,
@@ -288,6 +291,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   registerPullRequestRoutes(app)
   registerPrReviewRoutes(app)
   registerDiscussionRoutes(app)
+  registerReleaseRoutes(app)
   registerPmRoutes(app)
 
   app.get('/', async () => ({
@@ -354,4 +358,5 @@ import { registerIssueFormRoutes } from './routes/issueForms.js'
 import { registerPullRequestRoutes } from './routes/pullRequests.js'
 import { registerPrReviewRoutes } from './routes/prReview.js'
 import { registerDiscussionRoutes } from './routes/discussions.js'
+import { registerReleaseRoutes } from './routes/releases.js'
 import { registerPmRoutes } from './routes/pm.js'
