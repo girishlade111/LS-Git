@@ -1,0 +1,92 @@
+/*
+ * Releases — compact timeline/table. Every value comes from tokens.css.
+ */
+
+.ls-rel__table td {
+  vertical-align: top;
+}
+
+.ls-rel__version {
+  font-size: var(--ls-fs-row);
+  font-weight: 600;
+  color: var(--ls-text);
+  margin-right: var(--ls-dur-fast);
+}
+
+.ls-rel__table .ls-badge {
+  margin-left: 8px;
+  vertical-align: 1px;
+}
+
+.ls-rel__tag {
+  font-family: var(--ls-font-mono);
+  font-size: var(--ls-fs-table);
+  color: var(--ls-text-secondary);
+}
+
+.ls-rel__row--open,
+.ls-rel__row--open:hover {
+  background: var(--ls-hover);
+}
+
+/* Expanded asset panel */
+.ls-rel__assets-row > td {
+  background: var(--ls-surface-1);
+  border-bottom: 1px solid var(--ls-border);
+}
+
+.ls-rel__assets {
+  padding: 10px 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.ls-rel__assetlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.ls-rel__assetlist li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 28px;
+}
+
+.ls-rel__assetlist a {
+  font-family: var(--ls-font-mono);
+  font-size: var(--ls-fs-table);
+  color: var(--ls-accent);
+  text-decoration: none;
+}
+
+.ls-rel__assetlist a:hover {
+  text-decoration: underline;
+}
+
+.ls-rel__maintools {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* Hidden native file input inside the styled upload button. */
+.ls-rel__upload {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.ls-rel__upload input[type='file'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
