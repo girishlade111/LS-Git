@@ -6,10 +6,10 @@ import type {
   PmFieldRow,
   PmItemRow,
   PmFieldType,
-  DiscussionCategory,
 } from '../db/store.js'
 import { DEFAULT_PRIORITY_OPTIONS, DEFAULT_STATUS_OPTIONS, PM_FIELD_TYPES } from '../db/store.js'
 import type { Actor } from '../authz.js'
+import type { Row } from '../db/database.js'
 import { can, type Permission } from '../authz.js'
 
 /**
@@ -197,7 +197,7 @@ export class ProjectManagementService {
   }
 
   updateField(actor: Actor, projectId: number, boardId: number, fieldId: number, patch: Record<string, unknown>): PmFieldRow {
-    const { board, project } = this.visibleBoard(actor, projectId, boardId)
+    const { project } = this.visibleBoard(actor, projectId, boardId)
     this.authorize(actor, 'pm:maintain', project)
     const field = this.s.pmFields.byId(fieldId)
     if (!field || field.board_id !== boardId) throw new AppError(404, 'Field not found')
@@ -222,7 +222,7 @@ export class ProjectManagementService {
   }
 
   deleteField(actor: Actor, projectId: number, boardId: number, fieldId: number): void {
-    const { board, project } = this.visibleBoard(actor, projectId, boardId)
+    const { project } = this.visibleBoard(actor, projectId, boardId)
     this.authorize(actor, 'pm:maintain', project)
     const field = this.s.pmFields.byId(fieldId)
     if (!field || field.board_id !== boardId) throw new AppError(404, 'Field not found')
@@ -260,7 +260,13 @@ export class ProjectManagementService {
         const issueIid = Number(input.issue_iid)
         const issue = this.s.issues.byIid(projectId, issueIid)
         if (!issue) throw new AppError(422, `Issue #${issueIid} does not exist`, 'not_found')
-        item = this.linkIssue(board.id, projectId, issueIid, issue.title, issue.assigneeIds?.() ?? [], actor.userId, issue.milestoneTitle?.() ?? '')
+        const assigneeUsernames = this.s.issues.assigneeIds(issue.id)
+          .map((uid) => this.s.users.byId(uid)?.username ?? '')
+          .filter(Boolean)
+        const milestoneTitle = issue.milestone_id !== null
+          ? this.s.milestones.byId(issue.milestone_id)?.title ?? ''
+          : ''
+        item = this.linkIssue(board.id, projectId, issueIid, issue.title, assigneeUsernames, actor.userId, milestoneTitle)
       } else {
         const prIid = Number(input.pr_iid)
         const pr = this.s.pullRequests.byIid(projectId, prIid)
@@ -373,13 +379,12 @@ export class ProjectManagementService {
     return { item: this.s.pmItems.byId(itemId)!, from_status: fromStatus, to_status: toStatus }
   }
 
-  itemViewFull(board: PmBoardRow, item: PmItemRow): Record<string, unknown> {
+  itemViewFull(board: PmBoardRow, item: PmItemRow): PmItemRow & { field_values: Record<string, string | null> } {
     const values: Record<string, string | null> = {}
     for (const f of this.s.pmFields.listForBoard(board.id)) {
       const v = this.s.pmItemValues.get(item.id, f.id)
       values[f.key] = v ?? null
     }
-    void board
     return {
       id: item.id,
       kind: item.kind,
@@ -390,7 +395,7 @@ export class ProjectManagementService {
       field_values: values,
       created_at: item.created_at,
       updated_at: item.updated_at,
-    }
+    } as PmItemRow & { field_values: Record<string, string | null> }
   }
 
   private itemView(itemId: number) {
@@ -487,7 +492,7 @@ export class ProjectManagementService {
     }
     if (q.status !== undefined) filters.status = q.status
     if (q.kind === 'issue' || q.kind === 'pull_request' || q.kind === 'draft') filters.kind = q.kind
-    if (q.search) filters.q = q.search
+    if (q.search) (filters as { q?: string }).q = q.search
     if (q.sort === 'title' || q.sort === 'status' || q.sort === 'updated_at') filters.sort = q.sort
     filters.dir = q.dir === 'asc' ? 'asc' : 'desc'
 
