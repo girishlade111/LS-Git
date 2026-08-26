@@ -41,6 +41,9 @@ import {
   PrThreadNotesRepo,
   PrReviewsRepo,
   PrDraftCommentsRepo,
+  DiscussionsRepo,
+  DiscussionCommentsRepo,
+  DiscussionPollVotesRepo,
   type UserRow,
 } from '../db/store.js'
 import { notifyOnEvent } from './notifications.js'
@@ -96,6 +99,9 @@ export interface IdentityServices {
   prThreadNotes: PrThreadNotesRepo
   prReviews: PrReviewsRepo
   prDrafts: PrDraftCommentsRepo
+  discussions: DiscussionsRepo
+  discussionComments: DiscussionCommentsRepo
+  pollVotes: DiscussionPollVotesRepo
 }
 
 export function makeServices(db: Database): IdentityServices {
@@ -132,6 +138,9 @@ export function makeServices(db: Database): IdentityServices {
     prThreadNotes: new PrThreadNotesRepo(db),
     prReviews: new PrReviewsRepo(db),
     prDrafts: new PrDraftCommentsRepo(db),
+    discussions: new DiscussionsRepo(db),
+    discussionComments: new DiscussionCommentsRepo(db),
+    pollVotes: new DiscussionPollVotesRepo(db),
   }
   // Event-driven fanout: every durable domain event flows through this single
   // choke point after commit. Idempotent by dedupe key, so a future queue

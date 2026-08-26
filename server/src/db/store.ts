@@ -2033,6 +2033,7 @@ export const REACTION_EMOJI = [
   'thumbsup', 'thumbsdown', 'smile', 'tada', 'confetti_ball',
   'heart', 'rocket', 'eyes', 'fire', 'thinking',
 ] as const
+export type ReactableTarget = 'issue' | 'note' | 'pull_request' | 'discussion' | 'discussion_comment'
 export type ReactionName = (typeof REACTION_EMOJI)[number]
 export function isReactionName(v: unknown): v is ReactionName {
   return typeof v === 'string' && (REACTION_EMOJI as readonly string[]).includes(v)
@@ -2050,7 +2051,7 @@ export interface ReactionRow {
 export class ReactionsRepo {
   constructor(private db: Database) {}
 
-  toggle(userId: number, targetType: 'issue' | 'note', targetId: number, name: ReactionName): 'awarded' | 'revoked' {
+  toggle(userId: number, targetType: ReactableTarget, targetId: number, name: ReactionName): 'awarded' | 'revoked' {
     const existing = this.db.get(
       'SELECT id FROM reactions WHERE user_id = ? AND noteable_type = ? AND noteable_id = ? AND name = ?',
       userId,
@@ -2073,7 +2074,7 @@ export class ReactionsRepo {
     return 'awarded'
   }
 
-  summary(targetType: 'issue' | 'note', targetId: number, viewerId?: number): Array<{
+  summary(targetType: ReactableTarget, targetId: number, viewerId?: number): Array<{
     name: string
     count: number
     me: boolean
@@ -2094,7 +2095,7 @@ export class ReactionsRepo {
     return [...agg.entries()].map(([name, v]) => ({ name, ...v }))
   }
 
-  byName(targetType: 'issue' | 'note', targetId: number, name: ReactionName): Array<ReactionRow> {
+  byName(targetType: ReactableTarget, targetId: number, name: ReactionName): Array<ReactionRow> {
     return this.db.all(
       'SELECT * FROM reactions WHERE noteable_type = ? AND noteable_id = ? AND name = ?',
       targetType,
@@ -2708,5 +2709,205 @@ export class PrDraftCommentsRepo {
 
   deleteAllForAuthor(prId: number, authorId: number): number {
     return this.db.run('DELETE FROM pr_draft_comments WHERE pr_id = ? AND author_id = ?', prId, authorId).changes
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Community discussions (separate from issues by design — see §3.11 API.md).
+// ---------------------------------------------------------------------------
+
+export const DISCUSSION_CATEGORIES = ['question', 'idea', 'announcement', 'showcase', 'general', 'poll'] as const
+export type DiscussionCategory = (typeof DISCUSSION_CATEGORIES)[number]
+
+export interface DiscussionRow {
+  id: number
+  project_id: number
+  author_id: number
+  category: DiscussionCategory
+  title: string
+  body: string
+  pinned: number
+  locked: number
+  best_answer_comment_id: number | null
+  poll_options: string | null // JSON array<string> when category='poll'
+  last_activity_at: string
+  created_at: string
+  updated_at: string
+}
+
+export interface DiscussionCommentRow {
+  id: number
+  discussion_id: number
+  parent_id: number | null
+  author_id: number
+  body: string
+  edited_at: string | null
+  deleted: number
+  deleted_by_id: number | null
+  created_at: string
+  updated_at: string
+}
+
+export class DiscussionsRepo {
+  constructor(private db: Database) {}
+
+  create(data: {
+    project_id: number
+    author_id: number
+    category: DiscussionCategory
+    title: string
+    body: string
+    poll_options?: string[] | null
+  }): DiscussionRow {
+    const now = nowIso()
+    const res = this.db.run(
+      `INSERT INTO discussions (project_id, author_id, category, title, body, poll_options, last_activity_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      data.project_id,
+      data.author_id,
+      data.category,
+      data.title,
+      data.body,
+      data.poll_options ? JSON.stringify(data.poll_options) : null,
+      now,
+      now,
+      now,
+    )
+    return this.byId(res.lastInsertRowid)!
+  }
+
+  byId(id: number): DiscussionRow | undefined {
+    return this.db.get('SELECT * FROM discussions WHERE id = ?', id) as DiscussionRow | undefined
+  }
+
+  listFiltered(
+    projectId: number,
+    f: { category?: DiscussionCategory; search?: string; page?: number; perPage?: number },
+  ): { rows: Array<DiscussionRow>; total: number; page: number; perPage: number } {
+    const clauses: string[] = ['d.project_id = ?']
+    const params: SqlParam[] = [projectId]
+    if (f.category) { clauses.push('d.category = ?'); params.push(f.category) }
+    if (f.search) {
+      clauses.push('(d.title LIKE ? OR d.body LIKE ?)')
+      const like = `%${f.search}%`
+      params.push(like, like)
+    }
+    const page = Math.max(1, Math.floor(f.page ?? 1))
+    const perPage = Math.min(100, Math.max(1, Math.floor(f.perPage ?? 20)))
+    const total = Number(((this.db.get(`SELECT COUNT(*) AS c FROM discussions d WHERE ${clauses.join(' AND ')}`, ...params)) as Row).c)
+    const rows = this.db.all(
+      `SELECT d.* FROM discussions d WHERE ${clauses.join(' AND ')}
+       ORDER BY d.pinned DESC, d.last_activity_at DESC, d.id DESC LIMIT ? OFFSET ?`,
+      ...params,
+      perPage,
+      (page - 1) * perPage,
+    ) as unknown as Array<DiscussionRow>
+    return { rows, total, page, perPage }
+  }
+
+  update(id: number, fields: Partial<Pick<DiscussionRow, 'title' | 'body' | 'category' | 'pinned' | 'locked' | 'best_answer_comment_id' | 'last_activity_at' | 'poll_options'>>): void {
+    const allowed = [
+      'title', 'body', 'category', 'pinned', 'locked',
+      'best_answer_comment_id', 'last_activity_at', 'poll_options',
+    ] as const
+    const sets: string[] = []
+    const values: SqlParam[] = []
+    for (const key of allowed) {
+      if (fields[key] !== undefined) { sets.push(`${key} = ?`); values.push(fields[key] as SqlParam) }
+    }
+    if (sets.length === 0) return
+    sets.push('updated_at = ?')
+    values.push(nowIso(), id)
+    this.db.run(`UPDATE discussions SET ${sets.join(', ')} WHERE id = ?`, ...values)
+  }
+
+  delete(id: number): boolean {
+    return this.db.run('DELETE FROM discussions WHERE id = ?', id).changes > 0
+  }
+}
+
+export class DiscussionCommentsRepo {
+  constructor(private db: Database) {}
+
+  create(data: {
+    discussion_id: number
+    parent_id?: number | null
+    author_id: number
+    body: string
+  }): DiscussionCommentRow {
+    const now = nowIso()
+    const res = this.db.run(
+      `INSERT INTO discussion_comments (discussion_id, parent_id, author_id, body, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      data.discussion_id,
+      data.parent_id ?? null,
+      data.author_id,
+      data.body,
+      now,
+      now,
+    )
+    this.db.run('UPDATE discussions SET last_activity_at = ?, updated_at = ? WHERE id = ?', now, now, data.discussion_id)
+    return this.byId(res.lastInsertRowid)!
+  }
+
+  byId(id: number): DiscussionCommentRow | undefined {
+    return this.db.get('SELECT * FROM discussion_comments WHERE id = ?', id) as DiscussionCommentRow | undefined
+  }
+
+  listForDiscussion(discussionId: number): Array<DiscussionCommentRow> {
+    return this.db.all('SELECT * FROM discussion_comments WHERE discussion_id = ? ORDER BY id', discussionId) as
+      unknown as Array<DiscussionCommentRow>
+  }
+
+  countForDiscussion(discussionId: number): number {
+    const row = this.db.get(
+      'SELECT COUNT(*) AS c FROM discussion_comments WHERE discussion_id = ? AND deleted = 0',
+      discussionId,
+    ) as Row
+    return Number(row.c)
+  }
+
+  softDelete(id: number, deletedById: number): void {
+    this.db.run(
+      `UPDATE discussion_comments SET deleted = 1, deleted_by_id = ?, body = '', updated_at = ? WHERE id = ?`,
+      deletedById,
+      nowIso(),
+      id,
+    )
+  }
+}
+
+/** Poll foundation: one vote per user, switchable while the row is unlocked. */
+export class DiscussionPollVotesRepo {
+  constructor(private db: Database) {}
+
+  vote(discussionId: number, userId: number, optionIndex: number): void {
+    this.db.run(
+      `INSERT INTO discussion_poll_votes (discussion_id, user_id, option_index, voted_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(discussion_id, user_id) DO UPDATE SET option_index = excluded.option_index, voted_at = excluded.voted_at`,
+      discussionId,
+      userId,
+      optionIndex,
+      nowIso(),
+    )
+  }
+
+  tally(discussionId: number): Array<{ option_index: number; votes: number }> {
+    return (
+      this.db.all(
+        'SELECT option_index, COUNT(*) AS votes FROM discussion_poll_votes WHERE discussion_id = ? GROUP BY option_index ORDER BY option_index',
+        discussionId,
+      ) as Array<Row>
+    ).map((r) => ({ option_index: Number(r.option_index), votes: Number(r.votes) }))
+  }
+
+  forUser(discussionId: number, userId: number): number | null {
+    const row = this.db.get(
+      'SELECT option_index FROM discussion_poll_votes WHERE discussion_id = ? AND user_id = ?',
+      discussionId,
+      userId,
+    ) as Row | undefined
+    return row ? Number(row.option_index) : null
   }
 }

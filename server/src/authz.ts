@@ -51,6 +51,12 @@ export type Permission =
   | 'pr:comment'          // guest(10)+ — any authenticated reader
   | 'pr:approve'          // authenticated reader EXCEPT the PR author
   | 'pr:merge'            // maintainer+ AND the target branch's protection rule
+  // Community discussions (repository / future organization-community policy).
+  // Participation is guest-level on readable projects; moderation (pin, lock,
+  // delete others, edit others) requires maintainer-equivalent rights.
+  | 'discussion:create'   // guest(10)+ — any authenticated reader
+  | 'discussion:comment'  // guest(10)+
+  | 'discussion:maintain' // pin/lock/moderate — maintainer-equivalent (owner/admin today)
 
 /** Capabilities any authenticated READER of a project keeps (guest parity). */
 const ISSUE_GUEST_PERMISSIONS = new Set<Permission>(['issue:create', 'issue:comment'])
@@ -195,6 +201,14 @@ export function can(actor: Actor | null, permission: Permission, ctx: AuthzConte
       // service where the target branch context exists.
       if (!project) return false
       return canPushCode(actor, project)
+    case 'discussion:create':
+    case 'discussion:comment': {
+      if (project && canReadProject(actor, project)) return true
+      return false
+    }
+    case 'discussion:maintain':
+      if (!project) return false
+      return canReporterPlus(actor, project)
     case 'issue:close': {
       if (!project) return false
       if (canReporterPlus(actor, project)) return true

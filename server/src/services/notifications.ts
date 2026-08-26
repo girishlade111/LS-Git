@@ -37,6 +37,10 @@ const EVENT_TYPE_MAP: Record<string, NotificationType> = {
   'mr.reopened': 'merge_request',
   'mr.merged': 'merge_request',
   'mr.commented': 'discussion',
+  // Community discussions.
+  'discussion.created': 'discussion',
+  'discussion.commented': 'discussion',
+  'discussion.answered': 'discussion',
   // Direct catalog names pass through unchanged (future producers).
   issue: 'issue',
   merge_request: 'merge_request',
@@ -106,6 +110,19 @@ export function renderNotification(
       }
     }
     case 'discussion':
+      if (p.did !== undefined) {
+        const dActor = readActorUsername(p)
+        const dVerb =
+          p.action === 'best_answer' ? 'marked a best answer on'
+          : p.action === 'commented' ? 'commented on'
+          : 'started'
+        return {
+          type,
+          title: truncate(`${dActor ? `${dActor} ${dVerb}` : dVerb}: ${String(p.title ?? '')}`, 140),
+          body: truncate(projectFullPath, 200),
+          url: null,
+        }
+      }
       if (p.action === 'commented') {
         const actor = readActorUsername(p)
         const iid = p.iid !== undefined ? `#${String(p.iid)}` : String(p.title ?? '')

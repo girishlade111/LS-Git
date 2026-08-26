@@ -147,7 +147,19 @@ function inline(text: string): ReactNode {
       const link = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(tok)!
       const href = safeHref(link![2]!)
       if (href) {
-        nodes.push(<a key={k++} href={href} className="ls-md__link">{link![1]}</a>)
+        // User-generated content: external links open safely, never inheriting
+        // the opener context (reverse-tabnabbing protection).
+        const isExternal = /^https?:\/\//i.test(href)
+        nodes.push(
+          <a
+            key={k++}
+            href={href}
+            className="ls-md__link"
+            {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+          >
+            {link![1]}
+          </a>,
+        )
       } else {
         nodes.push(<Fragment key={k++}>{link![1]}</Fragment>)
       }

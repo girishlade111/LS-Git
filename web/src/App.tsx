@@ -22,9 +22,11 @@ import { ProjectContextRoute } from './issues/ProjectContextRoute'
 import { LabelsView } from './issues/LabelsView'
 import { MilestonesView } from './issues/MilestonesView'
 import { FormsManagerView } from './issues/FormsManagerView'
+import { DiscussionsListPage, DiscussionsDetailPage } from './discussions/DiscussionsPages'
 import { PullsListRouteBridge, PullDetailRouteBridge } from './pulls/PullsRouter'
 import './repository/repository.css'
 import './issues/issues.css'
+import './discussions/discussions.css'
 import './pulls/pulls.css'
 import './pulls/review.css'
 
@@ -106,6 +108,21 @@ export default function App() {
       const segments = path.replace(/#L\d+$/, '').split('/').filter(Boolean)
       const BROWSER_ACTIONS = new Set(['tree', 'blob', 'commits', 'commit', 'blame', 'search', 'edit', 'new', 'branches', 'tags', 'compare', 'network', 'notifications'])
       const action = segments[3]
+
+      if (action === 'discussions') {
+        const did = Number(segments[4])
+        return (
+          <AppShell sidebarCurrent="projects" onNavigate={(id) => navigate(`/${id}`)} repo={{ group: owner, project: projPath, visibility: 'Private', tabs: [], currentTab: '', onTab: () => undefined }}>
+            <ProjectContextRoute owner={owner} projectPath={projPath}>
+              {(project) => Number.isInteger(did) && did > 0 ? (
+                <DiscussionsDetailPage projectId={project.id} did={did} isMaintainer={project.owner?.id === user?.id || user?.admin === true} viewerId={user?.id ?? null} />
+              ) : (
+                <DiscussionsListPage projectId={project.id} />
+              )}
+            </ProjectContextRoute>
+          </AppShell>
+        )
+      }
 
       // Collaboration routes: pulls · issues · labels · milestones.
       if (action === 'pulls') {

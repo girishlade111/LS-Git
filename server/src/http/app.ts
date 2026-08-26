@@ -17,6 +17,7 @@ import { IssuesService } from '../services/issues.js'
 import { IssueFormsService } from '../services/issueForms.js'
 import { PullRequestsService } from '../services/pullRequests.js'
 import { PrReviewService } from '../services/prReview.js'
+import { DiscussionsService } from '../services/discussions.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -37,6 +38,7 @@ declare module 'fastify' {
     issueForms: IssueFormsService
     pullRequests: PullRequestsService
     prReview: PrReviewService
+    discussions: DiscussionsService
     authRateLimiter: RateLimiter
     store: ReturnType<typeof makeServices>
     requireAuth: (needed?: 'read_api' | 'write_api' | 'read_user') => PreHandlerFn
@@ -114,6 +116,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   app.issues = new IssuesService(services, cfg)
   app.pullRequests = new PullRequestsService(services, cfg, app.repositories, app.issues, app.projects.storage)
   app.prReview = new PrReviewService(services, app.projects.storage, app.repositories)
+  app.discussions = new DiscussionsService(services)
   app.issueForms = new IssueFormsService(
     services,
     cfg,
@@ -281,6 +284,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   registerIssueFormRoutes(app)
   registerPullRequestRoutes(app)
   registerPrReviewRoutes(app)
+  registerDiscussionRoutes(app)
 
   app.get('/', async () => ({
     name: 'LSGit API Server',
@@ -345,3 +349,4 @@ import { registerIssueRoutes } from './routes/issues.js'
 import { registerIssueFormRoutes } from './routes/issueForms.js'
 import { registerPullRequestRoutes } from './routes/pullRequests.js'
 import { registerPrReviewRoutes } from './routes/prReview.js'
+import { registerDiscussionRoutes } from './routes/discussions.js'

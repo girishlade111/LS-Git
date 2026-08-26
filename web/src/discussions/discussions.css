@@ -1,0 +1,67 @@
+/* Discussions — dense threaded layout, hairline separators, small type.
+   Terracotta ONLY for active links/actions; green only for best-answer;
+   neutral otherwise. No shadows, no heavy cards. */
+
+.ls-disc__chips { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; }
+.ls-disc__chip {
+  height: 24px; padding: 0 10px;
+  border: 1px solid var(--ls-border); border-radius: var(--ls-radius-full);
+  background: none; font-size: var(--ls-fs-label); color: var(--ls-text-secondary);
+  cursor: pointer;
+}
+.ls-disc__chip:hover { color: var(--ls-text); }
+.ls-disc__chip--on {
+  background: var(--ls-tint-accent); border-color: var(--ls-accent); color: var(--ls-accent);
+}
+
+.ls-disc__list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--ls-border); }
+.ls-disc__list li { border-bottom: 1px solid var(--ls-border); } /* hairline */
+.ls-disc__list a {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 4px; color: inherit; text-decoration: none;
+}
+.ls-disc__list a:hover { background: var(--ls-hover); }
+.ls-disc__rowtitle {
+  flex: 1; min-width: 0;
+  font-size: var(--ls-fs-row); font-weight: 500; color: var(--ls-text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ls-disc__rowtitle:hover { color: var(--ls-accent); }
+.ls-disc__flag {
+  display: inline-block; margin-right: 6px; padding: 0 6px;
+  border: 1px solid var(--ls-border); border-radius: var(--ls-radius-full);
+  font-size: var(--ls-fs-label); color: var(--ls-text-secondary); font-weight: 500;
+}
+
+/* ── detail ── */
+.ls-disc__op {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--ls-border);
+  font-size: var(--ls-fs-body);
+}
+.ls-disc__op strong { font-weight: 500; }
+.ls-disc__op time, .ls-disc__op .ls-comment__body { color: var(--ls-text-secondary); }
+
+.ls-disc__comments { margin: 12px 0 0; padding: 0; list-style: none; }
+.ls-disc__comment {
+  padding: 10px 0 8px;
+  border-bottom: 1px solid var(--ls-border); /* hairline separators */
+}
+.ls-disc__comment--nested {
+  margin-left: 20px;
+  border-bottom: none;
+  border-left: 1px solid var(--ls-border); /* vertical nesting guide */
+  padding-left: 14px;
+}
+.ls-disc__replies { margin: 4px 0 0; padding: 0; list-style: none; }
+
+/* best answer — the ONLY green mark in discussions */
+.ls-disc__bestmark {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-bottom: 4px;
+  color: var(--ls-success);
+  font-size: var(--ls-fs-label); font-weight: 500;
+}
+
+/* subtle avatars via initials chip (no images) */
