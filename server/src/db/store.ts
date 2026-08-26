@@ -3033,7 +3033,7 @@ export class PmFieldsRepo {
     if (fields.config !== undefined) { sets.push('config = ?'); values.push(JSON.stringify(fields.config)) }
     if (fields.position !== undefined) { sets.push('position = ?'); values.push(fields.position) }
     if (sets.length === 0) return
-    this.db.run(`UPDATE pm_fields SET ${sets.join(', ')} WHERE id = ?`, ...values)
+    this.db.run(`UPDATE pm_fields SET ${sets.join(', ')} WHERE id = ?`, id, ...values)
   }
 
   delete(id: number): boolean {
