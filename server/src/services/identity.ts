@@ -54,6 +54,7 @@ import {
   type UserRow,
 } from '../db/store.js'
 import { notifyOnEvent } from './notifications.js'
+import { pmApplyDomainEvent } from './pmEvents.js'
 import { verificationEmail, passwordResetEmail, type Mailer } from './mailer.js'
 
 /** Domain error carrying an HTTP status and a safe, user-facing message. */
@@ -166,7 +167,12 @@ export function makeServices(db: Database): IdentityServices {
   // Event-driven fanout: every durable domain event flows through this single
   // choke point after commit. Idempotent by dedupe key, so a future queue
   // worker can replay the same rows safely.
-  const events = new EventsRepo(db, (row) => notifyOnEvent(services as IdentityServices, row))
+  const events = new EventsRepo(db, (row) => {
+    // Event-based interaction model: notifications + PM workflow automation
+    // both subscribe to the same durable outbox.
+    notifyOnEvent(services as IdentityServices, row)
+    pmApplyDomainEvent(services as IdentityServices, row)
+  })
   return { ...services, events }
 }
 

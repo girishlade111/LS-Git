@@ -327,7 +327,7 @@ export class ProjectManagementService {
   }
 
   removeItem(actor: Actor, projectId: number, boardId: number, itemId: number): void {
-    const { board, project } = this.visibleBoard(actor, projectId, boardId)
+    const { project } = this.visibleBoard(actor, projectId, boardId)
     this.authorize(actor, 'pm:write', project)
     const item = this.s.pmItems.byId(itemId)
     if (!item || item.board_id !== boardId) throw new AppError(404, 'Item not found')
@@ -481,13 +481,13 @@ export class ProjectManagementService {
     q: { status?: string; kind?: string; search?: string; sort?: string; dir?: string; view?: string },
   ) {
     const { board } = this.visibleBoard(actor, projectId, boardId)
-    let filters: { status?: string; kind?: PmItemRow['kind']; search?: string; sort?: 'updated_at' | 'title' | 'status'; dir?: 'asc' | 'desc' } = {}
+    const filters: { status?: string; kind?: PmItemRow['kind']; q?: string; search?: string; sort?: 'updated_at' | 'title' | 'status'; dir?: 'asc' | 'desc' } = {}
     if (q.view !== undefined && q.view !== '') {
       const sv = this.s.pmSavedViews.listForBoard(boardId).find((v) => String((v as Row).name) === q.view)
       if (sv) {
         const parsed = JSON.parse(sv.filters as string) as { status?: string; kinds?: string[]; q?: string }
         if (parsed.status) filters.status = parsed.status
-        if (parsed.q) filters.q = parsed.q
+        if (parsed.q) (filters as { q?: string }).q = parsed.q
       }
     }
     if (q.status !== undefined) filters.status = q.status
