@@ -730,4 +730,97 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
       CREATE INDEX idx_reactions_target ON reactions(noteable_type, noteable_id);
     `,
   },
+  {
+    version: 13,
+    sql: `
+      -- Project management (GitHub Projects / GitLab boards inspiration,
+      -- LSGit-native schema): boards hold typed fields, items link to issues
+      -- and pull requests or exist as drafts, saved views persist filters.
+
+      CREATE TABLE pm_boards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        created_by_id INTEGER NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (project_id, name)
+      );
+
+      CREATE TABLE pm_fields (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        board_id INTEGER NOT NULL REFERENCES pm_boards(id) ON DELETE CASCADE,
+        key TEXT NOT NULL,
+        label TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('text', 'number', 'date', 'status', 'single_select', 'multi_select')),
+        config TEXT NOT NULL DEFAULT '{}',
+        position INTEGER NOT NULL DEFAULT 0,
+        UNIQUE (board_id, key)
+      );
+
+      CREATE TABLE pm_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        board_id INTEGER NOT NULL REFERENCES pm_boards(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL CHECK (
+          kind IN ('issue', 'pull_request', 'draft')
+          AND (kind = 'draft'
+               OR (kind = 'issue' AND issue_iid IS NOT NULL AND pr_iid IS NULL)
+               OR (kind = 'pull_request' AND pr_iid IS NOT NULL AND issue_iid IS NULL))
+        ),
+        issue_iid INTEGER,
+        pr_iid INTEGER,
+        title TEXT NOT NULL DEFAULT '',
+        body TEXT NOT NULL DEFAULT '',
+        created_by_id INTEGER NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_pm_items_board ON pm_items(board_id, updated_at DESC);
+      CREATE INDEX idx_pm_items_issue ON pm_items(board_id, issue_iid);
+      CREATE INDEX idx_pm_items_pr ON pm_items(board_id, pr_iid);
+
+      -- Typed field values. Canonical serialization per type:
+      --   text → raw · number → decimal string · date → YYYY-MM-DD
+      --   status/single_select → option label · multi_select → JSON array
+      CREATE TABLE pm_item_values (
+        item_id INTEGER NOT NULL REFERENCES pm_items(id) ON DELETE CASCADE,
+        field_id INTEGER NOT NULL REFERENCES pm_fields(id) ON DELETE CASCADE,
+        value TEXT,
+        PRIMARY KEY (item_id, field_id)
+      );
+
+      CREATE TABLE pm_saved_views (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        board_id INTEGER NOT NULL REFERENCES pm_boards(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        filters TEXT NOT NULL DEFAULT '{}',
+        group_by TEXT,
+        sort TEXT NOT NULL DEFAULT '{}',
+        owner_id INTEGER NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL,
+        UNIQUE (board_id, name)
+      );
+
+      -- Automatic status transitions: one rule per event per board.
+      CREATE TABLE pm_workflow_rules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        board_id INTEGER NOT NULL REFERENCES pm_boards(id) ON DELETE CASCADE,
+        event TEXT NOT NULL CHECK (event IN ('issue_opened', 'issue_closed', 'issue_reopened', 'pr_opened', 'pr_merged')),
+        target_status TEXT NOT NULL,
+        UNIQUE (board_id, event)
+      );
+
+      -- Status-transition history — the honest input for throughput metrics.
+      CREATE TABLE pm_item_status_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_id INTEGER NOT NULL REFERENCES pm_items(id) ON DELETE CASCADE,
+        from_status TEXT,
+        to_status TEXT NOT NULL,
+        actor_id INTEGER,
+        at TEXT NOT NULL
+      );
+      CREATE INDEX idx_pm_status_log ON pm_item_status_log(item_id, at);
+    `,
+  },
 ]
