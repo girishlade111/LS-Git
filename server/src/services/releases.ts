@@ -290,18 +290,29 @@ export class ReleaseService {
     if (!release) throw new AppError(404, 'Release not found')
 
     const repo = this.engineFor(project)
-    const currentSha = repo.resolveTag(tag) ?? repo.resolveBranch(project.default_branch)
+    // Annotated tags point at a TAG OBJECT, not a commit — peel first.
+    const tagCommit = (tagName: string): string | null => {
+      const sha = repo.resolveTag(tagName)
+      if (!sha) return null
+      const info = repo.readTagInfo(tagName)
+      return info && info.annotated ? info.target : sha
+    }
+    const currentSha = tagCommit(tag) ?? repo.resolveBranch(project.default_branch)
     if (!currentSha) throw new AppError(422, 'Nothing to generate notes from', 'empty_history')
 
-    const allTags = repo.listTags().sort((a, b) => {
-      const ta = repo.readCommit(a.sha).committer.timestamp.time
-      const tb = repo.readCommit(b.sha).committer.timestamp.time
-      return tb - ta
-    })
+    const allTags = repo
+      .listTags()
+      .map((t) => ({ name: t.name, commit: tagCommit(t.name) }))
+      .filter((t): t is { name: string; commit: string } => t.commit !== null)
+      .sort((a, b) => {
+        const ta = repo.readCommit(a.commit).committer.timestamp.time
+        const tb = repo.readCommit(b.commit).committer.timestamp.time
+        return tb - ta
+      })
     const idx = allTags.findIndex((t) => t.name === tag)
     const previous =
-      (opts.previous_tag && repo.resolveTag(opts.previous_tag)) ||
-      (idx >= 0 && idx + 1 < allTags.length ? allTags[idx + 1]!.sha : null)
+      (opts.previous_tag && tagCommit(opts.previous_tag)) ||
+      (idx >= 0 && idx + 1 < allTags.length ? allTags[idx + 1]!.commit : null)
 
     const aheadSet = new Set<string>()
     const frontier: string[] = [currentSha]
