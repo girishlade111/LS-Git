@@ -314,7 +314,11 @@ describe('asset replacement policy', () => {
     expect(del.statusCode).toBe(200)
     const dir = join(s.reposRoot, '@release-assets', String(s.projectId))
     expect(readdirSync(dir).length).toBe(0)
-    const after = await s.app.inject({ method: 'GET', url: `${releasesBase(s.projectId)}/v3.0.0/assets/gone.bin/download` })
+    const after = await s.app.inject({
+      method: 'GET',
+      url: `${releasesBase(s.projectId)}/v3.0.0/assets/gone.bin/download`,
+      headers: { cookie: s.ownerSession.cookie },
+    })
     expect(after.statusCode).toBe(404)
   })
 })
