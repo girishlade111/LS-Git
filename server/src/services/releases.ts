@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs'
-import { join, basename } from 'node:path'
+import { join } from 'node:path'
 import { AppError } from './identity.js'
 import type { IdentityServices } from './identity.js'
 import type { LocalHashedStorage } from '../storage/local.js'
@@ -139,8 +139,8 @@ export class ReleaseService {
       released_at: releasedAt,
       author_id: actor.userId,
     })
-    void existingTagSha
-    return { ...row, assets: [] }
+    // Consistent serialized view everywhere (booleans, asset_count, paths).
+    return { ...this.releaseView(row), draft: state === 'draft', assets: [] }
   }
 
   // ── read / history / latest ────────────────────────────────────────────────

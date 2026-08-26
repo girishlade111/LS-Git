@@ -79,7 +79,9 @@ export function registerReleaseRoutes(app: FastifyInstance): void {
     if (!Buffer.isBuffer(req.body)) {
       throw new AppError(415, 'Asset uploads must use application/octet-stream bodies')
     }
-    const contentType = req.headers['content-type']
+    // Transport is always octet-stream; the LOGICAL asset MIME type travels in
+    // the ?content_type= query (falls back to the transport header).
+    const contentType = q.content_type || req.headers['content-type']
     const result = svc.uploadAsset(
       actorOf(req),
       numParam(req, 'id'),
