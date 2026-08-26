@@ -823,4 +823,40 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
       CREATE INDEX idx_pm_status_log ON pm_item_status_log(item_id, at);
     `,
   },
+  {
+    version: 14,
+    sql: `
+      -- Releases: metadata bound to a git tag (created or existing), with a
+      -- draft -> published lifecycle, prerelease flag and binary assets.
+      CREATE TABLE releases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        tag_name TEXT NOT NULL,
+        name TEXT,
+        description TEXT NOT NULL DEFAULT '',
+        state TEXT NOT NULL DEFAULT 'draft' CHECK (state IN ('draft', 'published')),
+        is_prerelease INTEGER NOT NULL DEFAULT 0,
+        released_at TEXT,
+        author_id INTEGER NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (project_id, tag_name)
+      );
+      CREATE INDEX idx_releases_project ON releases(project_id, released_at DESC);
+
+      CREATE TABLE release_assets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        release_id INTEGER NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
+        filename TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        sha256 TEXT NOT NULL,
+        content_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+        stored_path TEXT NOT NULL,
+        uploaded_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE (release_id, filename)
+      );
+      CREATE INDEX idx_release_assets ON release_assets(release_id);
+    `,
+  },
 ]
