@@ -243,7 +243,7 @@ describe('asset upload', () => {
 
     const dl = await s.app.inject({
       method: 'GET',
-      url: `${releasesBase(s.projectId)}/releases/v1.0.0/assets/payload.zip/download`,
+      url: `${releasesBase(s.projectId)}/v1.0.0/assets/payload.zip/download`,
     })
     expect(dl.statusCode).toBe(200)
     expect(Buffer.compare(dl.rawPayload, bytes)).toBe(0)
@@ -259,7 +259,7 @@ describe('asset upload', () => {
     })
     const miss = await s.app.inject({
       method: 'GET',
-      url: `${releasesBase(s.projectId)}/releases/v1.0.0/assets/nope.bin/download`,
+      url: `${releasesBase(s.projectId)}/v1.0.0/assets/nope.bin/download`,
     })
     expect(miss.statusCode).toBe(404)
   })
@@ -290,7 +290,7 @@ describe('asset replacement policy', () => {
     expect(asset.sha256).toBe(sha256(v2))
 
     // Exactly ONE metadata row and ONE stored object remain.
-    const detail = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/releases/v2.0.0`, { session: s.ownerSession })
+    const detail = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/v2.0.0`, { session: s.ownerSession })
     const assets = ((detail.json().release as Record<string, unknown>).assets as Array<Record<string, unknown>>)
     expect(assets.length).toBe(1)
     expect(assets[0]!.size).toBe(v2.length)
@@ -304,11 +304,11 @@ describe('asset replacement policy', () => {
       session: s.ownerSession, payload: { tag_name: 'v3.0.0', draft: false },
     })
     await putAsset(s, s.ownerSession, 'v3.0.0', 'gone.bin', Buffer.from('bye'))
-    const del = await authed(s.app, 'DELETE', `${releasesBase(s.projectId)}/releases/v3.0.0/assets/gone.bin`, { session: s.ownerSession })
+    const del = await authed(s.app, 'DELETE', `${releasesBase(s.projectId)}/v3.0.0/assets/gone.bin`, { session: s.ownerSession })
     expect(del.statusCode).toBe(200)
     const dir = join(s.reposRoot, '@release-assets', String(s.projectId))
     expect(readdirSync(dir).length).toBe(0)
-    const after = await s.app.inject({ method: 'GET', url: `${releasesBase(s.projectId)}/releases/v3.0.0/assets/gone.bin/download` })
+    const after = await s.app.inject({ method: 'GET', url: `${releasesBase(s.projectId)}/v3.0.0/assets/gone.bin/download` })
     expect(after.statusCode).toBe(404)
   })
 })
@@ -335,7 +335,7 @@ describe('draft to published lifecycle', () => {
     const strangerList = await authed(s.app, 'GET', releasesBase(s.projectId), { session: s.strangerSession })
     expect(strangerList.statusCode).toBe(200)
     expect(((strangerList.json().releases ?? []) as unknown[]).length).toBe(0)
-    const strangerGet = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/releases/v1.0.0-rc1`, { session: s.strangerSession })
+    const strangerGet = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/v1.0.0-rc1`, { session: s.strangerSession })
     expect(strangerGet.statusCode).toBe(404)
   })
 
@@ -344,17 +344,17 @@ describe('draft to published lifecycle', () => {
     await authed(s.app, 'POST', releasesBase(s.projectId), {
       session: s.ownerSession, payload: { tag_name: 'v1.0.0', draft: true },
     })
-    const before = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/releases/v1.0.0`, { session: s.ownerSession })
+    const before = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/v1.0.0`, { session: s.ownerSession })
     expect(((before.json().release as Record<string, unknown>).released_at) === null).toBe(true)
 
-    const pub = await authed(s.app, 'PATCH', `${releasesBase(s.projectId)}/releases/v1.0.0`, {
+    const pub = await authed(s.app, 'PATCH', `${releasesBase(s.projectId)}/v1.0.0`, {
       session: s.ownerSession, payload: { state_event: 'publish' },
     })
     expect(pub.statusCode).toBe(200)
     const releasedAt = (pub.json().release as Record<string, unknown>).released_at
     expect(typeof releasedAt).toBe('string')
 
-    const again = await authed(s.app, 'PATCH', `${releasesBase(s.projectId)}/releases/v1.0.0`, {
+    const again = await authed(s.app, 'PATCH', `${releasesBase(s.projectId)}/v1.0.0`, {
       session: s.ownerSession, payload: { state_event: 'publish' },
     })
     expect(again.statusCode).toBe(422) // already immutable
@@ -371,7 +371,7 @@ describe('draft to published lifecycle', () => {
     await authed(s.app, 'POST', releasesBase(s.projectId), {
       session: s.ownerSession, payload: { tag_name: 'v1.1.0', description: 'final', draft: false },
     })
-    const edit = await authed(s.app, 'PATCH', `${releasesBase(s.projectId)}/releases/v1.1.0`, {
+    const edit = await authed(s.app, 'PATCH', `${releasesBase(s.projectId)}/v1.1.0`, {
       session: s.ownerSession, payload: { description: 'tampered' },
     })
     expect(edit.statusCode).toBe(422)
@@ -381,7 +381,7 @@ describe('draft to published lifecycle', () => {
     await authed(s.app, 'POST', releasesBase(s.projectId), {
       session: s.ownerSession, payload: { tag_name: 'v1.2.0-draft', draft: true },
     })
-    const okEdit = await authed(s.app, 'PATCH', `${releasesBase(s.projectId)}/releases/v1.2.0-draft`, {
+    const okEdit = await authed(s.app, 'PATCH', `${releasesBase(s.projectId)}/v1.2.0-draft`, {
       session: s.ownerSession, payload: { description: 'wip notes', name: 'v1.2.0 preview' },
     })
     expect(okEdit.statusCode).toBe(200)
@@ -403,7 +403,7 @@ describe('pre-releases', () => {
     expect(row.is_prerelease).toBe(true)
 
     // Flip back off while still a draft.
-    await authed(s.app, 'PATCH', `${releasesBase(s.projectId)}/releases/v2.0.0-beta1`, {
+    await authed(s.app, 'PATCH', `${releasesBase(s.projectId)}/v2.0.0-beta1`, {
       session: s.ownerSession, payload: { prerelease: false },
     })
     row = ((await authed(s.app, 'GET', releasesBase(s.projectId), { session: s.ownerSession })).json().releases as Array<Record<string, unknown>>)[0]!
@@ -420,7 +420,7 @@ describe('pre-releases', () => {
       session: s.ownerSession, payload: { tag_name: 'v2.0.0-rc1', prerelease: true, draft: false },
     })
 
-    const latest = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/releases/latest`)
+    const latest = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/latest`)
     expect(latest.statusCode).toBe(200)
     const rel = latest.json().release as Record<string, unknown>
     expect(rel.tag_name).toBe('v1.0.0')
@@ -435,7 +435,7 @@ describe('pre-releases', () => {
     await authed(s.app, 'POST', releasesBase(s.projectId), {
       session: s.ownerSession, payload: { tag_name: 'v0.2.0-beta', prerelease: true, draft: false },
     })
-    const latest = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/releases/latest`)
+    const latest = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/latest`)
     const rel = latest.json().release as Record<string, unknown>
     expect(rel.tag_name).toBe('v0.2.0-beta')
     expect(latest.json().is_prerelease_fallback).toBe(true)
@@ -446,7 +446,7 @@ describe('pre-releases', () => {
     await authed(s.app, 'POST', releasesBase(s.projectId), {
       session: s.ownerSession, payload: { tag_name: 'v0.0.1', draft: true },
     })
-    const latest = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/releases/latest`)
+    const latest = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/latest`)
     expect(latest.statusCode).toBe(404)
     expect((latest.json() as { code?: string }).code).toBe('no_releases')
   })
@@ -468,7 +468,7 @@ describe('release permissions', () => {
     })
     expect(deniedCreate.statusCode).toBe(403)
 
-    const deniedPatch = await authed(s.app, 'PATCH', `${releasesBase(s.projectId)}/releases/v1.0.0`, {
+    const deniedPatch = await authed(s.app, 'PATCH', `${releasesBase(s.projectId)}/v1.0.0`, {
       session: s.strangerSession, payload: { state_event: 'publish' },
     })
     expect(deniedPatch.statusCode).toBe(403)
@@ -476,10 +476,10 @@ describe('release permissions', () => {
     const deniedUpload = await putAsset(s, s.strangerSession, 'v1.0.0', 'evil.exe', Buffer.from('nope'))
     expect(deniedUpload.statusCode).toBe(403)
 
-    const deniedDelete = await authed(s.app, 'DELETE', `${releasesBase(s.projectId)}/releases/v1.0.0`, { session: s.strangerSession })
+    const deniedDelete = await authed(s.app, 'DELETE', `${releasesBase(s.projectId)}/v1.0.0`, { session: s.strangerSession })
     expect(deniedDelete.statusCode).toBe(403)
 
-    const deniedNotes = await authed(s.app, 'POST', `${releasesBase(s.projectId)}/releases/v1.0.0/notes/generate`, {
+    const deniedNotes = await authed(s.app, 'POST', `${releasesBase(s.projectId)}/v1.0.0/notes/generate`, {
       session: s.strangerSession, payload: {},
     })
     expect(deniedNotes.statusCode).toBe(403)
@@ -513,7 +513,7 @@ describe('release permissions', () => {
     await putAsset(s, s.ownerSession, 'v1.0.0', 'open.bin', Buffer.from('free'))
     const dl = await s.app.inject({
       method: 'GET',
-      url: `${releasesBase(s.projectId)}/releases/v1.0.0/assets/open.bin/download`,
+      url: `${releasesBase(s.projectId)}/v1.0.0/assets/open.bin/download`,
     })
     expect(dl.statusCode).toBe(200)
 
@@ -540,11 +540,11 @@ describe('release deletion', () => {
     const dir = join(s.reposRoot, '@release-assets', String(s.projectId))
     expect(readdirSync(dir).length).toBe(1)
 
-    const del = await authed(s.app, 'DELETE', `${releasesBase(s.projectId)}/releases/v1.0.0`, { session: s.ownerSession })
+    const del = await authed(s.app, 'DELETE', `${releasesBase(s.projectId)}/v1.0.0`, { session: s.ownerSession })
     expect(del.statusCode).toBe(200)
 
     // Metadata gone, asset files gone.
-    expect((await authed(s.app, 'GET', `${releasesBase(s.projectId)}/releases/v1.0.0`, { session: s.ownerSession })).statusCode).toBe(404)
+    expect((await authed(s.app, 'GET', `${releasesBase(s.projectId)}/v1.0.0`, { session: s.ownerSession })).statusCode).toBe(404)
     expect(existsSync(dir) ? readdirSync(dir).length : 0).toBe(0)
 
     // The GIT TAG survives — deleting a release never rewrites history.
@@ -553,7 +553,7 @@ describe('release deletion', () => {
     expect(engine.resolveTag('v1.0.0')).toBeTruthy()
 
     // Second deletion 404s.
-    expect((await authed(s.app, 'DELETE', `${releasesBase(s.projectId)}/releases/v1.0.0`, { session: s.ownerSession })).statusCode).toBe(404)
+    expect((await authed(s.app, 'DELETE', `${releasesBase(s.projectId)}/v1.0.0`, { session: s.ownerSession })).statusCode).toBe(404)
   })
 })
 
@@ -577,7 +577,7 @@ describe('latest-release determination', () => {
     s.app.store.db.run(`UPDATE releases SET released_at = ? WHERE tag_name = 'v1.0.0' AND project_id = ?`,
       new Date(t1.getTime() - 60_000).toISOString())
 
-    const latest = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/releases/latest`)
+    const latest = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/latest`)
     expect(((latest.json().release as Record<string, unknown>) as { tag_name: string }).tag_name).toBe('v1.1.0')
 
     // History listing orders published-first, newest-first.
@@ -594,7 +594,7 @@ describe('latest-release determination', () => {
     await authed(s.app, 'POST', releasesBase(s.projectId), {
       session: s.ownerSession, payload: { tag_name: 'v4.0.0', draft: false },
     })
-    const latest = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/releases/latest`)
+    const latest = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/latest`)
     expect(((latest.json().release as Record<string, unknown>) as { tag_name: string }).tag_name).toBe('v4.0.0')
   })
 })
@@ -616,7 +616,7 @@ describe('release notes generation', () => {
       session: s.ownerSession, payload: { tag_name: 'v1.1.0', draft: false },
     })
 
-    const gen = await authed(s.app, 'POST', `${releasesBase(s.projectId)}/releases/v1.1.0/notes/generate`, {
+    const gen = await authed(s.app, 'POST', `${releasesBase(s.projectId)}/v1.1.0/notes/generate`, {
       session: s.ownerSession, payload: { previous_tag: 'v1.0.0' },
     })
     expect(gen.statusCode).toBe(200)
@@ -629,7 +629,7 @@ describe('release notes generation', () => {
     expect(md).not.toContain('feat: alpha')
 
     // The generated text was returned for review, NOT persisted.
-    const detail = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/releases/v1.1.0`, { session: s.ownerSession })
+    const detail = await authed(s.app, 'GET', `${releasesBase(s.projectId)}/v1.1.0`, { session: s.ownerSession })
     expect(((detail.json().release as Record<string, unknown>).description) === '').toBe(true)
   })
 
@@ -666,7 +666,7 @@ describe('release notes generation', () => {
     await authed(s.app, 'POST', releasesBase(s.projectId), {
       session: s.ownerSession, payload: { tag_name: 'v1.1.0', draft: false },
     })
-    const gen = await authed(s.app, 'POST', `${releasesBase(s.projectId)}/releases/v1.1.0/notes/generate`, {
+    const gen = await authed(s.app, 'POST', `${releasesBase(s.projectId)}/v1.1.0/notes/generate`, {
       session: s.ownerSession, payload: { previous_tag: 'v1.0.0' },
     })
     expect(gen.statusCode).toBe(200)
