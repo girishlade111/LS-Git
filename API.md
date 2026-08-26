@@ -80,7 +80,9 @@ MergeReqs    create/update/list · diffs · commits · participants
              rebase (async job) · squash-on-merge · discussions/resolve
 Notes        polymorphic comments incl. commit & snippet notes
 Webhooks     project hooks CRUD + test-delivery endpoint
-Releases     CRUD bound to existing tag + asset links
+Releases     draft→published lifecycle · new/existing tags · pre-releases ·
+             binary assets (sha256 checksums) · explicit release-notes
+             generation from commit/PR history · latest-release resolution
 ```
 
 Phase 3 — CI/CD:
