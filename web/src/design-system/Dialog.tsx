@@ -5,6 +5,11 @@ import { trapTabKey } from './focus'
 
 function useOverlayA11y(open: boolean, onClose: () => void, ref: React.RefObject<HTMLElement | null>) {
   const previouslyFocused = useRef<HTMLElement | null>(null)
+  // Latest-ref pattern: parents pass inline closures that change identity on
+  // every render; keying the effect on them would re-run focus management
+  // mid-interaction (e.g. steal focus back from a controlled input).
+  const onCloseRef = useRef(onClose)
+  useEffect(() => { onCloseRef.current = onClose })
 
   useEffect(() => {
     if (!open) return
@@ -22,7 +27,7 @@ function useOverlayA11y(open: boolean, onClose: () => void, ref: React.RefObject
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.stopPropagation()
-        onClose()
+        onCloseRef.current()
       }
     }
     document.addEventListener('keydown', onKey)
@@ -34,7 +39,7 @@ function useOverlayA11y(open: boolean, onClose: () => void, ref: React.RefObject
       document.body.style.overflow = overflow
       previouslyFocused.current?.focus()
     }
-  }, [open, onClose, ref])
+  }, [open, ref])
 }
 
 export interface DialogProps {

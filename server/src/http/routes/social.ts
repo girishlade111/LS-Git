@@ -33,6 +33,10 @@ export function registerSocialRoutes(app: FastifyInstance): void {
   app.post('/api/v1/projects/:id/star', { preHandler: auth }, async (req, reply) => {
     const project = requireProject(app, projectId(req))
     const created = app.store.stars.star(req.actor!.userId, project.id)
+    // Outbox emission only — webhook/notification fan-out is async (EVENTS.md §1).
+    if (created) {
+      app.store.events.emit(project.id, 'star.added', { actor_user_id: req.actor!.userId })
+    }
     reply.code(created ? 201 : 200) // duplicate star is a no-op, not an error
     return { starred: true, count: app.store.stars.count(project.id), created }
   })
@@ -40,6 +44,9 @@ export function registerSocialRoutes(app: FastifyInstance): void {
   app.delete('/api/v1/projects/:id/star', { preHandler: auth }, async (req) => {
     const project = requireProject(app, projectId(req))
     const removed = app.store.stars.unstar(req.actor!.userId, project.id)
+    if (removed) {
+      app.store.events.emit(project.id, 'star.removed', { actor_user_id: req.actor!.userId })
+    }
     return { starred: false, count: app.store.stars.count(project.id), removed }
   })
 

@@ -10,6 +10,7 @@ import { projectsApi, type Project } from './api'
 import { FolderUploadDialog } from './FolderUploadDialog'
 import { ForkButton, ForkStatusPanel } from '../repository/forks'
 import { StarButton, WatchSelector } from '../repository/social'
+import { WebhooksSection } from '../webhooks/WebhooksSettings'
 
 export function ProjectDetailView({ owner, path }: { owner: string; path: string }) {
   const toast = useToast()
@@ -322,6 +323,9 @@ function SettingsPanel({
               <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>Delete…</Button>
             </div>
           </section>
+
+          {/* Webhooks management (maintainer capability; async delivery pipeline). */}
+          <WebhooksSection projectId={project.id} notify={notify} />
         </>
       )}
 

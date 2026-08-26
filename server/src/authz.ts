@@ -66,6 +66,10 @@ export type Permission =
   // Releases (GitLab parity): publishing/uploading/deleting releases requires
   // maintainer-equivalent rights; read follows project visibility.
   | 'release:maintain' // create/publish/delete releases and assets — owner/admin today
+  // Webhooks (GitLab parity): configuring hooks and reading the delivery log
+  // is a maintainer-equivalent capability; firing happens only from the
+  // event-bus worker, never inside user-facing request handling.
+  | 'project:manage_webhooks' // create/update/test/replay hooks — owner/admin today
 
 /** Capabilities any authenticated READER of a project keeps (guest parity). */
 const ISSUE_GUEST_PERMISSIONS = new Set<Permission>(['issue:create', 'issue:comment'])
@@ -230,6 +234,9 @@ export function can(actor: Actor | null, permission: Permission, ctx: AuthzConte
       if (!project) return false
       return canReporterPlus(actor, project)
     case 'release:maintain':
+      if (!project) return false
+      return canReporterPlus(actor, project)
+    case 'project:manage_webhooks':
       if (!project) return false
       return canReporterPlus(actor, project)
     case 'issue:close': {

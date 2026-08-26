@@ -859,4 +859,80 @@ export const MIGRATIONS: Array<{ version: number; sql: string }> = [
       CREATE INDEX idx_release_assets ON release_assets(release_id);
     `,
   },
+  {
+    version: 15,
+    sql: `
+      -- Webhooks (EVENTS.md §3–5; GitLab system/project hooks semantics).
+      -- Secrets are stored ONLY as digests + AES-GCM ciphertext keyed from the
+      -- app secret — the raw token is shown exactly once at create/rotate.
+      CREATE TABLE webhooks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        name TEXT NOT NULL DEFAULT '',
+        url TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        ssl_verify INTEGER NOT NULL DEFAULT 1,
+        state TEXT NOT NULL DEFAULT 'enabled'
+          CHECK (state IN ('enabled', 'disabled', 'auto_disabled')),
+        disabled_reason TEXT,
+        consecutive_failures INTEGER NOT NULL DEFAULT 0,
+        total_deliveries INTEGER NOT NULL DEFAULT 0,
+        failed_deliveries INTEGER NOT NULL DEFAULT 0,
+        last_delivery_at TEXT,
+        created_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_webhooks_project ON webhooks(project_id);
+
+      -- Per-hook event subscription (empty set = receives nothing).
+      CREATE TABLE webhook_events (
+        webhook_id INTEGER NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+        event TEXT NOT NULL,
+        PRIMARY KEY (webhook_id, event)
+      );
+
+      -- Secret history. active=1 is the signing key; deactivated rows still
+      -- verify within a grace window so rotation never drops in-flight
+      -- deliveries (zero-downtime rotation).
+      CREATE TABLE webhook_secrets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        webhook_id INTEGER NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+        digest TEXT NOT NULL UNIQUE,
+        cipher TEXT NOT NULL,
+        active INTEGER NOT NULL DEFAULT 1,
+        activated_at TEXT NOT NULL,
+        deactivated_at TEXT
+      );
+      CREATE INDEX idx_wsecrets_hook ON webhook_secrets(webhook_id);
+
+      -- Delivery ledger: ONE row per (hook, origin event). Retries mutate the
+      -- row (attempts++, last response), so history shows the full lifecycle
+      -- without duplicate rows; the UNIQUE index makes double-enqueue after a
+      -- crash-replay of the same outbox event a database-level impossibility.
+      -- Synthetic test deliveries carry event_id = NULL (NULLs stay distinct).
+      CREATE TABLE webhook_deliveries (
+        id TEXT PRIMARY KEY,
+        webhook_id INTEGER NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+        event_id INTEGER,
+        event_type TEXT NOT NULL,
+        schema_version INTEGER NOT NULL DEFAULT 1,
+        request_body TEXT NOT NULL,
+        state TEXT NOT NULL DEFAULT 'pending'
+          CHECK (state IN ('pending', 'retrying', 'delivered', 'failed')),
+        attempts INTEGER NOT NULL DEFAULT 0,
+        next_attempt_at TEXT,
+        response_status INTEGER,
+        response_snippet TEXT,
+        duration_ms INTEGER,
+        error TEXT,
+        delivered_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (webhook_id, event_id)
+      );
+      CREATE INDEX idx_wdeliveries_due ON webhook_deliveries(state, next_attempt_at);
+      CREATE INDEX idx_wdeliveries_hook ON webhook_deliveries(webhook_id, created_at DESC);
+    `,
+  },
 ]

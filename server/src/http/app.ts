@@ -20,6 +20,7 @@ import { PrReviewService } from '../services/prReview.js'
 import { DiscussionsService } from '../services/discussions.js'
 import { ReleaseService } from '../services/releases.js'
 import { ProjectManagementService } from '../services/pm.js'
+import { WebhookService } from '../services/webhooks.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -43,6 +44,7 @@ declare module 'fastify' {
     discussions: DiscussionsService
     releases: ReleaseService
     pm: ProjectManagementService
+    webhooks: WebhookService
     authRateLimiter: RateLimiter
     store: ReturnType<typeof makeServices>
     requireAuth: (needed?: 'read_api' | 'write_api' | 'read_user') => PreHandlerFn
@@ -92,7 +94,7 @@ export function serializeCookie(
 
 export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   const db = new Database(dbFile ?? cfg.databaseFile)
-  const services = makeServices(db)
+  const services = makeServices(db, cfg)
 
   const app = Fastify({ logger: false, bodyLimit: 1_500_000 })
   app.cfg = cfg
@@ -123,6 +125,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   app.discussions = new DiscussionsService(services)
   app.releases = new ReleaseService(services, app.projects.storage, cfg.repositoriesRoot)
   app.pm = new ProjectManagementService(services)
+  app.webhooks = new WebhookService(services, cfg)
   app.issueForms = new IssueFormsService(
     services,
     cfg,
@@ -293,6 +296,7 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
   registerDiscussionRoutes(app)
   registerReleaseRoutes(app)
   registerPmRoutes(app)
+  registerWebhookRoutes(app)
 
   app.get('/', async () => ({
     name: 'LSGit API Server',
@@ -302,6 +306,18 @@ export function buildApp(cfg: AppConfig, dbFile?: string): FastifyInstance {
     health: '/healthz',
   }))
   app.get('/healthz', async () => ({ status: 'ok' }))
+
+  // Webhook dispatcher worker (ARCHITECTURE.md §2.3: background jobs are
+  // first-class). Tests drive processDue() directly for determinism, so the
+  // timer only runs outside `test`. unref'd so the process can exit.
+  if (cfg.env !== 'test') {
+    const worker = setInterval(
+      () => void app.webhooks.processDue().catch(() => undefined),
+      Math.max(500, cfg.webhookWorkerIntervalMs),
+    )
+    worker.unref?.()
+    app.addHook('onClose', async () => clearInterval(worker))
+  }
   return app
 }
 
@@ -360,3 +376,4 @@ import { registerPrReviewRoutes } from './routes/prReview.js'
 import { registerDiscussionRoutes } from './routes/discussions.js'
 import { registerReleaseRoutes } from './routes/releases.js'
 import { registerPmRoutes } from './routes/pm.js'
+import { registerWebhookRoutes } from './routes/webhooks.js'

@@ -403,6 +403,10 @@ export type AuditEventName =
   | 'repo_tag_deleted'
   | 'repo_ref_updated'
   | 'repo_write_denied'
+  // Webhook administration
+  | 'webhook_created'
+  | 'webhook_removed'
+  | 'webhook_secret_rotated'
 
 export class AuditRepo {
   constructor(private db: Database) {}
@@ -3406,5 +3410,319 @@ export class ReleaseAssetsRepo {
     const row = this.byId(id)
     this.db.run('DELETE FROM release_assets WHERE id = ?', id)
     return row
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Webhooks: hook config, secret history, delivery ledger (EVENTS.md §3–5).
+// All SQL for the webhook domain lives here (repository-layer contract).
+// ---------------------------------------------------------------------------
+
+export type WebhookState = 'enabled' | 'disabled' | 'auto_disabled'
+export type DeliveryState = 'pending' | 'retrying' | 'delivered' | 'failed'
+
+export interface WebhookRow {
+  id: number
+  project_id: number
+  name: string
+  url: string
+  description: string
+  ssl_verify: number
+  state: WebhookState
+  disabled_reason: string | null
+  consecutive_failures: number
+  total_deliveries: number
+  failed_deliveries: number
+  last_delivery_at: string | null
+  created_by_id: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface WebhookEventRow {
+  webhook_id: number
+  event: string
+}
+
+export interface WebhookSecretRow {
+  id: number
+  webhook_id: number
+  digest: string
+  cipher: string // iv:tag:ciphertext — AES-256-GCM, keyed from the app secret
+  active: number
+  activated_at: string
+  deactivated_at: string | null
+}
+
+export interface WebhookDeliveryRow {
+  id: string
+  webhook_id: number
+  event_id: number | null
+  event_type: string
+  schema_version: number
+  request_body: string
+  state: DeliveryState
+  attempts: number
+  next_attempt_at: string | null
+  response_status: number | null
+  response_snippet: string | null
+  duration_ms: number | null
+  error: string | null
+  delivered_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export class WebhooksRepo {
+  constructor(private db: Database) {}
+
+  create(data: {
+    project_id: number
+    url: string
+    name?: string
+    description?: string
+    ssl_verify?: boolean
+    created_by_id?: number | null
+  }): WebhookRow {
+    const now = nowIso()
+    const res = this.db.run(
+      `INSERT INTO webhooks (project_id, name, url, description, ssl_verify, created_by_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      data.project_id,
+      data.name ?? '',
+      data.url,
+      data.description ?? '',
+      data.ssl_verify === false ? 0 : 1,
+      data.created_by_id ?? null,
+      now,
+      now,
+    )
+    return this.byId(res.lastInsertRowid)!
+  }
+
+  byId(id: number): WebhookRow | undefined {
+    return this.db.get('SELECT * FROM webhooks WHERE id = ?', id) as WebhookRow | undefined
+  }
+
+  listForProject(projectId: number): Array<WebhookRow> {
+    return this.db.all('SELECT * FROM webhooks WHERE project_id = ? ORDER BY id', projectId) as
+      unknown as Array<WebhookRow>
+  }
+
+  update(id: number, fields: Partial<Pick<WebhookRow, 'name' | 'url' | 'description' | 'ssl_verify' | 'state' | 'disabled_reason' | 'consecutive_failures' | 'total_deliveries' | 'failed_deliveries' | 'last_delivery_at'>>): void {
+    const allowed = [
+      'name', 'url', 'description', 'ssl_verify', 'state', 'disabled_reason',
+      'consecutive_failures', 'total_deliveries', 'failed_deliveries', 'last_delivery_at',
+    ] as const
+    const sets: string[] = []
+    const values: SqlParam[] = []
+    for (const key of allowed) {
+      if (fields[key] !== undefined) {
+        sets.push(`${key} = ?`)
+        values.push(fields[key] as SqlParam)
+      }
+    }
+    if (sets.length === 0) return
+    sets.push('updated_at = ?')
+    values.push(nowIso(), id)
+    this.db.run(`UPDATE webhooks SET ${sets.join(', ')} WHERE id = ?`, ...values)
+  }
+
+  delete(id: number): boolean {
+    return this.db.run('DELETE FROM webhooks WHERE id = ?', id).changes > 0
+  }
+}
+
+export class WebhookEventsRepo {
+  constructor(private db: Database) {}
+
+  setForHook(webhookId: number, events: Array<string>): void {
+    this.db.run('DELETE FROM webhook_events WHERE webhook_id = ?', webhookId)
+    for (const e of [...new Set(events)]) {
+      this.db.run('INSERT OR IGNORE INTO webhook_events (webhook_id, event) VALUES (?, ?)', webhookId, e)
+    }
+  }
+
+  listForHook(webhookId: number): Array<string> {
+    return (
+      this.db.all('SELECT event FROM webhook_events WHERE webhook_id = ? ORDER BY event', webhookId) as Array<Row>
+    ).map((r) => String(r.event))
+  }
+
+  /** Enabled hooks of a project subscribed to `event` — fan-out input. */
+  hooksForProjectEvent(projectId: number, event: string): Array<number> {
+    return (
+      this.db.all(
+        `SELECT w.id FROM webhooks w JOIN webhook_events we ON we.webhook_id = w.id
+         WHERE w.project_id = ? AND w.state = 'enabled' AND we.event = ?
+         ORDER BY w.id`,
+        projectId,
+        event,
+      ) as Array<Row>
+    ).map((r) => Number(r.id))
+  }
+}
+
+export class WebhookSecretsRepo {
+  constructor(private db: Database) {}
+
+  create(webhookId: number, digest: string, cipher: string): void {
+    this.db.run(
+      `INSERT INTO webhook_secrets (webhook_id, digest, cipher, active, activated_at) VALUES (?, ?, ?, 1, ?)`,
+      webhookId,
+      digest,
+      cipher,
+      nowIso(),
+    )
+  }
+
+  /** The current signing secret (exactly one active row per hook). */
+  active(webhookId: number): WebhookSecretRow | undefined {
+    return this.db.get(
+      'SELECT * FROM webhook_secrets WHERE webhook_id = ? AND active = 1 ORDER BY id DESC LIMIT 1',
+      webhookId,
+    ) as WebhookSecretRow | undefined
+  }
+
+  /**
+   * Every still-verifiable secret: the active one plus rows deactivated
+   * within the rotation grace window.
+   */
+  verifiable(webhookId: number, graceCutoffIso: string): Array<WebhookSecretRow> {
+    return this.db.all(
+      `SELECT * FROM webhook_secrets WHERE webhook_id = ?
+         AND (active = 1 OR (active = 0 AND deactivated_at >= ?))
+       ORDER BY active DESC, id DESC`,
+      webhookId,
+      graceCutoffIso,
+    ) as unknown as Array<WebhookSecretRow>
+  }
+
+  /** Rotation: deactivate everything old, atomically with the caller's insert. */
+  deactivateAll(webhookId: number): void {
+    this.db.run(
+      'UPDATE webhook_secrets SET active = 0, deactivated_at = ? WHERE webhook_id = ? AND active = 1',
+      nowIso(),
+      webhookId,
+    )
+  }
+
+  deleteForHook(webhookId: number): void {
+    this.db.run('DELETE FROM webhook_secrets WHERE webhook_id = ?', webhookId)
+  }
+}
+
+/** Transport result recorded per HTTP attempt. */
+export interface DeliveryAttemptResult {
+  ok: boolean
+  responseStatus: number | null
+  snippet: string | null
+  durationMs: number
+  error: string | null
+}
+
+export class WebhookDeliveriesRepo {
+  constructor(private db: Database) {}
+
+  create(data: {
+    id: string
+    webhookId: number
+    eventId: number | null
+    eventType: string
+    schemaVersion: number
+    requestBody: string
+    nextAttemptAt?: string | null
+  }): WebhookDeliveryRow {
+    const now = nowIso()
+    this.db.run(
+      `INSERT INTO webhook_deliveries
+         (id, webhook_id, event_id, event_type, schema_version, request_body, state, next_attempt_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
+      data.id,
+      data.webhookId,
+      data.eventId,
+      data.eventType,
+      data.schemaVersion,
+      data.requestBody,
+      data.nextAttemptAt ?? now,
+      now,
+      now,
+    )
+    return this.byId(data.id)!
+  }
+
+  byId(id: string): WebhookDeliveryRow | undefined {
+    return this.db.get('SELECT * FROM webhook_deliveries WHERE id = ?', id) as
+      | WebhookDeliveryRow
+      | undefined
+  }
+
+  listForHook(webhookId: number, limit = 20): Array<WebhookDeliveryRow> {
+    return this.db.all(
+      'SELECT * FROM webhook_deliveries WHERE webhook_id = ? ORDER BY created_at DESC, id DESC LIMIT ?',
+      webhookId,
+      Math.max(1, Math.min(limit, 200)),
+    ) as unknown as Array<WebhookDeliveryRow>
+  }
+
+  /** Due queue: pending first-attempts and retrying backoff slots. */
+  due(cutoffIso: string, limit: number): Array<WebhookDeliveryRow> {
+    return this.db.all(
+      `SELECT * FROM webhook_deliveries
+       WHERE state IN ('pending', 'retrying') AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+       ORDER BY created_at, id LIMIT ?`,
+      cutoffIso,
+      limit,
+    ) as unknown as Array<WebhookDeliveryRow>
+  }
+
+  recordResult(id: string, result: {
+    state: DeliveryState
+    attemptsDelta: number
+    nextAttemptAt?: string | null
+    responseStatus?: number | null
+    snippet?: string | null
+    durationMs?: number | null
+    error?: string | null
+  }): void {
+    const now = nowIso()
+    this.db.run(
+      `UPDATE webhook_deliveries SET
+         state = ?,
+         attempts = attempts + ?,
+         next_attempt_at = ?,
+         response_status = COALESCE(?, response_status),
+         response_snippet = COALESCE(?, response_snippet),
+         duration_ms = ?,
+         error = ?,
+         delivered_at = CASE WHEN ? = 'delivered' THEN ? ELSE delivered_at END,
+         updated_at = ?
+       WHERE id = ?`,
+      result.state,
+      result.attemptsDelta,
+      result.nextAttemptAt ?? null,
+      result.responseStatus ?? null,
+      result.snippet ?? null,
+      result.durationMs ?? null,
+      result.error ?? null,
+      result.state,
+      now,
+      now,
+      id,
+    )
+  }
+
+  /** Replay: reset lifecycle counters; the SAME row is retried end-to-end. */
+  resetForReplay(id: string, nextAttemptAt: string): boolean {
+    return this.db.run(
+      `UPDATE webhook_deliveries SET
+         state = 'pending', attempts = 0, next_attempt_at = ?,
+         response_status = NULL, response_snippet = NULL, duration_ms = NULL,
+         error = NULL, delivered_at = NULL, updated_at = ?
+       WHERE id = ?`,
+      nextAttemptAt,
+      nowIso(),
+      id,
+    ).changes > 0
   }
 }

@@ -62,6 +62,21 @@ export interface AppConfig {
 
   /** Issue-form template byte cap (safe-YAML layer enforces this pre-parse). */
   maxIssueFormBytes: number
+
+  // -- Webhook delivery (EVENTS.md §3–5) ---------------------------------------
+  /** Per-request cutoff; slow receivers are cut off (documented contract). */
+  webhookTimeoutMs: number
+  /** Total attempts per delivery (~8 over an hours-scale window at defaults). */
+  webhookMaxAttempts: number
+  /** Exponential backoff: min(base * 2^(attempt-1), max). */
+  webhookBackoffBaseMs: number
+  webhookBackoffMaxMs: number
+  /** Consecutive failed attempts before a hook is auto-disabled. */
+  webhookDisableThreshold: number
+  /** In-process dispatcher poll interval (workers are disabled under `test`). */
+  webhookWorkerIntervalMs: number
+  /** Old secrets keep verifying for this long after rotation. */
+  webhookSecretGraceHours: number
 }
 
 export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
@@ -110,6 +125,13 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     minChunkSize: Number(process.env.LSGIT_MIN_CHUNK_SIZE ?? 256 * 1024),
     maxAttemptsPerItem: Number(process.env.LSGIT_MAX_ATTEMPTS_PER_ITEM ?? 20),
     maxIssueFormBytes: Number(process.env.LSGIT_MAX_FORM_BYTES ?? 32 * 1024),
+    webhookTimeoutMs: Number(process.env.LSGIT_WEBHOOK_TIMEOUT_MS ?? 10_000),
+    webhookMaxAttempts: Number(process.env.LSGIT_WEBHOOK_MAX_ATTEMPTS ?? 8),
+    webhookBackoffBaseMs: Number(process.env.LSGIT_WEBHOOK_BACKOFF_BASE_MS ?? 30_000),
+    webhookBackoffMaxMs: Number(process.env.LSGIT_WEBHOOK_BACKOFF_MAX_MS ?? 6 * 60 * 60_000),
+    webhookDisableThreshold: Number(process.env.LSGIT_WEBHOOK_DISABLE_THRESHOLD ?? 20),
+    webhookWorkerIntervalMs: Number(process.env.LSGIT_WEBHOOK_WORKER_INTERVAL_MS ?? 5_000),
+    webhookSecretGraceHours: Number(process.env.LSGIT_WEBHOOK_SECRET_GRACE_HOURS ?? 24),
     ...overrides,
   }
   return base

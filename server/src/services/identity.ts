@@ -53,10 +53,15 @@ import {
   PmItemStatusLogRepo,
   ReleasesRepo,
   ReleaseAssetsRepo,
+  WebhooksRepo,
+  WebhookEventsRepo,
+  WebhookSecretsRepo,
+  WebhookDeliveriesRepo,
   type UserRow,
 } from '../db/store.js'
 import { notifyOnEvent } from './notifications.js'
 import { pmApplyDomainEvent } from './pmEvents.js'
+import { webhookEnqueueFromEvent } from './webhooks.js'
 import { verificationEmail, passwordResetEmail, type Mailer } from './mailer.js'
 
 /** Domain error carrying an HTTP status and a safe, user-facing message. */
@@ -121,9 +126,14 @@ export interface IdentityServices {
   pmStatusLog: PmItemStatusLogRepo
   releases: ReleasesRepo
   releaseAssets: ReleaseAssetsRepo
+  webhooks: WebhooksRepo
+  webhookEvents: WebhookEventsRepo
+  webhookSecrets: WebhookSecretsRepo
+  webhookDeliveries: WebhookDeliveriesRepo
 }
 
-export function makeServices(db: Database): IdentityServices {
+/** `cfg` is optional only for legacy callers; webhook fan-out needs it. */
+export function makeServices(db: Database, cfg?: AppConfig): IdentityServices {
   const services: Omit<IdentityServices, 'events'> = {
     db,
     users: new UsersRepo(db),
@@ -169,15 +179,20 @@ export function makeServices(db: Database): IdentityServices {
     pmStatusLog: new PmItemStatusLogRepo(db),
     releases: new ReleasesRepo(db),
     releaseAssets: new ReleaseAssetsRepo(db),
+    webhooks: new WebhooksRepo(db),
+    webhookEvents: new WebhookEventsRepo(db),
+    webhookSecrets: new WebhookSecretsRepo(db),
+    webhookDeliveries: new WebhookDeliveriesRepo(db),
   }
   // Event-driven fanout: every durable domain event flows through this single
   // choke point after commit. Idempotent by dedupe key, so a future queue
   // worker can replay the same rows safely.
   const events = new EventsRepo(db, (row) => {
-    // Event-based interaction model: notifications + PM workflow automation
-    // both subscribe to the same durable outbox.
+    // Event-based interaction model: notifications + PM workflow automation +
+    // webhook fan-out all subscribe to the same durable outbox.
     notifyOnEvent(services as IdentityServices, row)
     pmApplyDomainEvent(services as IdentityServices, row)
+    if (cfg) webhookEnqueueFromEvent(services as IdentityServices, cfg, row)
   })
   return { ...services, events }
 }
